@@ -1,69 +1,73 @@
-# Auto — Automatisiertes BLDC-Motor-Test- und Optimierungstool
+# Auto — Automated BLDC Motor Test and Optimization Tool
 
-## Ziel
+## Goal
 
-Autonome Optimierungsschleife für einen BLDC-Motor-Regelalgorithmus auf einem
-STM32-Controller. Ein Parametersatz wird gebaut, geflasht, der Motor läuft ein
-Testintervall, die Drehzahl wird gemessen, daraus werden Regelkennzahlen
-berechnet, und der nächste Parametersatz wird davon abgeleitet.
+Autonomous optimization loop for a BLDC motor control algorithm on an
+STM32 controller. A parameter set is built, flashed, the motor runs for a
+test interval, the speed is measured, control metrics are computed from
+that, and the next parameter set is derived from them.
 
-## Beteiligte Rechner/Geräte
+## Machines/Devices Involved
 
-- **STM32-Rechner (Windows, dieser Rechner)**: Hier läuft Claude Code. Hier ist
-  STM32CubeIDE/STM32_Programmer_CLI installiert, hier hängt auch der Saleae
-  Logic Pro 16 dran.
-- **STM32-Controller**: Führt den Regelalgorithmus aus, steuert den BLDC-Motor.
-- **Raspberry Pi**: Reiner Ausführungsknoten ohne eigene KI. Sendet LIN-Bus-
-  Kommandos (Start/Stop/Speed) an den Motor-Controller. Wird von Claude Code
-  per SSH ferngesteuert (Skripte hochladen, ausführen, Ergebnis zurücklesen).
-- **Saleae Logic Pro 16**: Zeichnet die 3 Hall-Sensor-Kanäle des Motors plus
-  einen Trigger-Kanal auf. Übernimmt komplett die Drehzahlmessung — kein
-  Rücklesen von Messdaten mehr über LIN.
+- **STM32 host (Windows, this machine)**: Claude Code runs here.
+  STM32CubeIDE/STM32_Programmer_CLI is installed here, and the Saleae
+  Logic Pro 16 is also connected here.
+- **STM32 controller**: Runs the control algorithm, drives the BLDC motor.
+- **Raspberry Pi**: A pure execution node with no AI of its own. Sends
+  LIN bus commands (Start/Stop/Speed) to the motor controller. Is
+  remote-controlled by Claude Code over SSH (upload scripts, run them,
+  read back results).
+- **Saleae Logic Pro 16**: Records the motor's 3 Hall sensor channels
+  plus a trigger channel. Handles speed measurement entirely — no more
+  reading measurement data back over LIN.
 
-## Datenfluss / Steuerkanäle
+## Data Flow / Control Channels
 
-- **Steuerung (LIN, bereits implementiert):** Raspi → STM32-Controller.
-  Kommandos: Motor Start, Motor Stop, Speed setzen.
-- **Messung (Saleae, non-invasiv):** Die 3 Hall-Sensor-Signale werden ohnehin
-  für die Kommutierung benötigt — der Saleae zapft sie nur ab, ohne dass die
-  Firmware dafür geändert werden muss. Daraus wird per Software (Zeit zwischen
-  Flankenwechseln) die Momentandrehzahl berechnet.
-- **Trigger-Pin:** Ein zusätzlicher freier GPIO-Pin am STM32-Controller wird
-  beim Start des Regelalgorithmus auf High gesetzt (direkt im Codepfad, der
-  auch den Motorstart auslöst) und beim Stop wieder auf Low. Dieser Pin läuft
-  als 4. Kanal mit in den Saleae-Capture und dient als Hardware-Trigger für
-  den Aufnahmestart — keine Software-Synchronisation zwischen Systemen nötig.
+- **Control (LIN, already implemented):** Raspi → STM32 controller.
+  Commands: motor start, motor stop, set speed.
+- **Measurement (Saleae, non-invasive):** The 3 Hall sensor signals are
+  needed for commutation anyway — the Saleae just taps them, without
+  requiring any firmware changes. Instantaneous speed is computed from
+  them in software (time between edge transitions).
+- **Trigger pin:** An additional free GPIO pin on the STM32 controller is
+  set high when the control algorithm starts (directly in the code path
+  that also triggers motor start) and set low again on stop. This pin
+  runs as the 4th channel in the Saleae capture and serves as a hardware
+  trigger for capture start — no software synchronization between
+  systems needed.
 
-## Sicherheit
+## Safety
 
-- **Der Watchdog auf dem Raspi (`raspi/watchdog/`) ist unabhängig vom
-  Optimierungs-Loop und von Claude Code.** Er läuft als eigener Prozess und
-  stoppt den Motor selbstständig, wenn z. B. zu lange kein Lebenszeichen /
-  Kommando ankommt. Grenzwerte (max. Speed etc.) gehören in den Code, nicht
-  in Prompts oder Claude-seitige Disziplin.
-- Ein manueller Not-Aus-Weg soll unabhängig vom Loop jederzeit auslösbar sein.
+- **The watchdog on the Raspi (`raspi/watchdog/`) is independent of the
+  optimization loop and of Claude Code.** It runs as its own process and
+  stops the motor on its own if, e.g., no heartbeat/command arrives for
+  too long. Limits (max speed, etc.) belong in the code, not in prompts
+  or Claude-side discipline.
+- A manual emergency-stop path must be triggerable at any time,
+  independent of the loop.
 
-## Repo-Struktur
+## Repo Structure
 
 ```
 Auto/
-├── STM32/          Firmware + Build/Flash-Automatisierung (STM32 CLI)
+├── STM32/          Firmware + build/flash automation (STM32 CLI)
 ├── raspi/
-│   ├── control/    LIN-Master-Code (Start/Stop/Speed) — bereits implementiert
-│   └── watchdog/   Unabhängige Sicherheitsschranke, läuft getrennt vom Rest
+│   ├── control/    LIN master code (Start/Stop/Speed) — already implemented
+│   └── watchdog/   Independent safety barrier, runs separately from the rest
 ├── saleae/
-│   ├── capture_config/   Kanalbelegung, Trigger-Setup, Sample-Rate
-│   └── exports/          Rohe Capture-Exporte pro Testlauf
-├── analysis/       Drehzahlberechnung aus Hall-Flanken, Regelkennzahlen
-└── runs/           Pro Iteration: Parametersatz, Rohdaten, Metriken
+│   ├── capture_config/   Channel mapping, trigger setup, sample rate
+│   └── exports/          Raw capture exports per test run
+├── analysis/       Speed calculation from Hall edges, control metrics
+└── runs/           Per iteration: parameter set, raw data, metrics
 ```
 
-`raspi/*` wird hier im Repo entwickelt/versioniert, aber per SSH/SCP auf den
-Raspi deployed — der Raspi selbst ist nur Ausführungsziel, kein Git-Checkout.
+`raspi/*` is developed/versioned here in the repo, but deployed to the
+Raspi via SSH/SCP — the Raspi itself is only a deployment target, not a
+git checkout.
 
-## Offene Punkte / noch zu klären
+## Open Points / Still To Be Clarified
 
-- Genaue Pin-Belegung (Hall-Kanäle, Trigger-Pin) — hier ergänzen, sobald fix.
-- Saleae Sample-Rate für Hall-Kanäle.
-- Kostenfunktion/Metrik-Gewichtung für die Optimierungsschleife.
-- Deployment-Mechanismus Repo → Raspi (Skript noch zu bauen).
+- Exact pin mapping (Hall channels, trigger pin) — fill in here once fixed.
+- Saleae sample rate for Hall channels.
+- Cost function/metric weighting for the optimization loop.
+- Deployment mechanism repo → Raspi (script still to be built).

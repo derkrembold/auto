@@ -1,0 +1,20 @@
+# SSH-Keys und sensible Zugangsdaten niemals versionieren
+.ssh/
+id_*
+*.pem
+*.key
+known_hosts*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Betriebssystem-Müll
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Saleae Rohdaten (können groß werden - je nach Bedarf anpassen)
+saleae/exports/*.sal
