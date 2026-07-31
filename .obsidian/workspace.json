@@ -185,10 +185,20 @@
   },
   "active": "cc16aa7c3d18d1f4",
   "lastOpenFiles": [
-    "raspi/control/linaddresses.py",
-    "raspi/control/lincomm.py",
-    "raspi/control/motorcontrol.py",
-    "raspi/CLAUDE.md.tmp.1824.1e66c8545801",
-    "CLAUDE.md.tmp.1824.b20709386ac5"
+    "raspi/CLAUDE.md.tmp.1824.1bb52719a93b",
+    "CLAUDE.md.tmp.1824.aadb9c66b292",
+    "raspi/control/motorcontrol.py.tmp.1824.8eb4b017e728",
+    "saleae/CLAUDE.md",
+    "CLAUDE.md",
+    "raspi/CLAUDE.md.tmp.1824.a8abd536ce20",
+    "raspi/control/motorcontrol.py.tmp.1824.904094bbb9bb",
+    "raspi/control/motorcontrol.py.tmp.1824.05afe31d4a13",
+    "raspi/control/motorcontrol.py.tmp.1824.44da7f31a5b2",
+    "raspi/control/motorcontrol.py.tmp.1824.1e6c2c0e5661",
+    "raspi/CLAUDE.md.tmp.1824.7dcbded08866",
+    "raspi/watchdog/CLAUDE.md",
+    "CLAUDE.md.tmp.1824.a7821e3db8f7",
+    "CLAUDE.md.tmp.1824.fcd46a601144",
+    "analysis/CLAUDE.md"
   ]
 }
