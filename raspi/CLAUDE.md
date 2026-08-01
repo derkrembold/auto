@@ -36,8 +36,11 @@ is the clean deploy target for this repo's `raspi/` code going forward.
 
 ## Structure
 
-- `control/` — LIN master code (`speed <value>` command, 0 = stop), already
-  implemented.
+- `control/` — LIN command code (`speed <value>` command, 0 = stop).
+  Currently implemented as the LIN master itself (opens `/dev/ttyS0`
+  directly). **Planned change** (see `watchdog/CLAUDE.md`'s Architecture
+  section): the watchdog becomes the sole LIN master, and `control/`
+  instead sends requests to it over local IPC — not yet done.
 - `watchdog/` — Independent safety barrier, runs as its own process
   separate from the rest. See `watchdog/CLAUDE.md` for details — not here.
 
@@ -69,6 +72,14 @@ only as the best current understanding of the protocol.
 - `control/motorcontrol.py` returns bare magic-number error codes
   (`-1`/`-2`/`-3`/`-4`) from `Lin.write()`/`Lin.read()`. Replace with named
   constants (or an enum) — deferred, planned for next session.
+
+## Test Suite Policy
+
+**Any change to `control/` or `watchdog/` must have the test suite run
+against dry-run mode before the change is considered done** — see
+`watchdog/CLAUDE.md`'s "Test Suite (Required on Every Change)" and
+"Dry-Run Mode" sections for detail. No real hardware needed. Applies to
+Claude Code too — don't deploy a change to either without running it.
 
 ## Motor Execution Consent
 
