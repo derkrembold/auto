@@ -33,17 +33,32 @@ Genuinely useful findings in there include:
 findings, it may be updated (e.g. once this project's own current-sensor
 hardware/firmware work starts and produces its own findings).
 
+## Firmware
+
+`firmware/` holds the DCPS course project's current-sensor ATmega328P
+source (`main.cpp`, `addresses.hpp`, `errors.hpp`, `Makefile`) — starting
+point for this project's own current-sensor slave, not yet adapted to
+this project (still has the original author's LIN addressing etc.).
+Only source files were copied — build artifacts (`.o`/`.s`/`.ii`/`.elf`/
+`.hex`) and editor backups (`~` files) were intentionally left out.
+
+Developing/building this doesn't need to happen on this machine — the
+repo is the source-of-truth copy (same pattern as `raspi/control/`); the
+actual AVR build/flash toolchain can run wherever that's normally set up.
+
 ## Status
 
-Reference material only — no current-sensor hardware/firmware for this
-project exists yet. Not yet designed or built.
+Firmware source copied from the DCPS course project as a starting point
+(see Firmware section above) — not yet adapted/built/tested for this
+project.
 
 ## Open Points (currentsensor-specific)
 
-- Design/source the actual current-sensor hardware for this project
-  (informed by, but not identical to, the DCPS course project's build).
-- LIN address (PID) assignment for this slave once it exists — extend
-  `linaddresses.py`/`addresses.h` per the Slave Topology note in root
-  `CLAUDE.md`.
+- Adapt `firmware/addresses.hpp` to this project's actual LIN addressing
+  once this slave's PID is assigned (see Slave Topology note in root
+  `CLAUDE.md`) — currently still the DCPS course project's own addresses.
+- Verify/adapt the hardware design this firmware assumes (informed by,
+  but not identical to, the DCPS course project's build).
+- Build/flash environment for this firmware not yet set up.
 
 Fill these in here once fixed, not in the root `CLAUDE.md`.

@@ -52,7 +52,18 @@ Protocol is deliberately minimal: one command per message (e.g.
 `"speed 300"`, `"stop"`), one reply per message (e.g. `"OK"`,
 `"ERR <reason>"`).
 
-## Dry-Run Mode — PRIORITY, needed soon
+## Build Order
+
+1. **Sole-LIN-master restructuring first** (Architecture section above)
+   — the watchdog process + IPC server/client skeleton needs to exist
+   before there's a real interface to stub out.
+2. **Dry-run mode** (below) — needed soon, right after #1. Swap the
+   real LIN I/O for the stub inside the now-existing skeleton.
+3. **Test suite** — exercises the skeleton via dry-run mode.
+4. **Watchdog's actual safety logic** (heartbeat timeout, max-speed
+   limit, current polling) — built/tested last, using #1-3.
+
+## Dry-Run Mode
 
 A stub swap-in for the real LIN bus I/O: same method interface as the
 real `Lin` class (`write()`, `read()`, etc.), but instead of touching

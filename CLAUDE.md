@@ -63,6 +63,8 @@ Auto/
 ├── raspi/
 │   ├── control/    LIN master code (speed command) — already implemented
 │   └── watchdog/   Independent safety barrier, runs separately from the rest
+├── currentsensor/  Planned LIN slave — firmware/ + reference notes
+├── lightsensor/    Planned LIN slave — firmware/
 ├── saleae/
 │   ├── capture_config/   Channel mapping, trigger setup, sample rate
 │   └── exports/          Raw capture exports per test run
@@ -90,6 +92,10 @@ side) live in `STM32/CLAUDE.md`, not here.
 Current-sensor-specific details (planned LIN slave, reference material
 from a related university course project) live in
 `currentsensor/CLAUDE.md`, not here.
+
+Light-sensor-specific details (planned LIN slave, firmware starting
+point from the same course project) live in `lightsensor/CLAUDE.md`,
+not here.
 
 ## LIN Protocol
 ### Header Operation
