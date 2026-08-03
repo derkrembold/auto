@@ -8,23 +8,80 @@ implementation details.
 
 - Runs as its own process on the Pi, separate from `raspi/control/` and
   independent of Claude Code / the optimization loop.
-- Must stop the motor on its own if, e.g., no heartbeat/command arrives
-  within a timeout, or a max-speed limit is exceeded.
-- Limits (max speed, heartbeat timeout, etc.) belong hardcoded in this
-  code — not configurable via prompts, not enforced by Claude-side
-  discipline.
+- Must stop the motor on its own if the connection to the client drops,
+  if a client goes idle too long, or if a stall is suspected.
+- Limits (max speed, timeouts, etc.) belong hardcoded in this code — not
+  configurable via prompts, not enforced by Claude-side discipline.
 - Must provide a manual emergency-stop path that works independent of
   whether the watchdog process itself, the optimization loop, or Claude
   Code is responsive.
-- Poll the motor current sensor over LIN (planned separate LIN slave —
-  see root `CLAUDE.md`'s LIN Protocol "Slave Topology" section) at
-  roughly 4×/second and cut power if current is too high. This is a
-  secondary, coarse safety net for sustained overload while the motor is
-  still spinning — at ~250ms per check, it's too slow to catch a fast
-  stall current spike. Fast stall protection is handled separately,
-  locally on the STM32 (see `STM32/CLAUDE.md`'s Stall Detection section)
-  using Hall transitions, not this LIN poll. Also useful as
-  telemetry/logging data, independent of the safety use.
+- Two-layer safety check over LIN — see "Two-Layer Safety Check" below.
+
+## Connection Model: Persistent, One Client at a Time
+
+**`motorcontrol.py` holds one persistent connection for its whole
+session** — it does not reconnect per command. This replaced an earlier
+per-command-reconnect design specifically because it gives two things
+for free that the earlier design couldn't:
+
+- **Instant disconnect detection.** If the client process dies, is
+  killed, or exits, the OS closes the socket — the watchdog's `recv()`
+  raises `EOFError` immediately, and it stops the motor right away, no
+  polling or timeout needed for this case (`Watchdog.on_disconnect()`).
+- **A genuinely non-blocking client.** `motorcontrol.py` is a small
+  interactive CLI (`input()` loop) — type a command, see the reply, type
+  the next one, all on one open connection. No dedicated heartbeat
+  process, no backgrounding, no `--noheartbeat` flag — that entire
+  design (built earlier today) was replaced by this because it was
+  clunky: it required a separate blocking `heartbeat` loop, and blocked
+  the terminal for any other command while it ran.
+
+**`IDLE_TIMEOUT` (20.0s, `watchdog.py`)** covers the other case: the
+connection is still open, but the client has gone quiet for a while
+(hung without crashing). Checked in the background `monitor()` thread.
+This is deliberately much longer than instant-disconnect handling
+needs — a human typing commands interactively will naturally pause
+between them, and 20s gives real slack for that before treating silence
+as a problem.
+
+## Two-Layer Safety Check
+
+- **Lower layer, the more important one: `rpm`.** The watchdog polls
+  `rpm` **itself**, directly, in its background `monitor()` thread
+  (`Watchdog.poll_rpm()`, every `RPM_POLL_INTERVAL` = 1.0s) — this does
+  **not** depend on a client asking for `rpm`; it runs regardless of
+  whether anyone's connected. This is what feeds the stall check
+  (`Watchdog._check_stall()`): commanded speed nonzero, but `rpm` stays
+  0 past `STALL_GRACE_PERIOD` (3.0s, covers startup torque/static
+  friction) → stop. Self-polling was chosen specifically so this check
+  doesn't depend on `motorcontrol.py` doing anything — it's a pure
+  motor-behavior check, decoupled from whether a supervisor is even
+  connected. (An earlier design had `motorcontrol.py` send `rpm`
+  explicitly as a "heartbeat" to feed this — replaced because it
+  conflated "is the motor stalled" with "is the supervisor alive," which
+  are different questions needing different mechanisms; see Connection
+  Model above for how "is the supervisor alive" is answered now.)
+- **Upper layer: the current sensor** (planned separate LIN slave — see
+  root `CLAUDE.md`'s LIN Protocol "Slave Topology" section). **Deferred
+  deliberately** — the current-sensor hardware isn't operational yet
+  (see `currentsensor/CLAUDE.md`), expected this week. Specific check,
+  once it exists: **current flowing while `rpm` reads 0** is the stall
+  signature (motor commanded to move, drawing current, but not actually
+  turning) — cut power. More precise than a bare "current too high"
+  threshold, since it directly targets the dangerous case (see
+  `STM32/CLAUDE.md`'s Known Hardware Issue — current sensing on the STM32
+  board itself is disabled, so this LIN-based current sensor will be the
+  only current visibility that exists). Until then, `_check_stall()` is
+  **interim and rpm-only** — more false-positive-prone without current
+  confirmation, but better than no stall protection while the sensor
+  isn't ready. Upgrading it to also check current later is a small
+  addition to `_check_stall()`, not a rebuild.
+
+At ~1×/second polling, this reacts on the order of a second, not
+milliseconds — acceptable for "sustained stall," not fast enough for a
+millisecond-scale current spike. That gap is exactly why the STM32-local
+Hall-based approach (below) remains a real, deprioritized-not-discarded
+future plan.
 
 ## Architecture: Sole LIN Master
 
@@ -32,101 +89,138 @@ LIN only tolerates one master on the bus. The watchdog is that master —
 it's the only process that ever opens/writes `/dev/ttyS0`. It does not
 decide *what* the motor should do (that's still the optimization loop's
 job, via `raspi/control/`); it's the gatekeeper/actuator: it receives
-command requests, validates them against its own limits (max speed,
-heartbeat freshness), and either puts them on the bus or refuses. It
-also runs its own independent heartbeat-timeout and current-polling
-checks and can push a stop onto the bus on its own, unprompted.
+command requests, validates them against its own limits, and either
+puts them on the bus or refuses. It also runs its own independent
+idle-timeout and stall checks and can push a stop onto the bus on its
+own, unprompted.
 
-This replaces the current design where `motorcontrol.py` opens the
+This replaced the earlier design where `motorcontrol.py` opened the
 serial port directly per-invocation — that would conflict with the
-watchdog also needing bus access (e.g. for current-sensor polling), and
-two uncoordinated processes touching one UART can corrupt LIN frames.
-`raspi/control/` needs to change to send requests to the watchdog
-instead of writing to the bus itself.
+watchdog also needing bus access, and two uncoordinated processes
+touching one UART can corrupt LIN frames. `raspi/control/motorcontrol.py`
+is now a thin IPC client (no `RPi.GPIO`/`serial` dependency at all); the
+`Lin` class and command functions (`set_speed`, `led_on`, etc.) live in
+`raspi/watchdog/linbus.py`.
 
 **IPC with `raspi/control/`:** `multiprocessing.connection`
 (`Listener`/`Client`, standard library, Unix domain socket under the
 hood on Linux) — chosen over raw sockets or a shared file for
 simplicity/KISS: no manual framing, `send()`/`recv()` of plain strings.
-Protocol is deliberately minimal: one command per message (e.g.
-`"speed 300"`, `"stop"`), one reply per message (e.g. `"OK"`,
-`"ERR <reason>"`).
+One command per message (e.g. `"speed 300"`), one reply per message
+(e.g. `"OK"`, `"ERR <reason>"`). The connection itself now stays open for
+a whole `motorcontrol.py` session (see Connection Model above) rather
+than being reopened per command.
 
-## Build Order
+## STM32-Local Stall Detection (Planned, Deprioritized)
 
-1. **Sole-LIN-master restructuring first** (Architecture section above)
-   — the watchdog process + IPC server/client skeleton needs to exist
-   before there's a real interface to stub out.
-2. **Dry-run mode** (below) — needed soon, right after #1. Swap the
-   real LIN I/O for the stub inside the now-existing skeleton.
-3. **Test suite** — exercises the skeleton via dry-run mode.
-4. **Watchdog's actual safety logic** (heartbeat timeout, max-speed
-   limit, current polling) — built/tested last, using #1-3.
+**Not the current approach — see Two-Layer Safety Check above for
+what's actually running.** Kept as a real future plan, not discarded,
+but deliberately sequenced after `STM32/CLAUDE.md`'s standalone
+(non-STM32CubeIDE) build/flash environment goal — touching that firmware
+is much more practical once that tooling friction is gone. Detail lives
+in `STM32/CLAUDE.md`'s own Stall Detection section, not duplicated here.
 
 ## Dry-Run Mode
 
-A stub swap-in for the real LIN bus I/O: same method interface as the
-real `Lin` class (`write()`, `read()`, etc.), but instead of touching
-the serial port, it prints what it would have sent to the terminal.
-Selected via a flag/env var at watchdog startup — the rest of the
-watchdog's logic (command validation, heartbeat, current thresholds)
-runs unchanged and doesn't know which one it's talking to.
+`DryRunLin` in `linbus.py` — same `write()`/`read()`/`close()` interface
+as the real `Lin` class, but instead of touching the serial port:
+`write()` prints every byte (sync, PID+parity, each data byte, checksum)
+and appends `(address, data)` to `self.writes` (so tests can assert on
+it); `read()` prints and returns a test-injected fake response from
+`self.read_responses[address]` if set, otherwise defaults to zero-filled
+data of the correct length. Both the "print for a human" and "record
+for a test" needs share this one stub, not two separate things.
 
-This is how the watchdog/`motorcontrol.py` IPC relay gets developed and
-tested — you can watch the exact command sequence that would go out on
-the wire, with zero risk of the motor actually moving, consistent with
-the "never run without consent" rule below. Prioritize this over the
-other watchdog features (heartbeat timeout, max-speed limit, current
-polling) — those all need this dry-run path to be testable safely first.
-
-The stub must also *record* what it would have sent (e.g. a list of
-decoded commands), not just print it — printing is for a human watching
-the terminal, but the test suite below needs something to assert
-against programmatically. Both purposes share the same stub.
+`watchdog.py`'s `serve()` picks `Lin()` (real) or `DryRunLin()` based on
+a `live` parameter; the `__main__` entry point sets that from an
+explicit `--live` CLI flag. **Dry-run is the default** — starting
+`watchdog.py` with no arguments can never move the motor, only `--live`
+enables real bus access. This is a deliberate safety choice: it directly
+serves the "never run without consent" rule below by making the *safe*
+behavior the one that happens if someone runs this without thinking
+about it.
 
 ## Test Suite (Required on Every Change)
 
 **Policy: any change to `raspi/control/` or `raspi/watchdog/` must have
-the test suite run against dry-run mode before the change is considered
-done.** No real hardware needed — this is the point of dry-run mode.
-Applies to Claude Code too: after editing either of these, run the
-suite, don't just deploy and call it finished.
+the test suite run before the change is considered done.** Applies to
+Claude Code too: after editing either of these, run `pytest raspi/tests/`,
+don't just deploy and call it finished.
 
-Illustrative starting set of test cases (not exhaustive, refine once
-built):
-- `speed <value>` produces the correct decoded LIN write (sync, PID,
-  data bytes, checksum) for a few representative values.
-- Out-of-range `speed` values get clamped as expected.
-- `on`/`off`/`hal`/`rpm`/`temp` each produce/parse the correct bytes.
-- Watchdog refuses a request above the configured max-speed limit.
-- Watchdog issues a stop after the heartbeat timeout with no new
-  command.
-- Watchdog issues a stop when a simulated current reading exceeds the
-  configured threshold.
+**Framework: `pytest`.** Extra dependency vs. stdlib `unittest`, but far
+less boilerplate, especially `@pytest.mark.parametrize` for the many
+small (input → expected result) cases here. Needs `pip install pytest`
+wherever the suite runs (not yet installed on the Pi itself).
 
-Not yet designed: test framework choice (`pytest` vs. stdlib
-`unittest` — leaning `pytest` for less boilerplate, but that's an extra
-dependency vs. KISS/zero-dependency `unittest`; not decided), where the
-suite lives (e.g. `raspi/tests/`), and whether "must run on every
-change" is just a documented human/Claude discipline for now or should
-become an actual pre-commit/CI hook later.
+**Location: `raspi/tests/`**, one test file per source module
+(`test_watchdog.py`, `test_linbus.py`, `test_motorcontrol.py`), plus a
+`conftest.py` that adds `raspi/control/` and `raspi/watchdog/` to
+`sys.path` (they're separate source folders in the repo, even though
+deploy flattens them into one directory on the Pi).
+
+**Two test tiers, discovered while building step 1, not planned
+upfront:**
+- **Unit tests** (pure logic, no sockets/hardware) — run anywhere,
+  including natively on Windows. 47 tests so far, covering: `validate()`;
+  `Watchdog.execute()` against `DryRunLin`; connection lifecycle
+  (`on_connect()`/`on_disconnect()` — immediate stop on disconnect,
+  `check_idle()` for the 20s stale-connection case, called directly
+  after manipulating `last_command_time` rather than a real 20-second
+  sleep); the interim rpm-only stall check via `poll_rpm()`, including
+  grace-period behavior and working correctly with no client connected
+  at all; `Lin.checksum`/`Lin.addparity` (both `@staticmethod` so
+  they're testable without instantiating `Lin()`, which needs real
+  `RPi.GPIO`/serial); the interactive `motorcontrol.py` CLI with
+  `input()` and `Client` both mocked.
+- **Integration tests** (real `Listener`/`Client` over `AF_UNIX`) — need
+  Linux. `multiprocessing.connection` doesn't recognize `'AF_UNIX'` as a
+  family at all on native Windows Python (not just unsupported — the
+  family name itself isn't recognized). Works fine on the Pi. Not yet
+  written — deferred to whenever full IPC round-trip testing happens on
+  the Pi (or a real Linux/WSL environment; not attempted from this
+  Windows machine so far).
+
+Remaining illustrative test case not yet covered: current-sensor-based
+stall confirmation ("current flowing while `rpm`=0") — blocked on the
+sensor existing at all, see Two-Layer Safety Check above.
 
 ## Status
 
-Not yet implemented — directory currently empty.
+Sole-LIN-master restructuring, dry-run mode, the test suite, and the
+watchdog's safety logic are all built (`Watchdog` class in `watchdog.py`
+— connection lifecycle, idle timeout, self-polled stall check). The
+current-sensor upper layer is not built — sensor hardware isn't
+operational yet.
+
+**Live-hardware status (2026-08-03):** confirmed working — both the
+earlier plain-relay version (`hal` read, `speed` write actually turning
+the motor, `rpm` read — see `raspi/CLAUDE.md`'s LIN Protocol Timing
+section) and, now, the full persistent-connection design with the
+complete `Watchdog` safety logic (self-polling stall check, idle
+timeout, disconnect handling) have been tested against real hardware
+over `--live`. Not separately broken down which specific safety paths
+(disconnect vs. idle-timeout vs. stall) were individually exercised
+during that test — worth doing deliberately at some point rather than
+assuming full coverage from general use.
 
 ## Open Points (watchdog-specific)
 
-- Concrete heartbeat timeout value.
-- Concrete max-speed limit.
-- Concrete current-cutoff threshold and polling rate for the LIN current
-  sensor (currently just "roughly 4×/second," not yet chosen precisely).
+- Concrete current-cutoff threshold and exact polling rate for the LIN
+  current sensor — blocked on the sensor existing; the interim rpm-only
+  stall check doesn't need this yet.
 - How the watchdog physically stops the motor if the watchdog *process
-  itself* fails — LIN-based stopping doesn't help then, since nothing's
-  driving the bus. Needs an independent hardware kill switch/relay as
-  the ultimate backstop, separate from the LIN-based stop path above.
-- Exact dry-run activation mechanism (flag vs. env var) — minor, not
-  blocking.
+  itself* fails — neither disconnect-detection nor LIN-based stopping
+  helps then, since nothing's driving the bus. Needs an independent
+  hardware kill switch/relay as the ultimate backstop.
+- Individual safety paths (disconnect detection, idle timeout, stall
+  check) haven't been deliberately, separately exercised live yet — see
+  Status above.
+- `hal` (Hall data over LIN) might be useful for something beyond what
+  it does today (e.g. further validation/diagnostics) — not prioritized,
+  but don't treat it as dead/removable either.
+- Whether "test suite must run on every change" stays a documented
+  human/Claude discipline or becomes an actual pre-commit/CI hook later
+  — not yet decided.
 
 Fill these in here once fixed, not in the root `CLAUDE.md` or
 `raspi/CLAUDE.md`.

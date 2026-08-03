@@ -37,17 +37,29 @@ The "how" — evolves as the system gets built out.
   remote-controlled by Claude Code over SSH (upload scripts, run them,
   read back results).
 - **Saleae Logic Pro 16**: Records the motor's 3 Hall sensor channels
-  plus a trigger channel. Handles speed measurement entirely — no more
-  reading measurement data back over LIN.
+  plus a trigger channel. Precision speed measurement for PI-parameter
+  optimization, and for validating the LIN `rpm` reading against ground
+  truth — see the Measurement bullet below. Not part of the operational/
+  production system — `raspi/watchdog/` reads `rpm` over LIN for that,
+  see its CLAUDE.md.
 
 ## Data Flow / Control Channels
 
 - **Control (LIN, already implemented):** Raspi → STM32 controller.
-  Command: set speed (0 = stop).
-- **Measurement (Saleae, non-invasive):** The 3 Hall sensor signals are
-  needed for commutation anyway — the Saleae just taps them, without
-  requiring any firmware changes. Instantaneous speed is computed from
-  them in software (time between edge transitions).
+  Command: set speed (0 = stop). All communication with the STM32 is
+  over LIN, always — the Saleae is a measurement tool, not a control or
+  operational data channel.
+- **Measurement (Saleae, non-invasive, for optimization + validation
+  only):** The 3 Hall sensor signals are needed for commutation anyway —
+  the Saleae just taps them, without requiring any firmware changes.
+  Instantaneous speed is computed from them in software (time between
+  edge transitions). Two purposes: (1) precise speed feedback for tuning
+  the PI parameters, (2) validating the LIN `rpm` reading against this
+  ground truth — see the open "does `speed` really mean RPM?" question
+  below. This is a dev-time/lab tool, not part of the deployed/
+  operational system — the watchdog's own `rpm` polling over LIN (see
+  `raspi/watchdog/CLAUDE.md`) is the operational speed-monitoring
+  channel, and is unaffected by this Saleae scoping.
 - **Trigger pin:** An additional free GPIO pin on the STM32 controller is
   set high when the control algorithm starts (directly in the code path
   that also triggers motor start) and set low again on stop. This pin
@@ -133,6 +145,25 @@ control PID and/or status PID, as applicable). Keep the PID table
 structure generic rather than hardcoded to a single slave when extending
 it, but don't build support for slaves that don't exist yet.
 
+### Address Table Single Source of Truth (Planned)
+
+With now 3+ separately hand-maintained address tables
+(`raspi/control/linaddresses.py`, `STM32/`'s `addresses.h`,
+`currentsensor/firmware/addresses.hpp`, soon `lightsensor/` too, plus
+future motor slaves), manual sync is a proven bug source — the DCPS
+course project's own notes (`currentsensor/notes.md`, Problems 8 & 10)
+document exactly this failure mode already happening once.
+
+Planned fix: a single canonical **`addresses.json`** (location TBD,
+likely repo root or a shared location all generators can reach) listing
+each LIN message (name, PID, byte count, source, destination) once. A
+small Python generator script produces `linaddresses.py`, `addresses.h`/
+`.hpp` etc. from it — none of those should be hand-edited directly once
+this exists. JSON chosen over YAML specifically to avoid an extra
+dependency (`pyyaml`) — `json` is stdlib.
+
+Not yet built — see Open Points.
+
 
 ## Battery
 
@@ -196,11 +227,12 @@ Living tracker — remove items once resolved.
 
 - **8S vs 9S battery decision** (24V vs ~28.8V nominal) — not yet
   decided. See Battery section above.
+- **`addresses.json` generator script** — not yet built. See LIN
+  Protocol "Address Table Single Source of Truth" section above.
 - Saleae-specific open points (pin mapping, sample rate) — see
   `saleae/CLAUDE.md`.
 - Analysis-specific open points (cost function/metric weighting) — see
   `analysis/CLAUDE.md`.
-- Deployment mechanism repo → Raspi (script still to be built).
 - Verify that the `speed` value sent via LIN (`raspi/control/motorcontrol.py`)
   actually corresponds to RPM — currently assumed, not confirmed against
   measured speed. Check once the Saleae Hall-edge speed measurement is
@@ -208,3 +240,10 @@ Living tracker — remove items once resolved.
   changes supply voltage, which itself changes motor speed — control
   for that when verifying, don't attribute all speed variation to
   `speed` alone.
+  - **Planned validation sequence** (real hardware, not a pytest test
+    case — see `raspi/CLAUDE.md`'s Test Suite Policy for that
+    distinction): `speed` 400 → check `rpm` → 800 → check `rpm` → 400 →
+    0 → -400 → check `rpm` → -800 → check `rpm` → -400 → 0. Exercises
+    ramping, not just single set-and-check, and direction reversal
+    (negative `speed`/`rpm`, only tested positive live so far) — ideally
+    paired with a Saleae capture for ground truth. Not yet run.

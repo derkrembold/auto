@@ -105,23 +105,33 @@ limit, not the motor or firmware. See `STM32/notes.md`
 ("Betriebsbedingungen"). Switching to battery power (see root
 `CLAUDE.md`'s Battery section) removes this implicit current limiting.
 
-## Stall Detection (Planned)
+## Stall Detection (Planned, Deprioritized)
 
-To partially compensate for current sensing being disabled: detect a
-locked/stalled rotor from the Hall signals the firmware already reads
-every commutation step (~785×/sec) — if the motor is commanded to move
-but no Hall transition occurs within some timeout, cut the MOSFETs. A
-stall is the most dangerous current-sensing-gap scenario (no back-EMF,
-only 65mΩ phase resistance, so stall current can be large and sustained)
-and is plausibly what caused the blown shunt in the first place (see
+**Not the current primary approach — see `raspi/watchdog/CLAUDE.md`'s
+two-layer LIN-based check (lower layer `rpm`, upper layer current
+sensor: stall = current flowing while `rpm` reads 0) for what's actually
+planned first.** This STM32-local approach is kept as a real future
+plan, not discarded, but deliberately sequenced *after* the standalone
+(non-STM32CubeIDE) build/flash environment goal above — touching this
+firmware is much more practical once that tooling friction is gone.
+Revisit then, not before.
+
+Idea, for when that time comes: detect a locked/stalled rotor from the
+Hall signals the firmware already reads every commutation step
+(~785×/sec) — if the motor is commanded to move but no Hall transition
+occurs within some timeout, cut the MOSFETs. A stall is the most
+dangerous current-sensing-gap scenario (no back-EMF, only 65mΩ phase
+resistance, so stall current can be large and sustained) and is
+plausibly what caused the blown shunt in the first place (see
 `STM32/notes.md` "Fehlerliste" Issue #1 — symptom was "won't start
 turning until the shaft is moved," which reads like a stall).
 
-This runs locally on the STM32 (no LIN round-trip), so it reacts in
-single-digit milliseconds — fast enough to matter, unlike the LIN-polled
-current sensor described in `raspi/watchdog/CLAUDE.md`, which is far too
-slow (~250ms) to catch a stall spike and instead covers a different
-failure mode (sustained overload while still spinning).
+This would run locally on the STM32 (no LIN round-trip), reacting in
+single-digit milliseconds — faster than the LIN-based watchdog check,
+which polls roughly 1×/second and is correspondingly slower to react.
+That speed difference is exactly why this remains a real future
+enhancement rather than something to discard, even though it's not
+being built next.
 
 Not yet implemented — see Open Points below.
 
@@ -165,8 +175,10 @@ Leerlauf Stromverbrauch: bei 5V: ca.: 0,5A,  bei 48V ca.: 1,4A
 - Evaluate whether a standalone (non-STM32CubeIDE) build/flash setup is
   feasible for this project — see the Build & Flash goal above.
 - Implement Hall-based stall detection (see Stall Detection section
-  above) — timeout/threshold not yet chosen, needs tuning against real
-  startup behavior (torque needed to overcome static friction before
-  the first Hall transition must not trigger a false stall trip).
+  above) — deprioritized, sequenced after the standalone-build-
+  environment goal, not before. When it happens: timeout/threshold not
+  yet chosen, needs tuning against real startup behavior (torque needed
+  to overcome static friction before the first Hall transition must not
+  trigger a false stall trip).
 
 Fill these in here once fixed, not in the root `CLAUDE.md`.

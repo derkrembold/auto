@@ -43,6 +43,11 @@ Die Drehzahl habe ich ermittelt durch:
 runtergezählt wird, je nachdem ob CW oder CCW. Eine Umdrehung ist 24
 steps. Taktrate kann ich einstellen, z.B. 0.05s, 0.1s, 0.2s.
 
+**Vorsicht: diese Werte mit Skepsis behandeln.** Unklar, ob sie noch
+aktuell sind — möglicherweise veraltet (andere Firmware-Version,
+andere Betriebsspannung o.ä. zum Zeitpunkt der Messung). Nicht
+ungeprüft als aktuelle Referenz verwenden.
+
 | Steuerwert | Drehzahl in U/min |
 |-----------:|-------------------:|
 | -550 | -2800 |
@@ -217,6 +222,10 @@ nun nicht mehr möglich.**
 
 Tabelle mit Messwerten: Es wird mit dem Oszilloskop der zeitliche Abstand
 zwischen 6 Zustandswechseln gemessen.
+
+**Vorsicht: diese Werte mit Skepsis behandeln.** Unklar, ob sie noch
+aktuell sind — möglicherweise veraltet. Nicht ungeprüft als aktuelle
+Referenz verwenden.
 
 | Steuerungswert | Oszilloskop |
 |---:|---:|
