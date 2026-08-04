@@ -21,16 +21,89 @@ The "how" — evolves as the firmware and tooling get built out.
 
 ## Build & Flash
 
-- Built and flashed via STM32CubeIDE / `STM32_Programmer_CLI`, both
-  installed on the Windows host (the "STM32 host" machine in the root
-  `CLAUDE.md` — this machine, not the STM32 controller being flashed).
-- Build/flash automation is meant to live here in `STM32/` — not yet
-  implemented, directory is currently empty.
-- **Goal (needs evaluation):** a standalone build/flash environment in
-  `STM32/` that doesn't require STM32CubeIDE itself — e.g. driving the
-  underlying toolchain (GCC + `STM32_Programmer_CLI`, or CMake) directly.
-  Not yet evaluated whether that's practical given the existing CubeIDE
-  project setup (see `STM32/notes.md`'s project file tree).
+- Both STM32CubeIDE and `STM32_Programmer_CLI` are installed on the
+  Windows host (the "STM32 host" machine in the root `CLAUDE.md` — this
+  machine, not the STM32 controller being flashed).
+- **Headless build: done (2026-08-04).** `STM32/firmware/` holds the
+  actual project, copied read-only from the live STM32CubeIDE workspace
+  project at `C:\Users\rembo\STM32CubeIDE\workspace_1.19.0\demoboard`
+  (source left untouched — that directory is read-only from this repo's
+  perspective, same as the KiCad directory below).
+  **Correction (2026-08-04, same day):** initially copied from
+  `C:\Users\rembo\Documents\STM32\BringupBoard.zip_expanded\BringUpBoard`
+  instead (per the user's own initial pointer) — that turned out to be a
+  stale/simpler snapshot (no PI controller, no ramping, older `main.c`
+  dated April vs. the real project's June) of what's actually an
+  actively-developed different project. Caught when comparing button/LED
+  GPIOs against the KiCad schematic led to noticing `main.c` didn't match
+  what `STM32/notes.md` already documented (PI controller etc.). Fully
+  re-copied from the correct source; the wrong copy's build/flash output
+  earlier that day should be treated as based on stale firmware, not
+  representative of the current project. STM32CubeIDE already auto-
+  generates a normal GNU Make
+  build (`firmware/Debug/makefile` etc.) — that's literally what the IDE
+  itself invokes internally on "Build." Both `arm-none-eabi-gcc` and
+  `make` are bundled inside the STM32CubeIDE install itself, no separate
+  toolchain download needed:
+  - GCC: `C:\ST\STM32CubeIDE_1.19.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.0.202411081344\tools\bin\arm-none-eabi-gcc.exe`
+  - `STM32_Programmer_CLI`: `...cubeprogrammer.win32_2.2.200.202503041107\tools\bin\STM32_Programmer_CLI.exe`
+  - `make`: also bundled in a sibling plugin dir, though `C:\Users\rembo\Documents\make-3.81\bin\make.exe` (a separate, older GNU Make 3.81) works fine too and is what `build.sh` actually uses.
+  `STM32/build.sh` wraps this (sets `PATH`, `make clean` then `make -j4
+  all` in `firmware/Debug/` — always cleans first, the build is fast
+  enough that this costs little and removes stale-object bugs as a
+  failure class entirely) — run it (or the `/build-stm32` skill, a thin
+  wrapper around it) instead of re-deriving the paths each time.
+- **Fixed while copying (both times):** `firmware/Debug/makefile` had
+  the linker script path hardcoded to the *original* project's absolute
+  location (`-T"C:\Users\rembo\STM32CubeIDE\workspace_1.19.0\...\
+  STM32H743VGTX_FLASH.ld"`) — copied verbatim by STM32CubeIDE's
+  generator, so the copy's build only worked by coincidence (reading the
+  original's linker script, right up until the original changes or
+  moves). Changed to a relative path (`../STM32H743VGTX_FLASH.ld`) so
+  the copy is genuinely standalone. This is a generic STM32CubeIDE
+  behavior, not specific to one project — expect to redo this same
+  one-line fix if the firmware is ever re-copied from source again
+  (e.g. after further upstream changes). Current build output (from the
+  correct `demoboard` source): `demoboard.elf`, 47208/16/2016
+  text/data/bss — larger than the earlier wrong-source build
+  (42384/16/1848), consistent with the extra PI-controller/ramping code
+  the correct source actually has.
+- **Headless flash: done (2026-08-04).** `STM32_Programmer_CLI` is the
+  tool (separate from the IDE GUI). Connectivity was confirmed first
+  (read-only connect, `-c port=SWD`, nothing written), correctly
+  identifying the real target: Device ID `0x450` (STM32H74x/75x family),
+  `STM32H7xx`, 1MB flash, Cortex-M7 — matches the STM32H743VGT6. Two
+  harmless quirks in that output, both explained, not bugs:
+  - `Board: NUCLEO-F401RE` — the ST-Link probe is physically cut from a
+    NUCLEO-F401RE board and used standalone (already worked fine this
+    way with STM32CubeIDE). This is stale identification baked into the
+    probe itself, unrelated to the actual connected target.
+  - `Voltage: 0.01V` even while communication works — the VTref/5V
+    sense line from the target board to the ST-Link isn't wired (no
+    cable for it), so the tool can't measure real target voltage.
+    SWDIO/SWCLK/GND are enough for SWD communication to work regardless;
+    this reading just can't be trusted as "target is unpowered."
+  With explicit, in-the-moment consent, an actual write+verify then
+  succeeded (41.41 KB, "Download verified successfully"), without
+  `-rst` — the target sat halted afterward rather than immediately
+  running, reset triggered manually (SW2) instead. That first flash was
+  from the wrong-source build (see Headless build above).
+  **Reflashed (2026-08-04) with the corrected `demoboard`-sourced
+  build** (46.12 KB, verified) via `/build-stm32` + `/flash-stm32`, both
+  with explicit consent. Confirmed working on real hardware after a
+  manual reset (SW2) — **motor runs correctly** on the corrected
+  firmware.
+  `STM32/flash.sh` (and the `/flash-stm32` skill, a thin wrapper around
+  it) wraps the connect/write/verify invocation — but wraps the
+  *mechanics* only. Both writing firmware and resetting the target start
+  code running on real hardware that can move the motor, so both still
+  need the same explicit, in-the-moment consent as motor commands do
+  (see `raspi/CLAUDE.md`'s Motor Execution Consent section; the rule
+  applies to anything that can move the motor, not just the Raspi side)
+  — every time, regardless of earlier approvals, and the script cannot
+  enforce this itself. `--reset` (`-rst`, immediate run after flashing)
+  defaults off and is its own separate consent event, distinct from the
+  write itself.
 
 ## LIN Slave
 
@@ -52,6 +125,28 @@ The "how" — evolves as the firmware and tooling get built out.
   motor, and low again on stop — this is the hardware trigger for the
   Saleae capture start (see root `CLAUDE.md` Data Flow, and
   `saleae/CLAUDE.md`).
+
+## Buttons / Switches
+
+Physical designators are from the KiCad schematic/PCB, a project that's
+**also** (confusingly) named `demoboard` — but a different, separate
+`demoboard` from the STM32CubeIDE firmware project this folder is
+sourced from (see Build & Flash above): the PCB one lives at
+`C:\Users\rembo\Documents\KiCad\designs\demoboard\demoboard`, external
+to this repo, read-only, not to be confused with the firmware source at
+`C:\Users\rembo\STM32CubeIDE\workspace_1.19.0\demoboard`. Traced via the
+PCB netlist (`Net-(U1-<pin>)` pad nets), not just the `.ioc`/`main.c`
+naming, since the STM32CubeIDE project carries no SW-designator labels
+of its own.
+
+- **SW1** → PE5. **SW3** → PC5. Both currently just toggle an onboard
+  LED while held (bring-up/test code, `main.c:207-218` for SW1/PE5→PB7,
+  `main.c:223-234` for SW3/PC5→PB8) — this is not necessarily their
+  final purpose, don't assume it stays this way.
+- **SW2** → `NRST` (confirmed via PCB net). The board's hardware reset
+  button — not a GPIO, not read by firmware.
+- **SW4** → reset button for the MCP2003B-E/SN chip (the LIN
+  transceiver on this board). Not currently referenced in `main.c`.
 
 ## Hardware
 
@@ -88,6 +183,33 @@ The "how" — evolves as the firmware and tooling get built out.
   it updated as the firmware changes (including its "STM32CubeIDE
   Projektstruktur" section, which will need to change or go away
   entirely if the standalone-build goal below is achieved).
+
+## RPM Measurement Resolution
+
+**`rpm` is quantized in steps of 25 — this is a real resolution limit
+of the measurement, not noise.** In `main.c`:
+```c
+// RPMFACTOR: 60*speedcount/(24*0.1); 60sec/min; 24steps/Umdrehung; 0.1s==100ms;
+const uint16_t RPMFACTOR = 25;
+const uint16_t SAMPLERATE = 100; // in ms
+...
+rpm = RPMFACTOR*hallCounter;
+```
+`hallCounter` is an integer Hall-edge count accumulated over a fixed
+100ms window, so `rpm` can only ever come out as a multiple of 25.
+Confirmed empirically (2026-08-04): every `rpm` value from the
+`validate_speed.py` run (see root `CLAUDE.md`'s Open Points) was an
+exact multiple of 25, and the run's observed `speed`-vs-`rpm` deviation
+(~±6%) is almost fully explained by this quantization (25/400 ≈ 6.25%)
+rather than by `speed` and `rpm` actually meaning different things.
+
+**This is entirely a property of the current `main.c` — `RPMFACTOR`,
+`SAMPLERATE`, and the 24-steps/revolution assumption could all change
+if the firmware changes.** Don't treat "25" as a fixed constant of the
+hardware; re-check this section against `main.c` if the firmware is
+ever rebuilt from a different/updated source. Relevant for the future
+optimization loop's cost function: don't mistake this quantization step
+for measurement noise when scoring control quality.
 
 ## Known Hardware Issue
 
@@ -137,11 +259,11 @@ Not yet implemented — see Open Points below.
 
 ## Status
 
-Not yet imported into this repo — directory currently only has
-`.gitkeep`. The actual firmware is an existing STM32CubeIDE project on
-this machine (project files named `demoboard`/`BringUpBoard`; see
-`STM32/notes.md` for its full file tree) — not yet located/linked into
-this repo.
+Imported (2026-08-04) — see Build & Flash above for the source, the
+same-day wrong-source correction, and current build/flash state.
+`STM32/notes.md`'s file-tree section describes the STM32CubeIDE project
+structure in general; it predates the actual import and hasn't been
+re-verified against the corrected `demoboard` source specifically.
 
 
 ## Motor Information
@@ -170,13 +292,14 @@ Leerlauf Stromverbrauch: bei 5V: ca.: 0,5A,  bei 48V ca.: 1,4A
 
 ## Open Points (STM32-specific)
 
+- `STM32/notes.md`'s file-tree section needs re-verification against the
+  corrected `demoboard` source — written before the import, may not
+  match exactly.
 - Exact trigger-pin GPIO assignment.
-- Build/flash automation script.
-- Evaluate whether a standalone (non-STM32CubeIDE) build/flash setup is
-  feasible for this project — see the Build & Flash goal above.
 - Implement Hall-based stall detection (see Stall Detection section
-  above) — deprioritized, sequenced after the standalone-build-
-  environment goal, not before. When it happens: timeout/threshold not
+  above) — deprioritized, was sequenced after the standalone-build-
+  environment goal; both build and flash are now headless, so this can
+  be reconsidered/picked up next. When it happens: timeout/threshold not
   yet chosen, needs tuning against real startup behavior (torque needed
   to overcome static friction before the first Hall transition must not
   trigger a false stall trip).
