@@ -179,11 +179,18 @@ class Watchdog:
             self._check_stall(value)
 
     def monitor(self):
-        # Runs in its own thread, independent of client connections.
+        # Runs in its own thread, independent of client connections. Must
+        # never die from a single bad poll (e.g. a bus timeout) — that
+        # would silently disable self-polled stall detection for the rest
+        # of the process's life, with nothing but a printed traceback to
+        # notice by.
         while True:
             time.sleep(RPM_POLL_INTERVAL)
-            self.check_idle()
-            self.poll_rpm()
+            try:
+                self.check_idle()
+                self.poll_rpm()
+            except Exception as exc:
+                print(f"\nwatchdog: monitor loop error (continuing): {exc}")
 
 
 def serve(address=SOCKET_ADDRESS, live=False):

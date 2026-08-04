@@ -203,6 +203,26 @@ over `--live`. Not separately broken down which specific safety paths
 during that test — worth doing deliberately at some point rather than
 assuming full coverage from general use.
 
+**Bug found and fixed (2026-08-04):** `Lin.read()` (`linbus.py`) didn't
+handle a bus timeout — if a slave doesn't respond within `pyserial`'s
+2s timeout, `self.ser.read(1)` returns empty bytes, and the old code
+crashed with `IndexError` trying to index into it. Hit live: after
+flashing new firmware via `/flash-stm32` (which deliberately doesn't
+reset the target, see `STM32/CLAUDE.md`), the STM32 sat halted and
+didn't answer any LIN traffic, so `poll_rpm()`'s `get_rpm()` call timed
+out and crashed — which killed the `monitor()` background thread
+**permanently and silently** (only a printed traceback), disabling
+self-polled stall detection for the rest of the process's life. Fixed
+two ways: `Lin.read()` now returns an error code (`-5`) on a timed-out
+read instead of crashing, and `monitor()`'s loop body is now wrapped in
+try/except so a single bad poll (whatever the cause) can never kill the
+thread outright — it logs and keeps polling. Both changes are pure
+robustness fixes at the LIN-bus system boundary (a slave can legitimately
+not respond for many reasons — halted, unpowered, bus unplugged); no
+new test added since `Lin.read()`/`write()` remain outside unit-test
+coverage for the same reason documented in `raspi/tests/test_linbus.py`
+(need real/dry-run serial, not just pure logic).
+
 ## Open Points (watchdog-specific)
 
 - Concrete current-cutoff threshold and exact polling rate for the LIN

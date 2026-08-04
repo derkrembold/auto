@@ -16,6 +16,9 @@ venv/
 Thumbs.db
 desktop.ini
 
+# Editor-Backup-/Swap-Dateien
+*~
+
 # Saleae Rohdaten (können groß werden - je nach Bedarf anpassen)
 saleae/exports/*.sal
 
@@ -24,3 +27,13 @@ STM32/datasheets/*.pdf
 
 # Obsidian UI-Zustand - lokal, kein Projektinhalt
 .obsidian/
+
+# STM32 Build-Artefakte - regenerierbar via STM32/build.sh, sonst riesige Diffs
+STM32/firmware/Debug/**/*.o
+STM32/firmware/Debug/**/*.d
+STM32/firmware/Debug/**/*.su
+STM32/firmware/Debug/**/*.cyclo
+STM32/firmware/Debug/*.elf
+STM32/firmware/Debug/*.list
+STM32/firmware/Debug/*.map
+STM32/firmware/Debug/default.size.stdout

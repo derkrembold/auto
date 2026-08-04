@@ -121,9 +121,15 @@ class Lin:
         data = []
         for _ in range(mbytes):
             response = self.ser.read(1)
+            if len(response) != 1:
+                print("no response from slave (read timeout)")
+                return -5, []
             data.append(response[0])
 
         response = self.ser.read(1)
+        if len(response) != 1:
+            print("no response from slave (checksum read timeout)")
+            return -5, []
         if response[0] != self.checksum(data):
             print("checksum not right")
             return -3, []

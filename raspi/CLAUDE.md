@@ -59,6 +59,34 @@ other. Same caution applies to any future same-named files across
   dependency at all. See `watchdog/CLAUDE.md`'s Connection Model section
   for why it's persistent (instant disconnect detection) rather than
   reconnecting per command.
+- `control/validate_speed.py` — standalone script implementing the
+  speed-ramp validation sequence from root `CLAUDE.md`'s Open Points
+  (0 → 400 → 800 → 1200 → 800 → 400 → 0 → -400 → -800 → -1200 → -800 →
+  -400 → 0, checking `rpm` after every step). Not a pytest test case
+  (real hardware, see Test Suite Policy below) — run it directly
+  (`python3 validate_speed.py`) with the watchdog already running
+  `--live`. Falls under Motor Execution Consent below like any other
+  motor command, whether run manually on the Pi or triggered remotely.
+  Uses one persistent connection for the whole sequence (imports
+  `SOCKET_ADDRESS` from `motorcontrol.py`), deliberately not the
+  one-shot `send_command()` helper — a one-shot connection's immediate
+  disconnect would trigger the watchdog's stop-on-disconnect after every
+  single step.
+- `control/capture_step_response.py` — standalone script: `speed 0` →
+  `speed 1000` (step input), then samples `rpm` every 200ms for 8s
+  (measured from the step, not from the initial `speed 0`), always
+  ending with `speed 0`. Prints CSV (`elapsed_ms,rpm`) to stdout — does
+  not write a file itself, the caller (human or Claude capturing the
+  SSH output) decides where it's saved, e.g. `runs/` in the main repo
+  (see root `CLAUDE.md`'s Repo Structure). Same one-persistent-
+  connection and Motor Execution Consent reasoning as
+  `validate_speed.py` above. Sampling is scheduled against the absolute
+  start time (not accumulated sleeps) so per-sample LIN round-trip
+  latency doesn't drift the interval over the run.
+  Both this and `validate_speed.py` above have their pre-flight checks
+  (watchdog running? client already connected?), consent gating, and
+  output-saving convention written up once in the `/run-raspi-validation`
+  skill — use that instead of re-deriving the steps each time.
 - `watchdog/` — Independent safety barrier, runs as its own process
   separate from the rest, and is the sole LIN master (owns
   `/dev/ttyS0` — `control/` no longer does). See `watchdog/CLAUDE.md`
