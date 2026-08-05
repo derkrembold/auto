@@ -71,6 +71,10 @@ The "how" — evolves as the system gets built out.
 
 ```
 Auto/
+├── addresses.json          Single source of truth for LIN PIDs (see LIN Protocol section)
+├── generate_addresses.py   Generates addresses.md + generated/ drafts from addresses.json
+├── addresses.md            Generated "at a glance" occupied/free PID map
+├── generated/               Generator's draft output (gitignored, review-before-adopt)
 ├── STM32/          Firmware + build/flash automation (STM32 CLI)
 ├── raspi/
 │   ├── control/    LIN master code (speed command) — already implemented
@@ -138,31 +142,81 @@ to the header only.
 
 ### Slave Topology
 
-Currently 1 motor slave. Planned expansion: 2 motor slaves, 1 current
-sensor, 1 light sensor — all as LIN slaves on the same bus, addressed
-via the same `linaddresses.py`/`addresses.h` scheme (each slave gets a
-control PID and/or status PID, as applicable). Keep the PID table
-structure generic rather than hardcoded to a single slave when extending
-it, but don't build support for slaves that don't exist yet.
+Currently 1 motor slave, live on the bus. `addresses.json` (see below)
+already reserves room for more: up to 4 motors, 2 current sensors, 2
+light sensors — reserved capacity in the addressing scheme, not a claim
+that this hardware exists yet. Keep the PID table structure generic
+rather than hardcoded to a single slave, but don't build device
+firmware/support for units that don't exist yet.
 
-### Address Table Single Source of Truth (Planned)
+### Address Table Single Source of Truth (In Progress)
 
-With now 3+ separately hand-maintained address tables
+With 3+ separately hand-maintained address tables
 (`raspi/control/linaddresses.py`, `STM32/`'s `addresses.h`,
-`currentsensor/firmware/addresses.hpp`, soon `lightsensor/` too, plus
+`currentsensor/firmware/addresses.h`, soon `lightsensor/` too, plus
 future motor slaves), manual sync is a proven bug source — the DCPS
 course project's own notes (`currentsensor/notes.md`, Problems 8 & 10)
-document exactly this failure mode already happening once.
+document exactly this failure mode happening once already, and it
+resurfaced live in this project too: `currentsensor/firmware/addresses.h`
+was still using the motor's own PIDs, with different message byte
+counts for the same PID names — a real collision waiting to happen once
+current-sensor hardware actually joins the bus, not just a theoretical
+risk.
 
-Planned fix: a single canonical **`addresses.json`** (location TBD,
-likely repo root or a shared location all generators can reach) listing
-each LIN message (name, PID, byte count, source, destination) once. A
-small Python generator script produces `linaddresses.py`, `addresses.h`/
-`.hpp` etc. from it — none of those should be hand-edited directly once
-this exists. JSON chosen over YAML specifically to avoid an extra
-dependency (`pyyaml`) — `json` is stdlib.
+**Design (settled 2026-08-05):** `addresses.json` (repo root) is now the
+single canonical source. `generate_addresses.py` (repo root) generates
+from it:
+- `addresses.md` (repo root) — human "at a glance" occupied/free PID
+  map, shown block-wise (see addressing model below).
+- `linaddresses.py` (the master/raspi's view) — every message across
+  every device class; `sources`/`destinations` are strings (including
+  `"master"`) naming a device *class*, not a fixed wire address.
+- `addresses.h` — **one single file, byte-for-byte identical for every
+  embedded target** (STM32, currentsensor, lightsensor, future motor
+  slaves) — no per-target filtering. Message names are already globally
+  unique across classes, unused `const uint8_t`s cost effectively
+  nothing, and firmware already decides what to act on via PID
+  comparison regardless of what else happens to be declared in the
+  header. `sources`/`destinations` there use small distinct `uint8_t`
+  sentinels (`master`, `motor`, `current`, `light` — not real wire
+  values) mirroring the Python class-name strings, since C can't put
+  strings in a `uint8_t[]`.
 
-Not yet built — see Open Points.
+**Addressing model — multiple identical physical units, one firmware
+image each:** up to 4 motors (and multiple current/light sensors)
+planned, but firmware must stay byte-identical across every unit of one
+device type — so no single unit's PID can be baked in at compile time.
+Instead:
+- The lowest 2 ID bits of every message's PID are reserved for an
+  **instance number** (0-3; only 1 bit is actually used today for
+  current/light, which have 2 instances each). Message *type* occupies
+  the remaining upper ID bits — every message's base PID in
+  `addresses.json` is a multiple of 4 (one 4-PID "block" per message
+  type). A separate `instances` list (`{"class": "motor", "num": 0,
+  "id": "0x00"}`, ...) gives each physical instance's 2-bit offset.
+- The actual on-wire PID for message X addressed to instance N is
+  `base_pid(X) | id(N)` — computed at **runtime**, not compile time.
+- Each physical board determines its own instance number at boot from
+  **hardware strap pins**, not from a firmware source difference — on
+  the STM32 motor controller, `PB14`/`PB15` read via internal pull-ups,
+  jumper-to-GND to select (see `STM32/CLAUDE.md`'s Buttons/Switches
+  section). This is what actually makes byte-identical firmware across
+  multiple physical units possible.
+- `addresses.md`'s block table is the "at a glance" check for this:
+  which 4-PID blocks are occupied by which message type, how many
+  instance slots within a block are still free, and which blocks are
+  entirely free for future message types.
+
+**Safety convention while this is still being reviewed by hand:**
+`generate_addresses.py` writes its `linaddresses.py`/`addresses.h`
+drafts to `generated/` (gitignored) — **never directly overwriting**
+the real `raspi/control/linaddresses.py`, `STM32/firmware/Core/Inc/
+addresses.h`, or `currentsensor/firmware/addresses.h`. Deliberate and
+temporary; lifted once the new scheme is confirmed adopted.
+
+**Not yet done — see Open Points below** for the concrete remaining
+steps (adopting the generated drafts for real, and wiring the runtime
+jumper-read into actual firmware dispatch logic).
 
 
 ## Battery
@@ -227,8 +281,19 @@ Living tracker — remove items once resolved.
 
 - **8S vs 9S battery decision** (24V vs ~28.8V nominal) — not yet
   decided. See Battery section above.
-- **`addresses.json` generator script** — not yet built. See LIN
-  Protocol "Address Table Single Source of Truth" section above.
+- **`addresses.json`/`generate_addresses.py`** — design settled and
+  built (2026-08-05), see LIN Protocol "Address Table Single Source of
+  Truth" section above. Remaining concrete steps:
+  - Review `generated/linaddresses.py`/`addresses.h` by hand and adopt
+    them for real (currently deliberately not overwriting the real
+    files — see that section).
+  - Wire the actual runtime jumper-read (`PB14`/`PB15` → instance
+    number → `base_pid | id`) into STM32 `main.c`'s LIN dispatch logic
+    — the jumper *reading* itself is hardware-confirmed working
+    (2026-08-05), but the dispatch logic still uses the old flat,
+    single-motor constants.
+  - Same runtime treatment needed in `currentsensor`/`lightsensor`
+    firmware once they're built for multiple physical units.
 - Saleae-specific open points (pin mapping, sample rate) — see
   `saleae/CLAUDE.md`.
 - Analysis-specific open points (cost function/metric weighting) — see

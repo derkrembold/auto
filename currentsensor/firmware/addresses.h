@@ -1,5 +1,5 @@
-#ifndef ADDRESSES_HPP
-#define ADDRESSES_HPP
+#ifndef ADDRESSES_H
+#define ADDRESSES_H
 
 const uint8_t cntlslv0 = 0x09;
 const uint8_t cntlslv1 = 0x1a;

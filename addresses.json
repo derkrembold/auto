@@ -1,0 +1,27 @@
+{
+  "sync": "0x55",
+  "master": "0xff",
+  "instances": [
+    {"class": "motor",   "num": 0, "id": "0x00"},
+    {"class": "motor",   "num": 1, "id": "0x01"},
+    {"class": "motor",   "num": 2, "id": "0x02"},
+    {"class": "motor",   "num": 3, "id": "0x03"},
+    {"class": "current", "num": 0, "id": "0x00"},
+    {"class": "current", "num": 1, "id": "0x01"},
+    {"class": "light",   "num": 0, "id": "0x00"},
+    {"class": "light",   "num": 1, "id": "0x01"}
+  ],
+  "messages": [
+    {"name": "cntl0mot", "pid": "0x00", "bytes": 2, "source": "master", "destination": "motor"},
+    {"name": "cntl1mot", "pid": "0x04", "bytes": 2, "source": "master", "destination": "motor"},
+    {"name": "cntl2mot", "pid": "0x08", "bytes": 6, "source": "master", "destination": "motor"},
+    {"name": "cntl3mot", "pid": "0x0C", "bytes": 2, "source": "master", "destination": "motor"},
+    {"name": "st0mot",   "pid": "0x10", "bytes": 3, "source": "motor", "destination": "master"},
+    {"name": "st1mot",   "pid": "0x14", "bytes": 2, "source": "motor", "destination": "master"},
+    {"name": "st2mot",   "pid": "0x18", "bytes": 2, "source": "motor", "destination": "master"},
+    {"name": "cntl0cur", "pid": "0x20", "bytes": 2, "source": "master", "destination": "current"},
+    {"name": "st0cur",   "pid": "0x24", "bytes": 2, "source": "current", "destination": "master"},
+    {"name": "cntl0lig", "pid": "0x30", "bytes": 2, "source": "master", "destination": "light"},
+    {"name": "st0lig",   "pid": "0x34", "bytes": 2, "source": "light", "destination": "master"}
+  ]
+}

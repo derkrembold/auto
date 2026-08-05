@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <util/delay.h>
 #include "errors.hpp"
-#include "addresses.hpp"
+#include "addresses.h"
 
 // LED Pins
 #define RED_LED_PIN PD6
@@ -235,6 +235,22 @@ uint8_t largest(uint16_t l[6]) {
   return index;
 }
 
+
+uint8_t checksum(const uint8_t *data, uint8_t data_size) {
+  uint16_t check = 0;
+  while (data_size-- > 0) {
+    check += *(data++);
+    if (check > 0xFF) {
+      check -= 0xFF;
+    }
+  }
+
+  return (~check) & 0xFF;
+}
+
+
+
+
 int main() {
 
   init(BAUD);
@@ -273,10 +289,10 @@ int main() {
 
 
   while(true) {
-    portd(RED_LED_PIN, 1);
+    /*portd(RED_LED_PIN, 1);
     _delay_ms(500);
     portd(RED_LED_PIN, 0);
-    _delay_ms(500);
+    _delay_ms(500);*/
     int sync = receivebyte();
     if(sync==LIN_TIM_ERR){
       error(LIN_TIM_ERR);
@@ -289,28 +305,57 @@ int main() {
       uint16_t val1 = readadc(2);
       uint16_t val2 = readadc(3);
       //continue;
-      transmitbyte(val1 & 0xFF);
-      receivebyte();
-      transmitbyte((val1 >> 8) & 0x03);
-      receivebyte();
-      transmitbyte(val2 & 0xFF);
-      receivebyte();
-      transmitbyte((val2 >> 8) & 0x03);
-      receivebyte();
-      transmitbyte(0xFF);
-      receivebyte();
+      uint8_t data[4];
+      data[0] = val1 & 0xFF;
+      data[1] = (val1 >> 8) & 0x03;
+      data[2] = val2 & 0xFF;
+      data[3] = (val2 >> 8) & 0x03;
+      
+      int check = 0;
+      transmitbyte(data[0]);
+      check = receivebyte();
+      if (check != data[0]) {
+	error(LIN_CHK_ERR);
+	continue;
+      }
+      transmitbyte(data[1]);
+      check = receivebyte();
+      if (check != data[1]) {
+	error(LIN_CHK_ERR);
+	continue;
+      }
+      transmitbyte(data[2]);
+      check = receivebyte();
+      if (check != data[2]) {
+	error(LIN_CHK_ERR);
+	continue;
+      }
+      transmitbyte(data[3]);
+      check = receivebyte();
+      if (check != data[3]) {
+	error(LIN_CHK_ERR);
+	continue;
+      }
+      int checks = checksum(data, 4);
+      transmitbyte(checks);
+      check = receivebyte();
+      if (check != checks) {
+	error(LIN_CHK_ERR);
+	continue;
+      }
       continue;
     }
     else if((cntl&0x3f)== cntlslv0){
-      int data1 = receivebyte();
-      int data2 = receivebyte();
-      if(data1 == 0x01 && data2 == 0xab){
+      uint8_t data[2];
+      data[0] = receivebyte();
+      data[1] = receivebyte();
+      if(data[0] == 0x01 && data[1] == 0xab){
         portb(YELLOW_LED_PIN, 1);
         portd(RED_LED_PIN, 1);
         portd(GREEN_LED_PIN, 1);
         portd(BLUE_LED_PIN, 1);
       }
-      if(data1 == 0xcd && data2 == 0x0c){
+      if(data[0] == 0xcd && data[1] == 0x0c){
         portb(YELLOW_LED_PIN, 0);
         portd(RED_LED_PIN, 0);
         portd(GREEN_LED_PIN, 0);
@@ -318,6 +363,9 @@ int main() {
       }
       
       int check = receivebyte();
+      if (check != checksum(data,2)) {
+	error(LIN_CHK_ERR);
+      }
       continue;
     }   
     

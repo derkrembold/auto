@@ -218,6 +218,19 @@ Der Shunt war zu klein dimensioniert.
 Lösung: Shunt rausgelötet und eine Kupferbrücke rein. **Strommessung ist
 nun nicht mehr möglich.**
 
+**Issue #2 (2026-08-05)**
+
+Symptom: Firmware-Test für PB14/PB15 (Jumper-Erkennung über
+`Conn_02x05_Top_Bottom`, siehe `STM32/CLAUDE.md`) reagierte nicht auf
+den Jumper — LEDs blieben unbeeinflusst vom Pin-Zustand. Firmware-Logik
+und KiCad-Schaltplan (PB14→J1 Pin 7, PB15→J1 Pin 5, beide direkt ohne
+weitere Bauteile) waren beide nachweislich korrekt; das Board lief
+ansonsten normal (LIN/Hall-Antworten funktionierten).
+
+Problem: Zwei kalte Lötstellen am Connector (`J1`).
+
+Lösung: Nachgelötet. Jumper-Erkennung funktioniert seitdem wie erwartet.
+
 ## Messwerte (Oszilloskop)
 
 Tabelle mit Messwerten: Es wird mit dem Oszilloskop der zeitliche Abstand

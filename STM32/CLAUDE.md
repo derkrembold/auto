@@ -148,6 +148,39 @@ of its own.
 - **SW4** → reset button for the MCP2003B-E/SN chip (the LIN
   transceiver on this board). Not currently referenced in `main.c`.
 
+## Instance-Selection Jumper (PB14/PB15)
+
+Hardware strap pins for the multi-instance LIN addressing scheme — see
+root `CLAUDE.md`'s LIN Protocol "Address Table Single Source of Truth"
+section for the full design (why this exists: byte-identical firmware
+across multiple physical motor boards, instance number read at runtime
+instead of baked into the firmware source).
+
+- **`PB14`/`PB15`**, configured `GPIO_MODE_INPUT` + `GPIO_PULLUP`
+  (`main.c:724-728`). Jumper to GND to select — reads `GPIO_PIN_RESET`
+  when jumpered, floating/pulled-up otherwise.
+- Wired to connector **`J1`** (`Connector_Generic:Conn_02x05_Top_Bottom`
+  in the KiCad schematic — see Buttons/Switches above for the read-only
+  KiCad path): `PB14` → `J1` pin 7, `PB15` → `J1` pin 5. Both nets are
+  direct/exclusive (just the MCU pad and the header pad, no other
+  component) with GND on the adjacent pins each way (pin 5 between GND
+  pins 4/6, pin 7 between GND pins 6/8) — a plain 2-pin jumper cap
+  bridges signal to GND directly.
+- `Conn_02x05_Top_Bottom` numbers **column-wise, not left-to-right**
+  (row 1 = pins 1,3,5,7,9; row 2 = pins 2,4,6,8,10) — easy to jumper the
+  wrong physical pin if you assume sequential numbering. Worth a
+  multimeter continuity check if the jumper doesn't seem to do anything.
+- **Confirmed working end-to-end (2026-08-05)**, wiring and firmware
+  logic verified correct against the KiCad schematic and via LED test
+  (`main.c:293-323`: reads `PB14`/`PB15`, drives `PB8`/`PB7`
+  accordingly). Root-caused an initial "doesn't do anything" failure to
+  **two cold solder joints on `J1`** — see `STM32/notes.md`'s
+  Fehlerliste, Issue #2. Not a firmware or schematic problem.
+- **Not yet done:** the actual LIN dispatch logic in `main.c` doesn't
+  read these pins or compute `base_pid | instance_id` yet — only the
+  raw pin-read-drives-LED test exists so far. See root `CLAUDE.md`'s
+  Open Points for this as a concrete remaining step.
+
 ## Hardware
 
 - **MCU:** STM32H743VGT6.

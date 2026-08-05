@@ -36,29 +36,68 @@ hardware/firmware work starts and produces its own findings).
 ## Firmware
 
 `firmware/` holds the DCPS course project's current-sensor ATmega328P
-source (`main.cpp`, `addresses.hpp`, `errors.hpp`, `Makefile`) — starting
-point for this project's own current-sensor slave, not yet adapted to
-this project (still has the original author's LIN addressing etc.).
+source (`main.cpp`, `addresses.h`, `errors.hpp`, `Makefile` — `.hpp` was
+renamed to `.h`, see root `CLAUDE.md`'s LIN Protocol section on why)
+— starting point for this project's own current-sensor slave (still has
+the original author's LIN addressing in `addresses.h`, see Open Points).
 Only source files were copied — build artifacts (`.o`/`.s`/`.ii`/`.elf`/
-`.hex`) and editor backups (`~` files) were intentionally left out.
+`.hex`) and editor backups (`~` files) were intentionally left out (and
+are `.gitignore`d, so `make` output never needs manual cleanup before a
+commit).
 
-Developing/building this doesn't need to happen on this machine — the
-repo is the source-of-truth copy (same pattern as `raspi/control/`); the
-actual AVR build/flash toolchain can run wherever that's normally set up.
+**Build: working (2026-08-05).** `current.elf`/`current.hex` build from
+this folder's own `Makefile` (sibling to `firmware/`, calls `cd firmware
+&& make -f Makefile objects` then links + `avr-objcopy`s to `.hex`) —
+same toolchain (`avr-gcc`, bundled `make-3.81`) as `STM32/build.sh`
+uses, just AVR instead of ARM. Chosen deliberately as a **standalone
+copy** (option 1 of two discussed), not a live reference into
+`C:\Users\rembo\Documents\ATMEGA328\Controller\` (the original DCPS
+project's shared multi-target build, which builds `current`/`light`/
+`eeprom`/4×`slave` all from common `cores`/`common`/`client` object
+trees) — same reasoning as the STM32 `demoboard` correction: avoid
+drift risk between a copy and a hand-maintained original. Turned out to
+be straightforward: `main.cpp` doesn't call into the Arduino
+Wiring/HardwareSerial layer at all (raw AVR port/ADC access, own
+`transmitbyte`/`receivebyte`), so `CORE_OBJECTS` (the `cores/arduino/*.o`
+the original Controller Makefile links in) isn't needed here — no
+missing-dependency risk from going standalone.
+
+**Protocol fix, same day:** the slave→master (`stslv2`-equivalent) reply
+path used to send a hardcoded `0xFF` as its final "checksum" byte
+instead of computing one, and didn't check the echoed bytes at all. Both
+fixed: a real `checksum()` (sum-with-wraparound-at-0xFF, then `~sum &
+0xFF` — same algorithm as `raspi/watchdog/linbus.py`'s `Lin.checksum()`)
+is now computed and sent, and every echoed byte (data and checksum) is
+compared against what was sent, erroring (`LIN_CHK_ERR`) on mismatch.
+The master→slave (`cntlslv0`-equivalent) handler also now verifies the
+received checksum the same way. **`lightsensor/firmware/main.cpp` has
+not received the equivalent fix yet** — see `lightsensor/CLAUDE.md`.
+
+Developing/building doesn't *need* to happen on this machine — the repo
+is the source-of-truth copy (same pattern as `raspi/control/`) — but as
+of the above, it also works fine here if that's convenient.
 
 ## Status
 
-Firmware source copied from the DCPS course project as a starting point
-(see Firmware section above) — not yet adapted/built/tested for this
-project.
+Firmware builds cleanly (`current.hex` produced and verified
+reproducible via a clean rebuild, 2026-08-05) with the checksum fix
+above. Not yet flashed to real current-sensor hardware, not yet adapted
+to this project's own LIN addressing (see Open Points) — still the DCPS
+course project's sensor logic otherwise.
 
 ## Open Points (currentsensor-specific)
 
-- Adapt `firmware/addresses.hpp` to this project's actual LIN addressing
-  once this slave's PID is assigned (see Slave Topology note in root
-  `CLAUDE.md`) — currently still the DCPS course project's own addresses.
+- Replace `firmware/addresses.h` with the real generated one once root
+  `CLAUDE.md`'s `addresses.json`/`generate_addresses.py` scheme is
+  reviewed and adopted (see its LIN Protocol section) — currently still
+  the DCPS course project's own, unrelated addressing.
 - Verify/adapt the hardware design this firmware assumes (informed by,
   but not identical to, the DCPS course project's build).
-- Build/flash environment for this firmware not yet set up.
+- Flash environment (`avrdude`/programmer) for this firmware not yet set
+  up/tested from this repo — build is done, flashing isn't (same
+  build-then-flash split as `STM32/CLAUDE.md`'s Build & Flash section;
+  a `/flash-stm32`-equivalent skill doesn't exist for this yet).
+- Apply the same checksum/echo-compare fix to `lightsensor/firmware/
+  main.cpp` — not done yet, see `lightsensor/CLAUDE.md`.
 
 Fill these in here once fixed, not in the root `CLAUDE.md`.
