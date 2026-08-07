@@ -18,9 +18,15 @@
 #            Omitted by default — without it, the target sits halted
 #            after flashing until reset manually (button/power-cycle) or
 #            via a separate, explicitly-consented run of this script.
+#
+# Every invocation (by Claude or run manually) appends one line to
+# STM32/flash.log — timestamp, firmware path, mode, exit status. Lets
+# Claude check when a flash last happened without having to ask, even
+# for flashes it didn't itself trigger. Gitignored, not a build artifact.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_FILE="$REPO_ROOT/STM32/flash.log"
 
 PROGRAMMER_CLI="/c/ST/STM32CubeIDE_1.19.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.win32_2.2.200.202503041107/tools/bin/STM32_Programmer_CLI.exe"
 
@@ -37,6 +43,14 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+log_result() {
+    local status=$?
+    local mode="write+verify"
+    [ "$DO_RESET" -eq 1 ] && mode="write+verify+reset"
+    echo "$(date '+%Y-%m-%d %H:%M:%S')  $mode  $FW_PATH  exit=$status" >> "$LOG_FILE"
+}
+trap log_result EXIT
 
 if [ ! -f "$FW_PATH" ]; then
     echo "Firmware not found: $FW_PATH" >&2

@@ -33,6 +33,36 @@ Genuinely useful findings in there include:
 findings, it may be updated (e.g. once this project's own current-sensor
 hardware/firmware work starts and produces its own findings).
 
+## Hardware
+
+The board carries **two ACS712xLCTR-20A** Hall-effect current-sensing
+chips — one channel per physical motor, so a single current-sensor board
+can measure current for up to 2 motors at once (matches the "up to 4
+motors, 2 current sensors" reserved capacity in root `CLAUDE.md`'s LIN
+Protocol section, at 2 motors per sensor board). Each ACS712's analog
+output feeds one of the ATmega328's ADC inputs (`readadc(2)`/`readadc(3)`
+in `firmware/main.cpp`), 10-bit resolution. At 0 A, the raw ADC reading
+sits at the midpoint, **~512** (matches the ACS712's own output biasing
+at `Vcc/2`, before this project's `Lin`-side scaling was ever attempted).
+`st0cur`'s 4-byte reply packs both readings — `val1` = ACS712 #1 (channel
+2), `val2` = ACS712 #2 (channel 3), sent as raw 10-bit counts (0-1023)
+over LIN. **Conversion to amps happens on the Raspi side**
+(`raspi/watchdog/linbus.py`'s `_adc_to_amps()`), not on the AVR —
+deliberate: the ATmega328 has no FPU, the calibration may still need
+tuning (easier to adjust in Python than to reflash), and `get_temp()`
+already follows the same raw-on-the-wire/converted-on-the-master
+pattern. Confirmed constants: `Vcc` = 5V (ATmega328 AVCC reference,
+also the ACS712 supply), 2.5V = 0A (confirmed against real hardware —
+raw reads ~512 at 0A), 100 mV/A sensitivity (ACS712xLCTR-**20A**
+datasheet value — the 20A variant, not the 5A/30A ones, which have
+different sensitivities).
+
+KiCad design for this board: `C:\Users\rembo\Documents\KiCad\designs\
+Abgabe Stromsensor\Abgabe Stromsensor\Current Sensor Board` — a
+different KiCad project from the STM32 `demoboard` PCB referenced in
+`STM32/CLAUDE.md` (unrelated boards, don't confuse the two "boards
+with schematics" in this repo's toolchain).
+
 ## Firmware
 
 `firmware/` holds the DCPS course project's current-sensor ATmega328P
@@ -79,25 +109,52 @@ of the above, it also works fine here if that's convenient.
 
 ## Status
 
-Firmware builds cleanly (`current.hex` produced and verified
-reproducible via a clean rebuild, 2026-08-05) with the checksum fix
-above. Not yet flashed to real current-sensor hardware, not yet adapted
-to this project's own LIN addressing (see Open Points) — still the DCPS
-course project's sensor logic otherwise.
+Firmware builds cleanly (`current.hex`, reproducible clean rebuild) and
+has been flashed to real current-sensor hardware (flashing is always
+done manually by the user, not from this repo/Claude — see
+`currentsensor/Makefile`'s Firmware section above). Adapted to this
+project's own LIN addressing (`st0cur`/`cntl0cur`, correct byte counts
+via `generate_addresses.py`'s output) — no longer the DCPS course
+project's own addressing.
+
+**Bugs found and fixed on real hardware, 2026-08-06/07:**
+- Dispatch used the wrong device's PIDs (`st0lig`/`cntl0lig` instead of
+  its own `st0cur`/`cntl0cur`) — fixed.
+- The "unknown pid → skip N bytes" fallback path used `getindex()`'s
+  return value (an array *index*) as if it were the message's *byte
+  count* — fixed to look up `messagebytes[index]`.
+- Sync-byte detection called the blocking, LED-blinking `error()` on
+  every mismatch (up to ~4.5s per call) — since the bus is busy (the
+  watchdog self-polls `rpm` every second), this reliably cascaded into
+  repeated, self-perpetuating desync ("aus dem Tritt"), which a plain
+  reset couldn't fix (the master never paused long enough for the
+  sensor's own blocking delays to line up with a real gap). Fixed by
+  scanning for `sync` in a tight, non-blocking loop instead.
+- The `st0cur` reply loop's echo-mismatch handling used `continue`
+  inside the byte-send `for` loop (only skips to the next byte) instead
+  of aborting the whole reply — fixed with an `aborted` flag + `break`.
+
+**Confirmed working on the real shared LIN bus together with the motor
+(2026-08-07):** `raspi/control/validate_motor_currentsensor.py` (motor
+speed steps interleaved with `current`/`hal`/`rpm` queries — see its own
+module docstring) ran clean end-to-end. This was also the scenario that
+originally exposed a matching STM32-side bug (`HAL_UART_RxCpltCallback`
+not re-arming UART reception for a recognized-but-foreign pid) — see
+`STM32/CLAUDE.md`.
 
 ## Open Points (currentsensor-specific)
 
-- Replace `firmware/addresses.h` with the real generated one once root
-  `CLAUDE.md`'s `addresses.json`/`generate_addresses.py` scheme is
-  reviewed and adopted (see its LIN Protocol section) — currently still
-  the DCPS course project's own, unrelated addressing.
-- Verify/adapt the hardware design this firmware assumes (informed by,
-  but not identical to, the DCPS course project's build).
-- Flash environment (`avrdude`/programmer) for this firmware not yet set
-  up/tested from this repo — build is done, flashing isn't (same
-  build-then-flash split as `STM32/CLAUDE.md`'s Build & Flash section;
-  a `/flash-stm32`-equivalent skill doesn't exist for this yet).
-- Apply the same checksum/echo-compare fix to `lightsensor/firmware/
-  main.cpp` — not done yet, see `lightsensor/CLAUDE.md`.
+- No hardware instance-strap-pin reading yet (unlike the motor's
+  `hwbits`, see `STM32/CLAUDE.md`'s Instance-Selection Jumper section) —
+  always answers as instance 0. Fine while only one physical current
+  sensor exists; revisit if/when a second one joins the bus.
+  `raspi/watchdog/linbus.py`'s `CURRENT_INSTANCE_ID` documents this too.
+- ACS712 zero-point (2.5V) is confirmed against real hardware, but the
+  "near 0A" noise tolerance isn't — `validate_motor_currentsensor.py`
+  only sanity-bounds the raw range (see its own Open Points/comments),
+  doesn't yet assert values are close to 0A when the motor is stopped.
+- Apply the same checksum/echo-compare and sync-scan-loop fixes to
+  `lightsensor/firmware/main.cpp` — not done yet, see
+  `lightsensor/CLAUDE.md`.
 
 Fill these in here once fixed, not in the root `CLAUDE.md`.

@@ -170,6 +170,7 @@ int16_t controlvariableinput = 0;
 unsigned int dirmeasured = 0;
 int16_t rpm = 0;
 float integral = 0.0f;
+uint8_t hwbits = 0x0;
 
 volatile const int directionMatrix[6][6] = {
 		{0, 1, 2, 0, -2, -1}, // 1 -> Sprung zu 2=CW, 3=CCW, 5=CW, 6=CCW
@@ -271,6 +272,13 @@ int main(void)
   }
 #endif
 
+  if(HAL_GPIO_ReadPin (GPIOB, GPIO_PIN_14) ==  GPIO_PIN_SET) {
+    hwbits |= 0x01;
+  } 
+  if(HAL_GPIO_ReadPin (GPIOB, GPIO_PIN_15) ==  GPIO_PIN_SET) {
+    hwbits |= 0x02;
+  }
+  
   //oldstep =
   driveStep(0);
   previousState = getState();
@@ -290,7 +298,8 @@ int main(void)
 			  done = 0;
 		  }
 
-		  if(HAL_GPIO_ReadPin (GPIOB, GPIO_PIN_14) ==  GPIO_PIN_RESET)
+
+		  if(HAL_GPIO_ReadPin (GPIOE, GPIO_PIN_5) ==  GPIO_PIN_RESET)
 		  {
 			  // Set The LED ON!
 			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
@@ -306,7 +315,7 @@ int main(void)
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET);
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_RESET);
 		  }
-		  if(HAL_GPIO_ReadPin (GPIOB, GPIO_PIN_15) ==  GPIO_PIN_RESET)
+		  if(HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_5) ==  GPIO_PIN_RESET)
 		  {
 			  // Set The LED ON!
 			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
@@ -361,13 +370,13 @@ int main(void)
 	  }
 	  // some LIN message was received.
 	  bodyrecvd = false;
-	  if ((rx_header[1]&0x3f) == cntlslv0 && rx_body[0] == 0x01 && rx_body[1] == 0xdb) {
+	  if ((rx_header[1]&0x3f) == (cntl0mot | hwbits) && rx_body[0] == 0x01 && rx_body[1] == 0xdb) {
 		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
 	  }
-	  if ((rx_header[1]&0x3f) == cntlslv0 && rx_body[0] == 0xcd && rx_body[1] == 0x0c) {
+	  if ((rx_header[1]&0x3f) == (cntl0mot | hwbits) && rx_body[0] == 0xcd && rx_body[1] == 0x0c) {
 		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
 	  }
-	  if ((rx_header[1]&0x3f) == cntlslv1) {
+	  if ((rx_header[1]&0x3f) == (cntl1mot | hwbits)) {
 		  int16_t speedlocal = (int16_t)((rx_body[0] << 8) | rx_body[1]);
 		  driveStep(speedlocal);
 		  driveStep(0);
@@ -379,7 +388,7 @@ int main(void)
 		  driveStep(0);
 		  driveStep(0);
 	  }
-	  if ((rx_header[1]&0x3f) == cntlslv2) {
+	  if ((rx_header[1]&0x3f) == (cntl2mot | hwbits)) {
 		  driveMOSFET(AL, rx_body[0] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(AH, rx_body[1] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(BL, rx_body[2] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
@@ -387,7 +396,7 @@ int main(void)
 		  driveMOSFET(CL, rx_body[4] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(CH, rx_body[5] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 	  }
-	  if ((rx_header[1]&0x3f) == cntlslv3) {
+	  if ((rx_header[1]&0x3f) == (cntl3mot | hwbits)) {
 		  controlvariableinput = (int16_t)((rx_body[0] << 8) | rx_body[1]);
 	  }
   }
@@ -748,25 +757,30 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	//messagerecvd = false;
 	if (headerrecvd == false && bodyrecvd == false) {
 		if (rx_header[0] == 0x55) {
-			uint8_t address = rx_header[1] & 0x3f;
+			uint8_t address = rx_header[1] & 0x3c;
 			int8_t linindex = getindex(address);
 			if (linindex >= 0) {
 				if (pids[linindex] == address) {
-					if (sources[linindex] == master) {
-						linbodysize = messagebytes[linindex];
-						HAL_UART_Receive_IT(&huart4, rx_body, linbodysize + 1);
-						// checksum sollte noch hier berechnet werden und gecheckt werden.
-						headerrecvd = true;
-					} else if (sources[linindex] != master) {
-						linbodysize = messagebytes[linindex];
-						fillbody(rx_header[1] & 0x3f, tx_body, linbodysize);
-						tx_body[linbodysize] = checksum(tx_body, linbodysize);
-						HAL_UART_Receive_IT(&huart4, rx_body, linbodysize + 1);
-						HAL_UART_Transmit_IT(&huart4, tx_body, linbodysize + 1);
-
-						headerrecvd = true;
-						bodysent = true;
-					}
+				  if (sources[linindex] == master) {
+				    linbodysize = messagebytes[linindex];
+				    HAL_UART_Receive_IT(&huart4, rx_body, linbodysize + 1);
+				    // checksum sollte noch hier berechnet werden und gecheckt werden.
+				    headerrecvd = true;
+				  } else if ((sources[linindex] == motor) && ((rx_header[1]&0x03) == hwbits)) {
+				    linbodysize = messagebytes[linindex];
+				    fillbody(rx_header[1]&0x3c, tx_body, linbodysize);
+				    tx_body[linbodysize] = checksum(tx_body, linbodysize);
+				    HAL_UART_Receive_IT(&huart4, rx_body, linbodysize + 1);
+				    HAL_UART_Transmit_IT(&huart4, tx_body, linbodysize + 1);
+				    
+				    headerrecvd = true;
+				    bodysent = true;
+				  } else {
+				    linbodysize = messagebytes[linindex];
+				    HAL_UART_Receive_IT(&huart4, rx_body, linbodysize + 1);
+				    headerrecvd = true;
+				    bodysent = false;
+				  }
 				}
 			}
 		}
@@ -877,7 +891,7 @@ void error (int status) {
 
 uint8_t iam() {
 
-  return slave0;
+  return hwbits;
 
 }
 
@@ -910,24 +924,24 @@ uint8_t checksum(const uint8_t *data, uint8_t len) {
 }
 
 void fillbody(uint8_t addr, uint8_t *data, uint8_t len) {
-
-	if(addr == stslv0) {
-		GPIO_PinState high = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_0); // high, see arduino above
-		GPIO_PinState middle = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_1); // middle, see arduino above
-		GPIO_PinState low = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_2); // low, see arduino above
-		data[0] = (high == GPIO_PIN_RESET) ? 0x00 : 0x01;
-		data[1] = (middle == GPIO_PIN_RESET) ? 0x00 : 0x01;
-		data[2] = (low == GPIO_PIN_RESET) ? 0x00 : 0x01;
-	} else 	if(addr == stslv1) {
-		HAL_ADC_Start(&hadc2);
-		HAL_ADC_PollForConversion(&hadc2, 10);
-		uint32_t val = HAL_ADC_GetValue(&hadc2);
-		data[0] = 0xFF & val;
-		data[1] = (0xFF00 & val) >> 8;
-	} else 	if(addr == stslv2) {
-		data[0] = 0xFF & rpm;
-		data[1] = (0xFF00 & rpm) >> 8;
-	}
+  
+  if(addr == st0mot) {
+    GPIO_PinState high = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_0); // high, see arduino above
+    GPIO_PinState middle = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_1); // middle, see arduino above
+    GPIO_PinState low = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_2); // low, see arduino above
+    data[0] = (high == GPIO_PIN_RESET) ? 0x00 : 0x01;
+    data[1] = (middle == GPIO_PIN_RESET) ? 0x00 : 0x01;
+    data[2] = (low == GPIO_PIN_RESET) ? 0x00 : 0x01;
+  } else if(addr == st1mot) {
+    HAL_ADC_Start(&hadc2);
+    HAL_ADC_PollForConversion(&hadc2, 10);
+    uint32_t val = HAL_ADC_GetValue(&hadc2);
+    data[0] = 0xFF & val;
+    data[1] = (0xFF00 & val) >> 8;
+  } else 	if(addr == st2mot) {
+    data[0] = 0xFF & rpm;
+    data[1] = (0xFF00 & rpm) >> 8;
+  }
 }
 
 uint8_t addparity(uint8_t addr) {

@@ -8,7 +8,7 @@ import linbus
 # Must match motorcontrol.py's SOCKET_ADDRESS.
 SOCKET_ADDRESS = '/tmp/motorwatchdog.sock'
 
-KNOWN_COMMANDS = {"speed", "on", "off", "hal", "rpm", "temp"}
+KNOWN_COMMANDS = {"speed", "on", "off", "hal", "rpm", "temp", "current"}
 
 # Business/safety speed limit — separate from the protocol-level int16
 # range linbus.set_speed() clamps to. Deliberately below the motor's
@@ -143,6 +143,11 @@ class Watchdog:
             ret, value = linbus.get_temp(self.lin)
             hex_value = linbus.hexword(value) if value is not None else None
             return f"OK ret={ret} temp={value} (hex={hex_value})"
+        if verb == "current":
+            ret, val1, val2 = linbus.get_current(self.lin)
+            val1_str = f"{val1:.2f}" if val1 is not None else None
+            val2_str = f"{val2:.2f}" if val2 is not None else None
+            return f"OK ret={ret} val1={val1_str} val2={val2_str}"
         return f"ERR unhandled command: {verb}"  # unreachable if validate() is correct
 
     def execute(self, command):

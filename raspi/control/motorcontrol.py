@@ -22,6 +22,7 @@ HELP_TEXT = """Commands:
   hal             read Hall sensor positions
   rpm             read RPM over LIN
   temp            read temperature
+  current         read current sensor (amps, val1/val2 = ACS712 #1/#2)
   help            show this again
   exit            quit (Ctrl+C also works)
 """

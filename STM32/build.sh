@@ -9,10 +9,16 @@
 # a source change is a classic embedded-C footgun; the build is fast
 # enough here that always doing a full rebuild costs little and removes
 # that whole failure class. Output: STM32/firmware/Debug/demoboard.elf
+#
+# Compile messages (warnings/errors) are also saved to STM32/build.log,
+# not just printed to the terminal — no need to remember a `tee`-style
+# incantation to keep them around (and `tee` isn't available in this
+# shell anyway). build.log is gitignored, regenerated every run.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$REPO_ROOT/STM32/firmware/Debug"
+LOG_FILE="$REPO_ROOT/STM32/build.log"
 
 # Bundled inside the STM32CubeIDE install — adjust if the IDE version
 # changes (these paths are version-specific).
@@ -22,8 +28,22 @@ MAKE_EXE="/c/Users/rembo/Documents/make-3.81/bin/make.exe"
 export PATH="$GCC_BIN:$PATH"
 
 cd "$BUILD_DIR"
-"$MAKE_EXE" clean
-"$MAKE_EXE" -j4 all
+
+set +e
+{
+  "$MAKE_EXE" clean
+  "$MAKE_EXE" -j4 all
+} > "$LOG_FILE" 2>&1
+BUILD_STATUS=$?
+set -e
+
+cat "$LOG_FILE"
+
+if [ "$BUILD_STATUS" -ne 0 ]; then
+  echo
+  echo "Build FAILED (exit $BUILD_STATUS) — see above, also saved to $LOG_FILE"
+  exit "$BUILD_STATUS"
+fi
 
 echo
 echo "Built: $BUILD_DIR/demoboard.elf"

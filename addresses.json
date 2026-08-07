@@ -20,8 +20,8 @@
     {"name": "st1mot",   "pid": "0x14", "bytes": 2, "source": "motor", "destination": "master"},
     {"name": "st2mot",   "pid": "0x18", "bytes": 2, "source": "motor", "destination": "master"},
     {"name": "cntl0cur", "pid": "0x20", "bytes": 2, "source": "master", "destination": "current"},
-    {"name": "st0cur",   "pid": "0x24", "bytes": 2, "source": "current", "destination": "master"},
+    {"name": "st0cur",   "pid": "0x24", "bytes": 4, "source": "current", "destination": "master"},
     {"name": "cntl0lig", "pid": "0x30", "bytes": 2, "source": "master", "destination": "light"},
-    {"name": "st0lig",   "pid": "0x34", "bytes": 2, "source": "light", "destination": "master"}
+    {"name": "st0lig",   "pid": "0x34", "bytes": 4, "source": "light", "destination": "master"}
   ]
 }

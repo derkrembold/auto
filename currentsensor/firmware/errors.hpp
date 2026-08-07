@@ -9,6 +9,9 @@ const int LIN_PID_ERR = -3;
 const int LIN_MSI_ERR = -4;
 const int LIN_CHK_ERR = -5;
 const int LIN_TIM_ERR = -6;
+const int LIN_IND_ERR = -7;
+const int LIN_NUM_ERR = -8;
+
 
 
 

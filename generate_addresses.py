@@ -14,12 +14,12 @@ into the base PID itself — nothing here bakes in all instances' PIDs at
 once. This is what lets multiple physical units share byte-identical
 firmware.
 
-Draft outputs go to generated/ (gitignored), NEVER directly to the real
-raspi/control/linaddresses.py, STM32/firmware/Core/Inc/addresses.h, or
-currentsensor/firmware/addresses.h — this is a deliberate, temporary
-safety measure while this new addressing scheme is still being reviewed
-by hand. Only start writing directly to the real files once explicitly
-told to.
+Writes directly to the real consuming files -- raspi/control/
+linaddresses.py, STM32/firmware/Core/Inc/addresses.h, and
+currentsensor/firmware/addresses.h. (Earlier versions of this script
+wrote review-before-adopt drafts to generated/ instead, while the new
+addressing scheme was still being hand-reviewed; that phase is over,
+confirmed 2026-08-06.)
 
 Run from the repo root: python generate_addresses.py
 """
@@ -29,8 +29,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).parent
 JSON_PATH = REPO_ROOT / "addresses.json"
 
-GENERATED_DIR = REPO_ROOT / "generated"
-PY_OUTPUT = GENERATED_DIR / "linaddresses.py"
+PY_OUTPUT = REPO_ROOT / "raspi" / "control" / "linaddresses.py"
 # One single addresses.h, byte-for-byte identical for every embedded
 # target (STM32, currentsensor, lightsensor, ...) -- contains every
 # message across every device class, not just "its own". No filtering
@@ -39,16 +38,21 @@ PY_OUTPUT = GENERATED_DIR / "linaddresses.py"
 # via PID comparison regardless of what else happens to be declared in
 # the header. This is what makes "one generated artifact, copied
 # everywhere, impossible to drift" actually true.
-C_OUTPUT = GENERATED_DIR / "addresses.h"
+C_OUTPUTS = [
+    REPO_ROOT / "STM32" / "firmware" / "Core" / "Inc" / "addresses.h",
+    REPO_ROOT / "currentsensor" / "firmware" / "addresses.h",
+]
 MD_OUTPUT = REPO_ROOT / "addresses.md"
 
 PY_HEADER_COMMENT = (
-    "# DRAFT, generated from addresses.json by generate_addresses.py.\n"
-    "# Not yet reviewed/adopted -- do not deploy or import as-is.\n"
+    "# Generated from addresses.json by generate_addresses.py — do not "
+    "edit directly.\n"
+    "# Edit addresses.json and re-run the generator instead.\n"
 )
 C_HEADER_COMMENT = (
-    "/* DRAFT, generated from addresses.json by generate_addresses.py.\n"
-    " * Not yet reviewed/adopted -- do not build or flash as-is.\n"
+    "/* Generated from addresses.json by generate_addresses.py — do not "
+    "edit directly.\n"
+    " * Edit addresses.json and re-run the generator instead.\n"
     " */\n"
 )
 
@@ -150,6 +154,20 @@ def render_python(data):
     return "\n".join(lines)
 
 
+def class_block_base(data, device_class):
+    # A class's sentinel value = the lowest pid among its own messages --
+    # by design every message's pid is already block-aligned (a multiple
+    # of 4, see module docstring), and each class's own "cntl0"-style
+    # message sits at that class's first/lowest block. Distinct per
+    # class and stable regardless of message ordering in addresses.json.
+    pids = [
+        int(m["pid"], 16)
+        for m in data["messages"]
+        if m["source"] == device_class or m["destination"] == device_class
+    ]
+    return min(pids)
+
+
 def render_c_header(data):
     # ONE universal header -- every message across every device class,
     # not filtered per target. See C_OUTPUT's comment above for why.
@@ -167,14 +185,15 @@ def render_c_header(data):
         f"const uint8_t sync = {data['sync']};",
         f"const uint8_t master = {data['master']};",
         "",
-        "// Symbolic labels for sources[]/destinations[] below -- NOT real",
-        "// wire addresses (those come from combining a message's base pid",
-        "// with an instance id at runtime). Mirrors the class names used",
-        "// in linaddresses.py, just as small distinct uint8_t sentinels",
-        "// since C can't put strings in a uint8_t[].",
+        "// Symbolic labels for sources[]/destinations[] below -- each is",
+        "// its device class's own lowest block-base pid (e.g. current's",
+        "// own cntl0cur pid), used purely as a distinguishing tag here,",
+        "// never compared against pids[]/messagebytes[] entries. Mirrors",
+        "// the class names used in linaddresses.py, just as uint8_t",
+        "// values since C can't put strings in a uint8_t[].",
     ]
-    for i, cls in enumerate(classes, start=1):
-        lines.append(f"const uint8_t {cls} = {i};")
+    for cls in classes:
+        lines.append(f"const uint8_t {cls} = 0x{class_block_base(data, cls):02x};")
     lines.append("")
     for m in messages:
         lines.append(f"const uint8_t {m['name']} = {m['pid']};")
@@ -212,14 +231,13 @@ def main():
     MD_OUTPUT.write_text(render_markdown_check(data), encoding="utf-8")
     print(f"wrote {MD_OUTPUT}")
 
-    GENERATED_DIR.mkdir(exist_ok=True)
-
     PY_OUTPUT.write_text(render_python(data), encoding="utf-8")
-    print(f"wrote {PY_OUTPUT} (draft -- not the real raspi/control/linaddresses.py)")
+    print(f"wrote {PY_OUTPUT}")
 
-    C_OUTPUT.write_text(render_c_header(data), encoding="utf-8")
-    print(f"wrote {C_OUTPUT} (draft -- same file for every embedded target, "
-          f"not the real STM32/currentsensor/lightsensor addresses.h)")
+    c_header = render_c_header(data)
+    for c_output in C_OUTPUTS:
+        c_output.write_text(c_header, encoding="utf-8")
+        print(f"wrote {c_output}")
 
 
 if __name__ == "__main__":

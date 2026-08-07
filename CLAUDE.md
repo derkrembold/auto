@@ -178,9 +178,11 @@ from it:
   nothing, and firmware already decides what to act on via PID
   comparison regardless of what else happens to be declared in the
   header. `sources`/`destinations` there use small distinct `uint8_t`
-  sentinels (`master`, `motor`, `current`, `light` — not real wire
-  values) mirroring the Python class-name strings, since C can't put
-  strings in a `uint8_t[]`.
+  sentinels (`master`, `motor`, `current`, `light`) mirroring the Python
+  class-name strings, since C can't put strings in a `uint8_t[]` —
+  each non-`master` sentinel is that class's own lowest block-base pid
+  (e.g. `current` = `cntl0cur`'s pid, `0x20`), used purely as a tag in
+  `sources[]`/`destinations[]` and never compared against `pids[]`.
 
 **Addressing model — multiple identical physical units, one firmware
 image each:** up to 4 motors (and multiple current/light sensors)

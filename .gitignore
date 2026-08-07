@@ -37,6 +37,9 @@ STM32/firmware/Debug/*.elf
 STM32/firmware/Debug/*.list
 STM32/firmware/Debug/*.map
 STM32/firmware/Debug/default.size.stdout
+STM32/build.log
+STM32/flash.log
+raspi/deploy.log
 
 # AVR Build-Artefakte (currentsensor/lightsensor) - regenerierbar via
 # make (siehe jeweiliges CLAUDE.md), sonst riesige Diffs
@@ -52,7 +55,3 @@ lightsensor/firmware/*.ii
 lightsensor/firmware/*.s
 lightsensor/*.elf
 lightsensor/*.hex
-
-# generate_addresses.py draft output - review-before-adopt scratch
-# space, never the real linaddresses.py/addresses.h files
-/generated/

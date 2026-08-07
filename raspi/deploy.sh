@@ -3,11 +3,22 @@
 # — see raspi/CLAUDE.md's Deployment Pattern section for why). Copy only,
 # nothing gets executed on the Pi by this script — see raspi/CLAUDE.md's
 # Motor Execution Consent rule for why that matters.
+#
+# Every invocation (by Claude or run manually) appends one line to
+# raspi/deploy.log — timestamp, exit status. Lets Claude check when a
+# deploy last happened without having to ask. Gitignored.
 set -euo pipefail
 
 HOST="pi@motorpi.local"
 TARGET="/home/pi/auto/"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_FILE="$REPO_ROOT/raspi/deploy.log"
+
+log_result() {
+    local status=$?
+    echo "$(date '+%Y-%m-%d %H:%M:%S')  deploy to $HOST:$TARGET  exit=$status" >> "$LOG_FILE"
+}
+trap log_result EXIT
 
 # motorpi.local's mDNS resolution has been observed to fail
 # intermittently — especially across repeated scp/ssh calls within one
@@ -32,6 +43,7 @@ echo "Deploying to $HOST:$TARGET (copy only, nothing executed)"
 run_with_retry scp \
   "$REPO_ROOT/raspi/control/motorcontrol.py" \
   "$REPO_ROOT/raspi/control/validate_speed.py" \
+  "$REPO_ROOT/raspi/control/validate_motor_currentsensor.py" \
   "$REPO_ROOT/raspi/control/capture_step_response.py" \
   "$REPO_ROOT/raspi/control/linaddresses.py" \
   "$REPO_ROOT/raspi/watchdog/watchdog.py" \

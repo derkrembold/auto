@@ -9,6 +9,41 @@ UART_BAUDRATE = 19200
 SPEED_MIN = -32768
 SPEED_MAX = 32767
 
+# Which physical motor instance the one motor currently on the bus
+# identifies as, per its PB14/PB15 strap pins (see STM32/CLAUDE.md's
+# "Instance-Selection Jumper" section): neither pin is jumpered to GND
+# right now, both read HIGH via their internal pull-ups, so the firmware
+# computes hwbits = 0x03 -- instance 3, not 0. Every motor command must
+# OR this into the message's base pid to actually reach it. Hardcoded
+# here (not auto-discovered) because only one motor is on the bus today;
+# revisit once a real multi-motor setup exists and the master needs to
+# pick a target per-call instead of once globally.
+TARGET_MOTOR_INSTANCE = 3
+
+# The current sensor's own firmware (currentsensor/firmware/main.cpp)
+# doesn't read any strap-pin instance selector yet -- it dispatches on
+# st0cur/cntl0cur unconditionally, regardless of instance bits (unlike
+# the motor's hwbits handling, see TARGET_MOTOR_INSTANCE above). So this
+# stays at instance 0 for now; revisit once that firmware gains the same
+# jumper-read treatment the motor got.
+CURRENT_INSTANCE_ID = constants.current_instances[0]
+
+# ACS712xLCTR-20A conversion (see currentsensor/CLAUDE.md's Hardware
+# section) -- done here, not on the AVR, deliberately: the ATmega328 has
+# no FPU (float math would mean slow/large software emulation on the
+# sensor), the calibration constants may still need tuning, and
+# `get_temp()` below already sends its ADC reading raw and converts on
+# this side -- same precedent.
+ADC_VCC = 5.0  # volts, ATmega328 AVCC reference (also the ACS712 supply)
+ADC_STEPS = 1024  # 10-bit ADC -> raw counts 0-1023
+ACS712_ZERO_VOLTAGE = 2.5  # volts at 0 A -- confirmed against real hardware (raw=512)
+ACS712_SENSITIVITY = 0.100  # V/A, ACS712xLCTR-20A datasheet value
+
+
+def _adc_to_amps(raw):
+    voltage = raw * ADC_VCC / ADC_STEPS
+    return (voltage - ACS712_ZERO_VOLTAGE) / ACS712_SENSITIVITY
+
 
 def hexbyte(value):
     return f"0x{value & 0xFF:02x}"
@@ -76,7 +111,12 @@ class Lin:
             return False
         return True
 
-    def write(self, address, data):
+    def write(self, address, data, instance=0x00):
+        # `address` is a message's BASE pid (from constants.pids) -- used
+        # as-is to look up byte count/source, but combined with `instance`
+        # (the target unit's strap-pin id, e.g. constants.motor_instances[n])
+        # for what actually goes out on the wire. See TARGET_MOTOR_INSTANCE
+        # above for why this matters right now.
         if address not in constants.pids:
             print("pid not known")
             return -1
@@ -85,13 +125,15 @@ class Lin:
         if len(data) != mbytes:
             print("number of bytes wrong")
             return -2
-        if constants.sources[index] != constants.master:
+        if constants.sources[index] != "master":
             print("you must be master to write")
             return -3
 
+        wire_pid = address | instance
+
         if not self.write_byte(constants.sync):
             return -4
-        if not self.write_byte(self.addparity(address)):
+        if not self.write_byte(self.addparity(wire_pid)):
             return -4
 
         for b in data:
@@ -103,19 +145,22 @@ class Lin:
 
         return 0
 
-    def read(self, address):
+    def read(self, address, instance=0x00):
+        # See write() above for base-pid-vs-wire-pid/instance reasoning.
         if address not in constants.pids:
             print("pid not known")
             return -1, []
         index = constants.pids.index(address)
         mbytes = constants.messagebytes[index]
-        if constants.sources[index] == constants.master:
+        if constants.sources[index] == "master":
             print("you must be client to write")
             return -2, []
 
+        wire_pid = address | instance
+
         if not self.write_byte(constants.sync):
             return -4, []
-        if not self.write_byte(self.addparity(address)):
+        if not self.write_byte(self.addparity(wire_pid)):
             return -4, []
 
         data = []
@@ -154,20 +199,25 @@ class DryRunLin:
         # Defaults to zero-filled data of the right length if unset.
         self.read_responses = {}
 
-    def write(self, address, data):
+    def write(self, address, data, instance=0x00):
         data = list(data)
-        self.writes.append((address, data))
+        wire_pid = address | instance
+        self.writes.append((wire_pid, data))
 
         print(f"[dry-run] write sync      = {hexbyte(constants.sync)}")
-        print(f"[dry-run] write address   = {hexbyte(Lin.addparity(address))}"
-              f"  (pid {hexbyte(address)})")
+        print(f"[dry-run] write address   = {hexbyte(Lin.addparity(wire_pid))}"
+              f"  (pid {hexbyte(wire_pid)})")
         for b in data:
             print(f"[dry-run] write data      = {hexbyte(b)}")
         print(f"[dry-run] write checksum  = {hexbyte(Lin.checksum(data))}")
         print()
         return 0
 
-    def read(self, address):
+    def read(self, address, instance=0x00):
+        # Keyed by the base address, not the wire pid -- tests inject
+        # responses per message type, independent of which instance a
+        # call happens to target. See Lin.write()'s docstring comment.
+        wire_pid = address | instance
         if address in self.read_responses:
             data = self.read_responses[address]
         else:
@@ -175,8 +225,8 @@ class DryRunLin:
             data = [0] * constants.messagebytes[index]
 
         print(f"[dry-run] read  sync      = {hexbyte(constants.sync)}")
-        print(f"[dry-run] read  address   = {hexbyte(Lin.addparity(address))}"
-              f"  (pid {hexbyte(address)})")
+        print(f"[dry-run] read  address   = {hexbyte(Lin.addparity(wire_pid))}"
+              f"  (pid {hexbyte(wire_pid)})")
         for b in data:
             print(f"[dry-run] read  data      = {hexbyte(b)}")
         print(f"[dry-run] read  checksum  = {hexbyte(Lin.checksum(data))}")
@@ -187,30 +237,33 @@ class DryRunLin:
         pass
 
 
+MOTOR_INSTANCE_ID = constants.motor_instances[TARGET_MOTOR_INSTANCE]
+
+
 def set_speed(lin, value):
     # `value` is assumed to be RPM, but this is unconfirmed — the firmware
     # side has never been verified against an actual measured speed. Check
     # this once the Saleae Hall-edge speed measurement is in place.
     value = max(SPEED_MIN, min(SPEED_MAX, int(value)))
     data = struct.pack('>h', value)
-    return lin.write(constants.cntlslv3, data)
+    return lin.write(constants.cntl3mot, data, instance=MOTOR_INSTANCE_ID)
 
 
 def led_on(lin):
     # Onboard status LED, not motor power.
-    return lin.write(constants.cntlslv0, [0x01, 0xdb])
+    return lin.write(constants.cntl0mot, [0x01, 0xdb], instance=MOTOR_INSTANCE_ID)
 
 
 def led_off(lin):
-    return lin.write(constants.cntlslv0, [0xcd, 0x0c])
+    return lin.write(constants.cntl0mot, [0xcd, 0x0c], instance=MOTOR_INSTANCE_ID)
 
 
 def get_hal(lin):
-    return lin.read(constants.stslv0)
+    return lin.read(constants.st0mot, instance=MOTOR_INSTANCE_ID)
 
 
 def get_rpm(lin):
-    ret, data = lin.read(constants.stslv2)
+    ret, data = lin.read(constants.st2mot, instance=MOTOR_INSTANCE_ID)
     if ret < 0:
         return ret, None
     raw = data[0] + 256 * data[1]
@@ -220,7 +273,21 @@ def get_rpm(lin):
 
 
 def get_temp(lin):
-    ret, data = lin.read(constants.stslv1)
+    ret, data = lin.read(constants.st1mot, instance=MOTOR_INSTANCE_ID)
     if ret < 0:
         return ret, None
     return ret, data[0] + 256 * data[1]
+
+
+def get_current(lin):
+    # 4-byte reply: 2x 10-bit ADC readings, each split as (low byte,
+    # high 2 bits) -- matches currentsensor/firmware/main.cpp's packing
+    # (data[0]=val&0xFF, data[1]=(val>>8)&0x03). Converted to amps via
+    # _adc_to_amps() -- see its comment for why the conversion lives here
+    # and not on the AVR.
+    ret, data = lin.read(constants.st0cur, instance=CURRENT_INSTANCE_ID)
+    if ret < 0:
+        return ret, None, None
+    val1 = _adc_to_amps(data[0] | ((data[1] & 0x03) << 8))
+    val2 = _adc_to_amps(data[2] | ((data[3] & 0x03) << 8))
+    return ret, val1, val2

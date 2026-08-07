@@ -51,8 +51,22 @@ other. Same caution applies to any future same-named files across
 ## Structure
 
 - `control/motorcontrol.py` — small interactive CLI (`speed <value>`
-  command, 0 = stop, plus `on`/`off`/`hal`/`rpm`/`temp`, `help`, `exit`
-  to quit). Arrow-key command history via `readline` (Unix/Pi only,
+  command, 0 = stop, plus `on`/`off`/`hal`/`rpm`/`temp`/`current`,
+  `help`, `exit` to quit). `current` reads the current sensor board's two
+  ACS712xLCTR-20A chips (one per motor — see `currentsensor/CLAUDE.md`'s
+  Hardware section) via `linbus.get_current()`: `val1`/`val2` are amps,
+  converted from the raw 10-bit ADC reading on this (Raspi) side, not on
+  the AVR — see `linbus.py`'s `_adc_to_amps()`/`ACS712_*` constants
+  (Vcc=5V, 2.5V=0A confirmed against hardware, 100mV/A per the
+  ACS712xLCTR-**20A** datasheet). Its
+  firmware doesn't read its own instance-strap pins yet either (unlike
+  the motor's `hwbits`, see `watchdog/CLAUDE.md`'s `linbus.py` constants)
+  so it's addressed at instance 0 for now — fine while only one physical
+  sensor exists. This is a manual/CLI read only, not wired into the
+  watchdog's stall-check safety logic (see `watchdog/CLAUDE.md`'s
+  Two-Layer Safety Check section — that integration is still open,
+  deliberately deferred until the sensor's readings are trusted).
+  Arrow-key command history via `readline` (Unix/Pi only,
   import is guarded so it doesn't break local Windows testing). Holds
   one persistent IPC connection to the watchdog for the whole session —
   does **not** open `/dev/ttyS0` itself, no `RPi.GPIO`/`serial`
@@ -72,6 +86,17 @@ other. Same caution applies to any future same-named files across
   one-shot `send_command()` helper — a one-shot connection's immediate
   disconnect would trigger the watchdog's stop-on-disconnect after every
   single step.
+- `control/validate_motor_currentsensor.py` — standalone script
+  regression-testing motor+currentsensor bus coexistence: steps speed
+  through `[0, 500, 1000, 500, 0]`, and after each step (following a
+  `SETTLE_TIME` pause) sends `current`, `hal`, `rpm` in turn. Built
+  2026-08-07 specifically to catch the LIN receive-state-machine hang
+  found that day — STM32's `HAL_UART_RxCpltCallback` didn't re-arm UART
+  reception for a recognized-but-foreign pid (`st0cur`, when `current`
+  is queried while the motor is running) — see `STM32/CLAUDE.md`/
+  `currentsensor/CLAUDE.md` for the fix on both sides. Same one-
+  persistent-connection and Motor Execution Consent reasoning as
+  `validate_speed.py` above.
 - `control/capture_step_response.py` — standalone script: `speed 0` →
   `speed 1000` (step input), then samples `rpm` every 200ms for 8s
   (measured from the step, not from the initial `speed 0`), always

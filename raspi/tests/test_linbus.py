@@ -29,9 +29,12 @@ def test_checksum_all_ff():
 
 
 def test_addparity_known_pids():
-    assert Lin.addparity(0x09) == 0x49  # cntlslv0
-    assert Lin.addparity(0x39) == 0x39  # cntlslv3
-    assert Lin.addparity(0x04) == 0xc4  # stslv0
-    assert Lin.addparity(0x1b) == 0x5b  # stslv1
-    assert Lin.addparity(0x2e) == 0x2e  # stslv2
+    # Frozen regression values from the old (pre-instance-addressing)
+    # scheme -- addparity() is pure pid-bit math, unaffected by the
+    # cntlslv*/cntl*mot renaming, so these stay valid as-is.
+    assert Lin.addparity(0x09) == 0x49
+    assert Lin.addparity(0x39) == 0x39
+    assert Lin.addparity(0x04) == 0xc4
+    assert Lin.addparity(0x1b) == 0x5b
+    assert Lin.addparity(0x2e) == 0x2e
     assert Lin.addparity(0x55) == 0x55  # sync

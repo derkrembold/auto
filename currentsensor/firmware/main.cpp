@@ -27,7 +27,7 @@ void init(uint16_t baud)
   cli();
 
   
-  // LED Init
+  // LED Init2
   DDRD |= (1 << BLUE_LED_PIN); //OUT
   DDRD |= (1 << GREEN_LED_PIN); //OUT
   DDRD |= (1 << RED_LED_PIN); //OUT
@@ -118,12 +118,12 @@ void error (int status) {
 
   for (int i = 0; i < sts; i++) {
     portb(YELLOW_LED_PIN, 0);
-    _delay_ms(100);
+    _delay_ms(250);
     portb(YELLOW_LED_PIN, 1);
-    _delay_ms(100);    
+    _delay_ms(250);    
   }
   portb(YELLOW_LED_PIN, 0);
-  _delay_ms(100);
+  _delay_ms(500);
 }
 
 void transmitbyte(uint8_t data)
@@ -141,8 +141,9 @@ void transmitbyte(uint8_t data)
 int receivebyte(void)
 {
   // 1000 ist about 40 seconds
+  // 500 is about 20 seconds
   // 250 is about 10 seconds
-  for (unsigned int i = 0; i < 250; i++) {
+  for (unsigned int i = 0; i < 500; i++) {
     for (unsigned int j = 0; j < 0xFFF0; j++) {
 
       if (UCSR0A & (1<<RXC0)) {
@@ -249,94 +250,80 @@ uint8_t checksum(const uint8_t *data, uint8_t data_size) {
 }
 
 
+int8_t getindex(uint8_t addr) {
+	int8_t linindex = 0;
+	for (unsigned int i = 0; i < sizeof(pids); i++) {
+	  if (pids[i] == addr) {
+		linindex = i;
+		return linindex;
+	  }
+	}
+	return LIN_PID_ERR;
 
+}
 
 int main() {
 
   init(BAUD);
+  uint8_t data[10];
+  portd(RED_LED_PIN, 1);
+  _delay_ms(1000);
+  portd(RED_LED_PIN, 0);
 
-    //while(true) {
-    //portb(YELLOW_LED_PIN, 1);
-    //_delay_ms(500);
-    //portb(YELLOW_LED_PIN, 0);
-    //_delay_ms(500);
-    //uint16_t val1 = readadc(2);
-    //uint16_t val2 = readadc(3);
-    
-    //int sync = receivebyte();
-    //if(sync==LIN_TIM_ERR) {
-    //portb(YELLOW_LED_PIN, 1);
-    //_delay_ms(100);
-    //portb(YELLOW_LED_PIN, 0);
-    //_delay_ms(100);
-    //portb(YELLOW_LED_PIN, 1);
-    //_delay_ms(100);
-    //portb(YELLOW_LED_PIN, 0);
-    //_delay_ms(100);
-    //portb(YELLOW_LED_PIN, 1);
-    //_delay_ms(100);
-    //portb(YELLOW_LED_PIN, 0);
-    //_delay_ms(100);
-    //error(LIN_TIM_ERR);
-    //}
-  //}
-
-/*  while(true) {
-    running(1);
-    uint16_t val1 = readadc(2);
-    uint16_t val2 = readadc(3);
-  }*/
-
-
+  
   while(true) {
-    /*portd(RED_LED_PIN, 1);
-    _delay_ms(500);
-    portd(RED_LED_PIN, 0);
-    _delay_ms(500);*/
-    int sync = receivebyte();
-    if(sync==LIN_TIM_ERR){
-      error(LIN_TIM_ERR);
+
+    for(;;) {
+      int syncbyte = receivebyte();
+      /*if(syncbyte==LIN_TIM_ERR){
+	error(LIN_TIM_ERR);
+	continue;
+	}*/
+      if(syncbyte!=sync){
+	//error(LIN_SYN_ERR);
+	continue;
+      } else {
+	break;
+      }
     }
-    if(sync!=0x55){
-      continue;
-    }
-    int cntl = receivebyte();
-    if((cntl&0x3f)== stslv1){
+    
+    int pid = receivebyte();
+    if((pid&0x3f)== st0cur){
+
+      int8_t index = getindex(pid&0x3c);
+      if (index < 0) {
+	error(LIN_IND_ERR);
+	continue;
+      }
+      uint8_t len = messagebytes[index];
+      if (len != 4) {
+	error(LIN_NUM_ERR);
+	continue;
+      }
+
       uint16_t val1 = readadc(2);
       uint16_t val2 = readadc(3);
-      //continue;
-      uint8_t data[4];
+
       data[0] = val1 & 0xFF;
       data[1] = (val1 >> 8) & 0x03;
       data[2] = val2 & 0xFF;
       data[3] = (val2 >> 8) & 0x03;
       
       int check = 0;
-      transmitbyte(data[0]);
-      check = receivebyte();
-      if (check != data[0]) {
-	error(LIN_CHK_ERR);
-	continue;
+
+      bool aborted = false;
+      for (unsigned i = 0; i < len; i++) {
+	transmitbyte(data[i]);
+	check = receivebyte();
+	if (check != data[i]) {
+	  error(LIN_CHK_ERR);
+	  aborted = true;
+	  break;
+	}
       }
-      transmitbyte(data[1]);
-      check = receivebyte();
-      if (check != data[1]) {
-	error(LIN_CHK_ERR);
-	continue;
-      }
-      transmitbyte(data[2]);
-      check = receivebyte();
-      if (check != data[2]) {
-	error(LIN_CHK_ERR);
-	continue;
-      }
-      transmitbyte(data[3]);
-      check = receivebyte();
-      if (check != data[3]) {
-	error(LIN_CHK_ERR);
-	continue;
-      }
-      int checks = checksum(data, 4);
+      if (aborted == true) continue;
+
+      int checks = checksum(data, len);
       transmitbyte(checks);
       check = receivebyte();
       if (check != checks) {
@@ -344,8 +331,7 @@ int main() {
 	continue;
       }
       continue;
-    }
-    else if((cntl&0x3f)== cntlslv0){
+    } else if((pid&0x3f)== cntl0cur){
       uint8_t data[2];
       data[0] = receivebyte();
       data[1] = receivebyte();
@@ -367,28 +353,25 @@ int main() {
 	error(LIN_CHK_ERR);
       }
       continue;
-    }   
+    } else {
+      int8_t index = getindex(pid&0x3c);
+      if (index < 0) {
+	error(LIN_IND_ERR);
+	continue;
+      }
+      uint8_t len = messagebytes[index];
+      if (len > 8) {
+	error(LIN_NUM_ERR);
+	continue;
+      }
+      for (unsigned int i = 0; i < len; i++) {
+	receivebyte();
+      }
+      receivebyte();
+      continue;
+    }
     
   }
-
-  /*
-  while(true) {
-    portb(YELLOW_LED_PIN, 1);
-    portd(RED_LED_PIN, 1);
-    portd(GREEN_LED_PIN, 1);
-    portd(BLUE_LED_PIN, 1);
-    
-    _delay_ms(250);
-
-    portb(YELLOW_LED_PIN, 0);
-    portd(RED_LED_PIN, 0);
-    portd(GREEN_LED_PIN, 0);
-    portd(BLUE_LED_PIN, 0);
-    
-
-    _delay_ms(250);
-  }
-    */
   
   return(0);
 }
