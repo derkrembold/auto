@@ -51,8 +51,22 @@ other. Same caution applies to any future same-named files across
 ## Structure
 
 - `control/motorcontrol.py` — small interactive CLI (`speed <value>`
-  command, 0 = stop, plus `on`/`off`/`hal`/`rpm`/`temp`/`current`,
-  `help`, `exit` to quit). `current` reads the current sensor board's two
+  command, 0 = stop, plus `on`/`off`/`hal`/`rpm`/`temp`/`current`/
+  `errors`, `help`, `exit` to quit). `errors` (added 2026-08-12) reads
+  the currentsensor's `st1cur` — its last 8 error codes (most recent
+  first, `currentsensor/firmware/main.cpp`'s `errorstorage` ring
+  buffer), decoded via `linbus.get_error_history()`/
+  `CURRENTSENSOR_ERROR_NAMES` into both raw codes and names (`SYN`/
+  `PAR`/`PID`/`MSI`/`CHK`/`TIM`/`IND`/`NUM`, mirroring
+  `currentsensor/firmware/errors.hpp`). Currentsensor-only for
+  now — the motor's equivalent (`st3mot`) isn't dispatched on the
+  STM32 side yet, see `STM32/CLAUDE.md`'s Open Points. Deliberately
+  **not** auto-triggered by a failed `current` read — kept as its own
+  explicit, manually-invoked command (discussed 2026-08-12): automatic
+  follow-up queries would make `current`'s behavior context-dependent
+  and harder to predict/test, and conflicts with this project's general
+  preference for explicit over implicit bus activity (e.g.
+  `poll_current()`'s observe-only stall signature, below). `current` reads the current sensor board's two
   ACS712xLCTR-20A chips (one per motor — see `currentsensor/CLAUDE.md`'s
   Hardware section) via `linbus.get_current()`: `val1`/`val2` are amps,
   converted from the raw 10-bit ADC reading on this (Raspi) side, not on

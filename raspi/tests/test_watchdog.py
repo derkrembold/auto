@@ -35,6 +35,7 @@ CNTL3MOT_WIRE = constants.cntl3mot | MOTOR_INSTANCE_ID
     ("rpm", (True, None)),
     ("temp", (True, None)),
     ("current", (True, None)),
+    ("errors", (True, None)),
     ("on extra", (False, "usage: on")),
     ("banana", (False, "unknown command: banana")),
     ("", (False, "empty command")),
@@ -111,6 +112,24 @@ def test_execute_current_parses_and_converts_to_amps():
     wd.lin.read_responses[constants.st0cur] = [0x2c, 0x01, 0x64, 0x00]
     reply = wd.execute("current")
     assert reply == "OK ret=0 val1=-10.35 val2=-20.12"
+
+
+def test_execute_errors_decodes_two_complement_codes_and_names():
+    wd = Watchdog(DryRunLin())
+    # 0xfb = -5 (LIN_CHK_ERR, "CHK"), rest unused/no-error (0, "OK") --
+    # matches currentsensor/firmware/main.cpp's errorstorage[8] on-wire
+    # as raw int8_t bytes (two's complement).
+    wd.lin.read_responses[constants.st1cur] = [0xfb, 0, 0, 0, 0, 0, 0, 0]
+    reply = wd.execute("errors")
+    assert reply == ("OK ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] "
+                      "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']")
+
+
+def test_execute_errors_defaults_to_no_errors_when_not_injected():
+    wd = Watchdog(DryRunLin())
+    reply = wd.execute("errors")
+    assert reply == ("OK ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] "
+                      "names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']")
 
 
 # --- Connection lifecycle: disconnect + idle timeout ---

@@ -322,6 +322,35 @@ def get_temp(lin):
     return ret, data[0] + 256 * data[1]
 
 
+# currentsensor/firmware/main.cpp's storeerror() ring buffer (see
+# errors.hpp) -- names for st1cur's raw codes, purely for human-readable
+# display (motorcontrol.py's `errors` command). 0 = unused slot/no error.
+CURRENTSENSOR_ERROR_NAMES = {
+    0: "OK",
+    -1: "SYN",
+    -2: "PAR",
+    -3: "PID",
+    -4: "MSI",
+    -5: "CHK",
+    -6: "TIM",
+    -7: "IND",
+    -8: "NUM",
+}
+
+
+def get_error_history(lin):
+    # 8-byte reply: currentsensor/firmware/main.cpp's errorstorage[8],
+    # most recent error first, sent as raw int8_t bytes (two's
+    # complement on the wire) -- decoded back to signed ints here, same
+    # split-conversion-out-of-the-message-function precedent as
+    # get_current()'s _adc_to_amps() above.
+    ret, data = lin.read(constants.st1cur, instance=CURRENT_INSTANCE_ID)
+    if ret < 0:
+        return ret, None
+    codes = [b - 256 if b >= 128 else b for b in data]
+    return ret, codes
+
+
 def get_current(lin):
     # 4-byte reply: 2x 10-bit ADC readings, each split as (low byte,
     # high 2 bits) -- matches currentsensor/firmware/main.cpp's packing

@@ -1,0 +1,19 @@
+13:52:40.426  INFO    connected to watchdog
+13:52:47.146  INFO    -> current
+13:52:47.153  INFO    <- OK ret=0 val1=0.05 val2=0.05
+13:52:51.115  INFO    -> errors
+13:52:51.123  INFO    <- OK ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']
+13:53:04.812  INFO    -> hal
+13:53:04.818  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+13:53:10.381  INFO    -> hal
+13:53:10.387  INFO    <- OK ret=0 data=['0x01', '0x00', '0x01']
+13:53:19.359  INFO    -> speed 0
+13:53:19.364  INFO    <- OK
+13:53:28.208  INFO    -> speed 500
+13:53:28.213  INFO    <- OK
+13:53:31.856  INFO    -> speed 0
+13:53:31.862  INFO    <- OK
+13:53:36.769  INFO    -> current
+13:53:36.775  INFO    <- OK ret=0 val1=0.05 val2=0.00
+13:53:40.369  INFO    -> errors
+13:53:40.378  INFO    <- OK ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']

@@ -72,9 +72,8 @@ The "how" — evolves as the system gets built out.
 ```
 Auto/
 ├── addresses.json          Single source of truth for LIN PIDs (see LIN Protocol section)
-├── generate_addresses.py   Generates addresses.md + generated/ drafts from addresses.json
+├── generate_addresses.py   Generates addresses.md + writes directly to every consuming file
 ├── addresses.md            Generated "at a glance" occupied/free PID map
-├── generated/               Generator's draft output (gitignored, review-before-adopt)
 ├── STM32/          Firmware + build/flash automation (STM32 CLI)
 ├── raspi/
 │   ├── control/    LIN master code (speed command) — already implemented
@@ -209,16 +208,17 @@ Instead:
   instance slots within a block are still free, and which blocks are
   entirely free for future message types.
 
-**Safety convention while this is still being reviewed by hand:**
-`generate_addresses.py` writes its `linaddresses.py`/`addresses.h`
-drafts to `generated/` (gitignored) — **never directly overwriting**
-the real `raspi/control/linaddresses.py`, `STM32/firmware/Core/Inc/
-addresses.h`, or `currentsensor/firmware/addresses.h`. Deliberate and
-temporary; lifted once the new scheme is confirmed adopted.
+**Writes directly to the real consuming files** — `raspi/control/
+linaddresses.py`, `STM32/firmware/Core/Inc/addresses.h`, and
+`currentsensor/firmware/addresses.h` — no `generated/` staging step.
+An earlier, temporary review-before-adopt phase wrote drafts to
+`generated/` (gitignored) instead while the addressing scheme itself
+was still being hand-reviewed; that phase ended 2026-08-06, confirmed
+by `generate_addresses.py`'s own docstring. Edit `addresses.json`, then
+re-run the generator — never hand-edit the generated files directly.
 
-**Not yet done — see Open Points below** for the concrete remaining
-steps (adopting the generated drafts for real, and wiring the runtime
-jumper-read into actual firmware dispatch logic).
+**Not yet done — see Open Points below**: wiring the runtime
+jumper-read into actual firmware dispatch logic.
 
 
 ## Battery
@@ -284,11 +284,9 @@ Living tracker — remove items once resolved.
 - **8S vs 9S battery decision** (24V vs ~28.8V nominal) — not yet
   decided. See Battery section above.
 - **`addresses.json`/`generate_addresses.py`** — design settled and
-  built (2026-08-05), see LIN Protocol "Address Table Single Source of
-  Truth" section above. Remaining concrete steps:
-  - Review `generated/linaddresses.py`/`addresses.h` by hand and adopt
-    them for real (currently deliberately not overwriting the real
-    files — see that section).
+  built (2026-08-05), writes directly to every consuming file since
+  2026-08-06 (no more `generated/` staging), see LIN Protocol "Address
+  Table Single Source of Truth" section above. Remaining concrete step:
   - Wire the actual runtime jumper-read (`PB14`/`PB15` → instance
     number → `base_pid | id`) into STM32 `main.c`'s LIN dispatch logic
     — the jumper *reading* itself is hardware-confirmed working

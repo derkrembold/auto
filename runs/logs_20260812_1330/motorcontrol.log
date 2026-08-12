@@ -1,0 +1,15 @@
+13:28:23.846  INFO    connected to watchdog
+13:28:27.451  INFO    -> hal
+13:28:27.457  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+13:28:32.716  INFO    -> hal
+13:28:32.721  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+13:28:43.261  INFO    -> current
+13:28:43.268  INFO    <- OK ret=0 val1=0.05 val2=0.00
+13:29:14.865  INFO    -> rpm
+13:29:14.870  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+13:29:21.298  INFO    -> speed 0
+13:29:21.303  INFO    <- OK
+13:29:28.307  INFO    -> speed 500
+13:29:28.312  INFO    <- OK
+13:29:32.900  INFO    -> speed 0
+13:29:32.905  INFO    <- OK

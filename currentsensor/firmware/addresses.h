@@ -25,16 +25,18 @@ const uint8_t cntl3mot = 0x0C;
 const uint8_t st0mot = 0x10;
 const uint8_t st1mot = 0x14;
 const uint8_t st2mot = 0x18;
+const uint8_t st3mot = 0x1C;
 const uint8_t cntl0cur = 0x20;
 const uint8_t st0cur = 0x24;
+const uint8_t st1cur = 0x28;
 const uint8_t cntl0lig = 0x30;
 const uint8_t st0lig = 0x34;
 
-const uint8_t pids[] = {cntl0mot, cntl1mot, cntl2mot, cntl3mot, st0mot, st1mot, st2mot, cntl0cur, st0cur, cntl0lig, st0lig};
-const uint8_t messagebytes[] = {2, 2, 6, 2, 3, 2, 2, 2, 4, 2, 4};
+const uint8_t pids[] = {cntl0mot, cntl1mot, cntl2mot, cntl3mot, st0mot, st1mot, st2mot, st3mot, cntl0cur, st0cur, st1cur, cntl0lig, st0lig};
+const uint8_t messagebytes[] = {2, 2, 6, 2, 3, 2, 2, 4, 2, 4, 8, 2, 4};
 
-const uint8_t sources[] = {master, master, master, master, motor, motor, motor, master, current, master, light};
-const uint8_t destinations[] = {motor, motor, motor, motor, master, master, master, current, master, light, master};
+const uint8_t sources[] = {master, master, master, master, motor, motor, motor, motor, master, current, current, master, light};
+const uint8_t destinations[] = {motor, motor, motor, motor, master, master, master, master, current, master, master, light, master};
 
 // This board's own instance id (0x00, 0x01, ...) is read at startup from hardware strap pins -- look up the right table below for the device class this firmware actually is.
 const uint8_t current_instances[] = {0x00, 0x01};

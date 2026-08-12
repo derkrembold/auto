@@ -18,7 +18,7 @@ LOG_PATH = "watchdog.log"
 
 logger = logging.getLogger("watchdog")
 
-KNOWN_COMMANDS = {"speed", "on", "off", "hal", "rpm", "temp", "current"}
+KNOWN_COMMANDS = {"speed", "on", "off", "hal", "rpm", "temp", "current", "errors"}
 
 # Business/safety speed limit — separate from the protocol-level int16
 # range linbus.set_speed() clamps to. Deliberately below the motor's
@@ -172,6 +172,14 @@ class Watchdog:
             val1_str = f"{val1:.2f}" if val1 is not None else None
             val2_str = f"{val2:.2f}" if val2 is not None else None
             return f"OK ret={ret} val1={val1_str} val2={val2_str}"
+        if verb == "errors":
+            # Currentsensor-only for now -- the motor's equivalent
+            # (st3mot) isn't wired up on the STM32 side yet, see
+            # STM32/CLAUDE.md's Open Points.
+            ret, codes = linbus.get_error_history(self.lin)
+            names = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes]
+                      if codes is not None else None)
+            return f"OK ret={ret} codes={codes} names={names}"
         return f"ERR unhandled command: {verb}"  # unreachable if validate() is correct
 
     def execute(self, command):

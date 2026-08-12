@@ -40,6 +40,9 @@ volatile uint16_t count1 = 0;
 volatile uint16_t channel = 2;
 
 
+int8_t errorstorage[] = {0,0,0,0,0,0,0,0};
+
+
 ISR (TIMER1_COMPA_vect)
 {
 
@@ -186,16 +189,30 @@ void portb(uint8_t pin, uint8_t value) {
   }
 }
 
+
+void storeerror(int8_t sts) {
+
+  for (unsigned int i = 1; i < sizeof(errorstorage); i++) {
+    errorstorage[sizeof(errorstorage) - i] = errorstorage[sizeof(errorstorage) - i - 1];
+  }
+
+  errorstorage[0] = sts;
+  
+}
+
+
 void error (int status) {
   int sts = 0;
   if (status < 0) {
     sts = -status;
   }
 
-    portb(YELLOW_LED_PIN, 0);
-    portd(RED_LED_PIN, 0);
-    portd(GREEN_LED_PIN, 0);
-    portd(BLUE_LED_PIN, 0);
+  storeerror(status);
+  
+  portb(YELLOW_LED_PIN, 0);
+  portd(RED_LED_PIN, 0);
+  portd(GREEN_LED_PIN, 0);
+  portd(BLUE_LED_PIN, 0);
 
   for (int i = 0; i < sts; i++) {
     portb(YELLOW_LED_PIN, 0);
@@ -224,7 +241,8 @@ int receivebyte(void)
   // 1000 ist about 40 seconds
   // 500 is about 20 seconds
   // 250 is about 10 seconds
-  for (unsigned int i = 0; i < 500; i++) {
+  // 2 is about 80ms
+  for (unsigned int i = 0; i < 2; i++) {
     for (unsigned int j = 0; j < 0xFFF0; j++) {
 
       if (UCSR0A & (1<<RXC0)) {
@@ -411,6 +429,47 @@ int main() {
 	continue;
       }
       continue;
+      
+    } else if((pid&0x3f)== st1cur){
+
+      int8_t index = getindex(pid&0x3c);
+      if (index < 0) {
+	error(LIN_IND_ERR);
+	continue;
+      }
+      uint8_t len = messagebytes[index];
+      if (len != 8) {
+	error(LIN_NUM_ERR);
+	continue;
+      }
+
+      for (unsigned i = 0; i < len; i++) {
+	data[i] = errorstorage[i];
+      }
+      
+      int check = 0;
+
+      bool aborted = false;
+      for (unsigned i = 0; i < len; i++) {
+	transmitbyte(data[i]);
+	check = receivebyte();
+	if (check != data[i]) {
+	  error(LIN_CHK_ERR);
+	  aborted = true;
+	  break;
+	}
+      }
+      if (aborted == true) continue;
+
+      int checks = checksum(data, len);
+      transmitbyte(checks);
+      check = receivebyte();
+      if (check != checks) {
+	error(LIN_CHK_ERR);
+	continue;
+      }
+      continue;
+      
     } else if((pid&0x3f)== cntl0cur){
       uint8_t data[2];
       data[0] = receivebyte();

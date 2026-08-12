@@ -35,6 +35,7 @@ HELP_TEXT = """Commands:
   rpm             read RPM over LIN
   temp            read temperature
   current         read current sensor (amps, val1/val2 = ACS712 #1/#2)
+  errors          read currentsensor's last 8 error codes (most recent first)
   help            show this again
   exit            quit (Ctrl+C also works)
 """

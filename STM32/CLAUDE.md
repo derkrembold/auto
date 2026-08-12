@@ -82,7 +82,22 @@ The "how" — evolves as the firmware and tooling get built out.
     sense line from the target board to the ST-Link isn't wired (no
     cable for it), so the tool can't measure real target voltage.
     SWDIO/SWCLK/GND are enough for SWD communication to work regardless;
-    this reading just can't be trusted as "target is unpowered."
+    this reading just can't be trusted as "target is unpowered." **Don't
+    read a failed connect + `0.01V` as confirmation the board has no
+    power** — that reading is always ~0V here, powered or not, so it's
+    not diagnostic either way (a mistake made live 2026-08-12, see next
+    bullet).
+  - **`Error: Unable to get core ID` / `No STM32 target found`**
+    (first hit 2026-08-12): a real SWD-level connection failure, not a
+    power problem (see the `0.01V` point above — that reading doesn't
+    move regardless). Four consecutive `flash.sh` attempts failed this
+    way; power-cycling the target board (unplug/replug its supply)
+    between attempts 4 and 5 fixed it — the 5th attempt succeeded
+    (`flash.log`, 2026-08-12 13:24:29). Plausible mechanism: the
+    power-cycle reset the target's own debug port state, not that it
+    was ever actually unpowered. Not yet a confirmed root cause, just
+    the one troubleshooting step observed to work so far — if this
+    recurs, try the power-cycle first before assuming a cabling fault.
   With explicit, in-the-moment consent, an actual write+verify then
   succeeded (41.41 KB, "Download verified successfully"), without
   `-rst` — the target sat halted afterward rather than immediately
