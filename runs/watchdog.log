@@ -1,0 +1,750 @@
+watchdog: LIVE bus [debug]
+watchdog listening on /tmp/motorwatchdog.sock
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: client connected
+watchdog: -  
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+watchdog: \  watchdog: |  watchdog: /  
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=425
+
+watchdog: [debug] poll current — ret=0 val1=0.0 val2=0.0 last_known_rpm=425
+
+watchdog: [debug] poll rpm — ret=0 value=425
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.390625 last_known_rpm=425
+watchdog: -  watchdog: \  watchdog: |  
+watchdog: [debug] poll rpm — ret=0 value=800
+
+watchdog: [debug] poll current — ret=0 val1=-0.29296875 val2=-0.341796875 last_known_rpm=800
+
+watchdog: [debug] poll rpm — ret=0 value=775
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.48828125 last_known_rpm=775
+
+watchdog: [debug] poll rpm — ret=0 value=800
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.439453125 last_known_rpm=800
+watchdog: /  watchdog: -  watchdog: \  
+watchdog: [debug] poll rpm — ret=0 value=1200
+
+watchdog: [debug] poll current — ret=0 val1=-0.537109375 val2=-0.5859375 last_known_rpm=1200
+
+watchdog: [debug] poll rpm — ret=0 value=1150
+
+watchdog: [debug] poll current — ret=0 val1=-0.5859375 val2=-0.537109375 last_known_rpm=1150
+
+watchdog: [debug] poll rpm — ret=0 value=1200
+
+watchdog: [debug] poll current — ret=0 val1=-0.537109375 val2=-0.5859375 last_known_rpm=1200
+watchdog: |  watchdog: /  watchdog: -  
+watchdog: [debug] poll rpm — ret=0 value=875
+
+watchdog: [debug] poll current — ret=0 val1=-0.48828125 val2=-0.439453125 last_known_rpm=875
+
+watchdog: [debug] poll rpm — ret=0 value=850
+
+watchdog: [debug] poll current — ret=0 val1=-0.439453125 val2=-0.439453125 last_known_rpm=850
+
+watchdog: [debug] poll rpm — ret=0 value=825
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.439453125 last_known_rpm=825
+watchdog: \  watchdog: |  watchdog: /  
+watchdog: [debug] poll rpm — ret=0 value=425
+
+watchdog: [debug] poll current — ret=0 val1=-0.29296875 val2=-0.390625 last_known_rpm=425
+
+watchdog: [debug] poll rpm — ret=0 value=400
+
+watchdog: [debug] poll current — ret=0 val1=-0.1953125 val2=-0.244140625 last_known_rpm=400
+
+watchdog: [debug] poll rpm — ret=0 value=400
+
+watchdog: [debug] poll current — ret=0 val1=-0.29296875 val2=-0.29296875 last_known_rpm=400
+watchdog: -  watchdog: \  watchdog: |  
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=-0.1953125 val2=-0.1953125 last_known_rpm=0
+
+watchdog: *** OBSERVED STALL SIGNATURE (not acted on yet) — current=-0.20A while rpm=0 ***
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+watchdog: /  watchdog: -  watchdog: \  
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.0 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=-375
+
+watchdog: [debug] poll current — ret=0 val1=-0.244140625 val2=-0.341796875 last_known_rpm=-375
+
+watchdog: [debug] poll rpm — ret=0 value=-400
+
+watchdog: [debug] poll current — ret=0 val1=-0.244140625 val2=-0.29296875 last_known_rpm=-400
+watchdog: |  watchdog: /  watchdog: -  
+watchdog: [debug] poll rpm — ret=0 value=-750
+
+watchdog: [debug] poll current — ret=0 val1=-0.341796875 val2=-0.341796875 last_known_rpm=-750
+
+watchdog: [debug] poll rpm — ret=0 value=-825
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.390625 last_known_rpm=-825
+
+watchdog: [debug] poll rpm — ret=0 value=-825
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.439453125 last_known_rpm=-825
+watchdog: \  watchdog: |  watchdog: /  
+watchdog: [debug] poll rpm — ret=0 value=-1150
+
+watchdog: [debug] poll current — ret=0 val1=-0.439453125 val2=-0.537109375 last_known_rpm=-1150
+
+watchdog: [debug] poll rpm — ret=0 value=-1200
+
+watchdog: [debug] poll current — ret=0 val1=-0.48828125 val2=-0.5859375 last_known_rpm=-1200
+
+watchdog: [debug] poll rpm — ret=0 value=-1200
+
+watchdog: [debug] poll current — ret=0 val1=-0.634765625 val2=-0.68359375 last_known_rpm=-1200
+watchdog: -  watchdog: \  watchdog: |  
+watchdog: [debug] poll rpm — ret=0 value=-800
+
+watchdog: [debug] poll current — ret=0 val1=-0.537109375 val2=-0.537109375 last_known_rpm=-800
+
+watchdog: [debug] poll rpm — ret=0 value=-800
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.390625 last_known_rpm=-800
+
+watchdog: [debug] poll rpm — ret=0 value=-800
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.439453125 last_known_rpm=-800
+watchdog: /  watchdog: -  watchdog: \  
+watchdog: [debug] poll rpm — ret=0 value=-375
+
+watchdog: [debug] poll current — ret=0 val1=-0.29296875 val2=-0.390625 last_known_rpm=-375
+
+watchdog: [debug] poll rpm — ret=0 value=-375
+
+watchdog: [debug] poll current — ret=0 val1=-0.244140625 val2=-0.29296875 last_known_rpm=-375
+
+watchdog: [debug] poll rpm — ret=0 value=-400
+
+watchdog: [debug] poll current — ret=0 val1=-0.29296875 val2=-0.341796875 last_known_rpm=-400
+watchdog: |  watchdog: /  watchdog: -  
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=-0.244140625 val2=-0.1953125 last_known_rpm=0
+
+watchdog: *** OBSERVED STALL SIGNATURE (not acted on yet) — current=-0.24A while rpm=0 ***
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+watchdog: \  watchdog: |  
+watchdog: client disconnected — stopping motor
+watchdog: client disconnected
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.09765625 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.09765625 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: client connected
+watchdog: /  
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+watchdog: -  watchdog: \  watchdog: |  
+watchdog: [debug] poll rpm — ret=0 value=0
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.0 last_known_rpm=0
+
+watchdog: [debug] poll rpm — ret=0 value=75
+
+watchdog: [debug] poll current — ret=0 val1=0.048828125 val2=0.048828125 last_known_rpm=75
+
+watchdog: [debug] poll rpm — ret=0 value=425
+
+watchdog: [debug] poll current — ret=0 val1=-0.146484375 val2=-0.1953125 last_known_rpm=425
+watchdog: /  watchdog: -  watchdog: \  
+watchdog: [debug] poll rpm — ret=0 value=400
+
+watchdog: [debug] poll current — ret=0 val1=-0.29296875 val2=-0.341796875 last_known_rpm=400
+
+watchdog: [debug] poll rpm — ret=0 value=775
+
+watchdog: [debug] poll current — ret=0 val1=-0.29296875 val2=-0.341796875 last_known_rpm=775
+
+watchdog: [debug] poll rpm — ret=0 value=775
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.537109375 last_known_rpm=775
+watchdog: |  watchdog: /  watchdog: -  
+watchdog: [debug] poll rpm — ret=0 value=825
+
+watchdog: [debug] poll current — ret=0 val1=-0.439453125 val2=-0.48828125 last_known_rpm=825
+
+watchdog: [debug] poll rpm — ret=0 value=1175
+
+watchdog: [debug] poll current — ret=0 val1=-0.439453125 val2=-0.48828125 last_known_rpm=1175
+
+watchdog: [debug] poll rpm — ret=0 value=1150
+
+watchdog: [debug] poll current — ret=0 val1=-0.5859375 val2=-0.5859375 last_known_rpm=1150
+watchdog: \  watchdog: |  watchdog: /  
+watchdog: [debug] poll rpm — ret=0 value=1175
+
+watchdog: [debug] poll current — ret=0 val1=-0.48828125 val2=-0.5859375 last_known_rpm=1175
+
+watchdog: [debug] poll rpm — ret=0 value=850
+
+watchdog: [debug] poll current — ret=0 val1=-0.5859375 val2=-0.48828125 last_known_rpm=850
+
+watchdog: [debug] poll rpm — ret=0 value=825
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.48828125 last_known_rpm=825
+watchdog: -  watchdog: \  watchdog: |  
+watchdog: [debug] poll rpm — ret=0 value=800
+
+watchdog: [debug] poll current — ret=0 val1=-0.439453125 val2=-0.439453125 last_known_rpm=800
+
+watchdog: [debug] poll rpm — ret=0 value=450
+
+watchdog: [debug] poll current — ret=0 val1=-0.390625 val2=-0.48828125 last_known_rpm=450
+
+watchdog: [debug] poll rpm — ret=0 value=425
+
+watchdog: [debug] poll current — ret=0 val1=-0.341796875 val2=-0.341796875 last_known_rpm=425
+watchdog: /  watchdog: -  watchdog: \  
+watchdog: [debug] poll rpm — ret=0 value=400
+
+watchdog: [debug] poll current — ret=0 val1=-0.341796875 val2=-0.29296875 last_known_rpm=400
+watchdog: |  no response from slave (read timeout)
+
+watchdog: [debug] poll rpm — ret=-5 value=None
+no response from slave (read timeout)
+
+watchdog: [debug] poll current — ret=-5 val1=None val2=None last_known_rpm=400
+no response from slave (read timeout)
+watchdog: /  no response from slave (read timeout)
+
+watchdog: [debug] poll rpm — ret=-5 value=None
+no response from slave (read timeout)
+watchdog: -  no response from slave (read timeout)
+
+watchdog: [debug] poll current — ret=-5 val1=None val2=None last_known_rpm=400
+no response from slave (read timeout)
+
+watchdog: [debug] poll rpm — ret=-5 value=None
+watchdog: \  no response from slave (read timeout)
+
+watchdog: [debug] poll current — ret=-5 val1=None val2=None last_known_rpm=400
+no response from slave (read timeout)
+watchdog: |  no response from slave (read timeout)
+
+watchdog: [debug] poll rpm — ret=-5 value=None
+no response from slave (read timeout)
+
+watchdog: [debug] poll current — ret=-5 val1=None val2=None last_known_rpm=400
+no response from slave (read timeout)
+watchdog: /  

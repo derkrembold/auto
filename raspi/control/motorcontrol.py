@@ -1,4 +1,7 @@
+import logging
 from multiprocessing.connection import Client
+
+import logsetup
 
 try:
     # Side-effect import: hooks GNU readline into input(), giving
@@ -14,6 +17,15 @@ except ImportError:
 # raspi/watchdog/CLAUDE.md's "Architecture: Sole LIN Master" section.
 # Must match watchdog.py's SOCKET_ADDRESS.
 SOCKET_ADDRESS = '/tmp/motorwatchdog.sock'
+
+# Rotated (one generation kept, see logsetup.rotate_log()) on every
+# main() start. Always mirrored to the terminal too -- unlike
+# watchdog.py, there's no high-frequency self-polling noise here, every
+# line corresponds to an explicit command a human typed. See
+# raspi/watchdog/CLAUDE.md's log-format notes.
+LOG_PATH = "motorcontrol.log"
+
+logger = logging.getLogger("motorcontrol")
 
 HELP_TEXT = """Commands:
   speed <value>   set speed, 0 = stop
@@ -42,8 +54,9 @@ def send_command(command, address=SOCKET_ADDRESS):
 
 
 def main():
+    logsetup.configure("motorcontrol", LOG_PATH, terminal_level=logging.INFO)
     with Client(SOCKET_ADDRESS, family='AF_UNIX') as conn:
-        print("Connected to watchdog.")
+        logger.info("connected to watchdog")
         print(HELP_TEXT)
         while True:
             try:
@@ -58,8 +71,10 @@ def main():
             if command == "help":
                 print(HELP_TEXT)
                 continue
+            logger.info(f"-> {command}")
             conn.send(command)
-            print(conn.recv())
+            reply = conn.recv()
+            logger.info(f"<- {reply}")
 
 
 if __name__ == "__main__":

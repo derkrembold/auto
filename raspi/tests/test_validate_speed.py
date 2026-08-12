@@ -3,19 +3,44 @@ from unittest.mock import MagicMock, patch
 from validate_speed import run
 
 
-def test_run_sends_speed_then_rpm_for_each_step():
-    fake_conn = MagicMock()
-    fake_conn.__enter__.return_value = fake_conn
-    fake_conn.recv.return_value = "OK"
+def _fake_conn(rpm_values, current_values=()):
+    # Replies based on the command actually sent, not just call order —
+    # same pattern as test_capture_step_response.py, needed since
+    # "speed", "rpm", and "current" are now interleaved.
+    conn = MagicMock()
+    conn.__enter__.return_value = conn
+    rpm_iter = iter(rpm_values)
+    current_iter = iter(current_values)
+    sent_commands = []
 
-    with patch("validate_speed.Client", return_value=fake_conn), \
+    def fake_send(command):
+        sent_commands.append(command)
+
+    def fake_recv():
+        command = sent_commands[-1]
+        if command == "rpm":
+            return f"OK ret=0 rpm={next(rpm_iter)} (hex=0x0000)"
+        if command == "current":
+            val1, val2 = next(current_iter)
+            return f"OK ret=0 val1={val1} val2={val2}"
+        return "OK"  # speed <value>
+
+    conn.send.side_effect = fake_send
+    conn.recv.side_effect = fake_recv
+    return conn
+
+
+def test_run_sends_speed_then_rpm_then_current_for_each_step():
+    conn = _fake_conn([0, 400, -400], [("0.00", "0.00")] * 3)
+    with patch("validate_speed.Client", return_value=conn), \
+         patch("validate_speed.logsetup.configure"), \
          patch("validate_speed.time.sleep"):
         run(address="/tmp/fake.sock", sequence=[0, 400, -400], settle_time=0)
 
-    assert fake_conn.send.call_args_list == [
-        (("speed 0",),), (("rpm",),),
-        (("speed 400",),), (("rpm",),),
-        (("speed -400",),), (("rpm",),),
+    assert conn.send.call_args_list == [
+        (("speed 0",),), (("rpm",),), (("current",),),
+        (("speed 400",),), (("rpm",),), (("current",),),
+        (("speed -400",),), (("rpm",),), (("current",),),
     ]
 
 
@@ -24,11 +49,9 @@ def test_run_uses_one_persistent_connection_not_one_shot():
     # on_disconnect() stop after every step (see
     # raspi/watchdog/CLAUDE.md's Connection Model) — this asserts the
     # Client is only ever opened once for the whole sequence.
-    fake_conn = MagicMock()
-    fake_conn.__enter__.return_value = fake_conn
-    fake_conn.recv.return_value = "OK"
-
-    with patch("validate_speed.Client", return_value=fake_conn) as fake_client, \
+    conn = _fake_conn([0, 400, 0], [("0.00", "0.00")] * 3)
+    with patch("validate_speed.Client", return_value=conn) as fake_client, \
+         patch("validate_speed.logsetup.configure"), \
          patch("validate_speed.time.sleep"):
         run(address="/tmp/fake.sock", sequence=[0, 400, 0], settle_time=0)
 
@@ -36,12 +59,23 @@ def test_run_uses_one_persistent_connection_not_one_shot():
 
 
 def test_run_sleeps_settle_time_between_speed_and_rpm():
-    fake_conn = MagicMock()
-    fake_conn.__enter__.return_value = fake_conn
-    fake_conn.recv.return_value = "OK"
-
-    with patch("validate_speed.Client", return_value=fake_conn), \
+    conn = _fake_conn([400], [("0.00", "0.00")])
+    with patch("validate_speed.Client", return_value=conn), \
+         patch("validate_speed.logsetup.configure"), \
          patch("validate_speed.time.sleep") as fake_sleep:
         run(address="/tmp/fake.sock", sequence=[400], settle_time=3.0)
 
     fake_sleep.assert_called_once_with(3.0)
+
+
+def test_run_prints_csv_header_and_rows(capsys):
+    conn = _fake_conn([400, -400], [("1.20", "1.10"), ("-1.30", "-1.25")])
+    with patch("validate_speed.Client", return_value=conn), \
+         patch("validate_speed.logsetup.configure"), \
+         patch("validate_speed.time.sleep"):
+        run(address="/tmp/fake.sock", sequence=[400, -400], settle_time=0)
+
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert lines[0] == "elapsed_ms,speed,rpm,current_val1,current_val2"
+    assert lines[1].split(",")[1:] == ["400", "400", "1.20", "1.10"]
+    assert lines[2].split(",")[1:] == ["-400", "-400", "-1.30", "-1.25"]

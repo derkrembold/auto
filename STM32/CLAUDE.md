@@ -325,6 +325,31 @@ Leerlauf Stromverbrauch: bei 5V: ca.: 0,5A,  bei 48V ca.: 1,4A
 
 ## Open Points (STM32-specific)
 
+- **Bus-hang investigation (2026-08-11), continuing next session.** Real
+  hardware trace (`raspi/watchdog/watchdog.py --debug`, see
+  `raspi/watchdog/CLAUDE.md`) caught the STM32 going completely silent
+  mid-`validate_speed.py`-run — both `rpm` and `current` reads started
+  returning `-5` ("no response from slave") simultaneously, mid-ramp,
+  after many prior successful transactions. Leading (unconfirmed)
+  hypothesis: `HAL_UART_RxCpltCallback`'s `else` branch (foreign-but-
+  known pid, e.g. `st0cur`) arms `HAL_UART_Receive_IT` for the full
+  expected reply length with **no timeout** — if the replying device
+  (currentsensor) aborts mid-reply (its own `aborted`/`break` echo-check
+  logic can do exactly this, see `currentsensor/CLAUDE.md`), the STM32
+  waits forever, jamming the whole shared bus for every device, not just
+  itself. Two concrete next steps agreed for next session:
+  - Add a `HAL_GetTick()`-based timeout (**not** `htim4`/`htim5` — both
+    already actively used elsewhere: `htim4` for the 100ms rpm-sampling
+    window inside the same wait loop, `htim5` for `driveState()`'s
+    commutation timing — reusing either would corrupt that other use).
+    Code sketch already handed to the user (2026-08-11), user is
+    implementing it themselves in `main.c`.
+  - Add a counter for how often that timeout actually fires, exposed via
+    a new status message (free block at `0x1C`, e.g. `st3mot` — see
+    `addresses.md`). Pairs with a similar error counter planned for
+    `currentsensor` (see its CLAUDE.md's Open Points) — together they'd
+    show whether the two events actually correlate, confirming or
+    refuting the hypothesis above instead of leaving it a guess.
 - `STM32/notes.md`'s file-tree section needs re-verification against the
   corrected `demoboard` source — written before the import, may not
   match exactly.

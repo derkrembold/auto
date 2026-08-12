@@ -228,3 +228,58 @@ def test_poll_rpm_works_with_no_client_connected():
     wd.lin.read_responses[constants.st2mot] = [0x00, 0x00]
     wd.poll_rpm()
     assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
+
+
+def test_poll_rpm_caches_last_known_rpm():
+    wd = Watchdog(DryRunLin())
+    wd.lin.read_responses[constants.st2mot] = [0x2c, 0x01]  # rpm=300
+    wd.poll_rpm()
+    assert wd.last_known_rpm == 300
+
+
+# --- Upper-layer stall *signature* (current while rpm=0) -- observe-only,
+# see watchdog/CLAUDE.md's Two-Layer Safety Check section: logs, does not
+# stop the motor yet.
+
+def test_poll_current_logs_but_does_not_stop_when_signature_present(caplog):
+    wd = Watchdog(DryRunLin())
+    wd.last_known_rpm = 0
+    # raw=522 -> ~0.49A, above CURRENT_STALL_THRESHOLD (0.15A)
+    wd.lin.read_responses[constants.st0cur] = [10, 2, 0, 2]
+    wd.poll_current()
+    assert wd.lin.writes == []  # observe-only -- never stops the motor
+    assert "STALL SIGNATURE" in caplog.text
+
+
+def test_poll_current_silent_when_below_threshold(caplog):
+    wd = Watchdog(DryRunLin())
+    wd.last_known_rpm = 0
+    # raw=512 -> 0.0A, below threshold
+    wd.lin.read_responses[constants.st0cur] = [0, 2, 0, 2]
+    wd.poll_current()
+    assert "STALL SIGNATURE" not in caplog.text
+
+
+def test_poll_current_silent_when_rpm_nonzero(caplog):
+    # Same current reading as the triggering case above, but the motor
+    # is actually turning -- not a stall signature, current is expected.
+    wd = Watchdog(DryRunLin())
+    wd.last_known_rpm = 300
+    wd.lin.read_responses[constants.st0cur] = [10, 2, 0, 2]
+    wd.poll_current()
+    assert "STALL SIGNATURE" not in caplog.text
+
+
+def test_poll_current_silent_when_last_known_rpm_unset(caplog):
+    # last_known_rpm is None until poll_rpm() has run at least once --
+    # must not be mistaken for rpm==0.
+    wd = Watchdog(DryRunLin())
+    wd.lin.read_responses[constants.st0cur] = [10, 2, 0, 2]
+    wd.poll_current()
+    assert "STALL SIGNATURE" not in caplog.text
+
+
+# Note: --debug tracing (timestamped ->/<- bus-call logging) moved to
+# linbus.Lin itself (see raspi/tests/test_linbus.py's _log_source()/
+# _log_pid_name() tests) -- Watchdog no longer has its own debug flag or
+# per-tick prints.

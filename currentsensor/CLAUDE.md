@@ -3,8 +3,11 @@
 This folder holds reference material for the planned current-sensor LIN
 slave — see root `CLAUDE.md`'s LIN Protocol "Slave Topology" section
 ("2 motor slaves, 1 current sensor, 1 light sensor" planned expansion).
-See also `raspi/watchdog/CLAUDE.md`, which plans to poll this sensor
-(~4×/second) as a secondary overcurrent safety net.
+See also `raspi/watchdog/CLAUDE.md`, which polls this sensor (1×/second
+— matches the sensor's own ~1s on-board averaging window, see Hardware
+below; an earlier "~4×/second" plan predated actually knowing that and
+is now outdated) as a secondary, currently observe-only overcurrent
+safety net.
 
 ## Notes Origin
 
@@ -144,15 +147,40 @@ not re-arming UART reception for a recognized-but-foreign pid) — see
 
 ## Open Points (currentsensor-specific)
 
+- **Bus-hang investigation (2026-08-11), continuing next session** — see
+  `STM32/CLAUDE.md`'s Open Points for the full writeup (real hardware
+  trace caught the STM32 going silent on both `rpm` and `current` reads
+  mid-`validate_speed.py`-run). Leading hypothesis: the `st0cur` reply
+  loop's `aborted`/`break` echo-check logic (`main.cpp`) sends fewer
+  bytes than the STM32 expects when it fires, and the STM32 has no
+  timeout waiting for the rest — possibly triggered by the new ~5ms
+  Timer1 ISR (added this week for ADC averaging) introducing timing
+  jitter into the still-polling-based `receivebyte()`/`transmitbyte()`.
+  Unconfirmed — no visibility yet into whether/how often this actually
+  fires. Next step planned: an error counter (ideally per error type —
+  `LIN_SYN_ERR`/`LIN_CHK_ERR`/`LIN_IND_ERR`/`LIN_NUM_ERR`, or at least
+  the `st0cur`-echo-abort case specifically), queryable via a new
+  status message (free block at `0x28`, see `addresses.md`). Pairs with
+  a similar timeout-counter planned for the STM32 side — together
+  they'd show whether the two events actually correlate.
 - No hardware instance-strap-pin reading yet (unlike the motor's
   `hwbits`, see `STM32/CLAUDE.md`'s Instance-Selection Jumper section) —
   always answers as instance 0. Fine while only one physical current
   sensor exists; revisit if/when a second one joins the bus.
   `raspi/watchdog/linbus.py`'s `CURRENT_INSTANCE_ID` documents this too.
 - ACS712 zero-point (2.5V) is confirmed against real hardware, but the
-  "near 0A" noise tolerance isn't — `validate_motor_currentsensor.py`
-  only sanity-bounds the raw range (see its own Open Points/comments),
-  doesn't yet assert values are close to 0A when the motor is stopped.
+  "near 0A" noise tolerance is still just an initial guess, not
+  characterized — `raspi/watchdog/watchdog.py`'s `CURRENT_STALL_THRESHOLD`
+  (0.15A) was chosen with headroom above the ~0.05-0.09A chip-to-chip
+  offset observed once, not from a proper noise-floor measurement.
+  `validate_motor_currentsensor.py` also still only sanity-bounds the
+  raw range, doesn't assert values are close to 0A when the motor is
+  stopped.
+- Chip-to-chip offset/gain tolerance between the two ACS712s (~0.05-0.09A
+  observed with the same real current flowing through both, see Hardware
+  above) — no per-channel calibration exists, both use the same fixed
+  constants. Deliberately left alone for now (small relative to
+  `CURRENT_STALL_THRESHOLD`).
 - Apply the same checksum/echo-compare and sync-scan-loop fixes to
   `lightsensor/firmware/main.cpp` — not done yet, see
   `lightsensor/CLAUDE.md`.

@@ -21,7 +21,11 @@ def _run_interactive(inputs):
     fake_conn.__enter__.return_value = fake_conn
     fake_conn.recv.return_value = "OK"
 
+    # logsetup.configure() is real file I/O (rotates + opens
+    # motorcontrol.log) — not something a unit test should touch on
+    # disk; only the send()/recv() interaction is under test here.
     with patch("motorcontrol.Client", return_value=fake_conn), \
+         patch("motorcontrol.logsetup.configure"), \
          patch("builtins.input", side_effect=inputs):
         main()
 
@@ -44,6 +48,7 @@ def test_interactive_stops_on_ctrl_c():
     fake_conn = MagicMock()
     fake_conn.__enter__.return_value = fake_conn
     with patch("motorcontrol.Client", return_value=fake_conn), \
+         patch("motorcontrol.logsetup.configure"), \
          patch("builtins.input", side_effect=KeyboardInterrupt):
         main()  # must not raise
     fake_conn.send.assert_not_called()

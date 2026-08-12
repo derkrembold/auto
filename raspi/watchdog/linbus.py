@@ -1,6 +1,14 @@
+import logging
 import struct
+import threading
 
 from linaddresses import constants
+
+# Child of the "watchdog" logger configured in watchdog.py's serve() --
+# propagates to its handlers automatically (file always gets everything
+# at DEBUG, terminal only if --debug), no separate setup needed here.
+# See raspi/watchdog/CLAUDE.md's log-format notes.
+logger = logging.getLogger("watchdog.linbus")
 
 SLP_PIN = 23  # enables the LIN transceiver
 UART_PORT = '/dev/ttyS0'
@@ -56,6 +64,21 @@ def hexword(value):
     return f"0x{value & 0xFFFF:04x}"
 
 
+def _log_source():
+    # Which thread triggered this bus call: Watchdog.monitor() runs in
+    # its own background thread (self-polling); Watchdog.execute() (via
+    # serve()'s accept loop) runs on the main thread (client commands).
+    # Auto-detected from the thread itself rather than threaded through
+    # every call site as a parameter.
+    if threading.current_thread() is threading.main_thread():
+        return "[client]"
+    return "[poll]  "
+
+
+def _log_pid_name(address):
+    return constants.pid_names.get(address, hexbyte(address))
+
+
 class Lin:
 
     def __init__(self):
@@ -106,8 +129,8 @@ class Lin:
         echo = self.ser.read(1)
         if len(echo) != 1 or echo[0] != byte_value:
             read_desc = hexbyte(echo[0]) if echo else 'nothing'
-            print(f"echo mismatch: wrote {hexbyte(byte_value)}, "
-                  f"read {read_desc}")
+            logger.warning(f"echo mismatch: wrote {hexbyte(byte_value)}, "
+                            f"read {read_desc}")
             return False
         return True
 
@@ -118,18 +141,29 @@ class Lin:
         # for what actually goes out on the wire. See TARGET_MOTOR_INSTANCE
         # above for why this matters right now.
         if address not in constants.pids:
-            print("pid not known")
+            logger.warning("pid not known")
             return -1
         index = constants.pids.index(address)
         mbytes = constants.messagebytes[index]
         if len(data) != mbytes:
-            print("number of bytes wrong")
+            logger.warning("number of bytes wrong")
             return -2
         if constants.sources[index] != "master":
-            print("you must be master to write")
+            logger.warning("you must be master to write")
             return -3
 
         wire_pid = address | instance
+
+        # No matching "<-" line by design: a LIN write gets no slave
+        # reply (see raspi/watchdog/CLAUDE.md's log-format notes) -- a
+        # write's own local echo-check outcome isn't logged here, only
+        # that it started, matching the one-line-per-write shape agreed
+        # on with the user. Always logged at DEBUG -- the file handler
+        # captures it unconditionally, only the terminal echo depends on
+        # --debug (see watchdog.py's logging setup).
+        data_str = [hexbyte(b) for b in data]
+        logger.debug(f"{_log_source()}  -> write {_log_pid_name(address):<10}"
+                      f" data={data_str}")
 
         if not self.write_byte(constants.sync):
             return -4
@@ -148,38 +182,47 @@ class Lin:
     def read(self, address, instance=0x00):
         # See write() above for base-pid-vs-wire-pid/instance reasoning.
         if address not in constants.pids:
-            print("pid not known")
+            logger.warning("pid not known")
             return -1, []
         index = constants.pids.index(address)
         mbytes = constants.messagebytes[index]
         if constants.sources[index] == "master":
-            print("you must be client to write")
+            logger.warning("you must be client to write")
             return -2, []
 
         wire_pid = address | instance
+        name = _log_pid_name(address)
+
+        logger.debug(f"{_log_source()}  -> read  {name:<10}")
+
+        def _finish(ret, data):
+            data_str = [hexbyte(b) for b in data]
+            logger.debug(f"{_log_source()}  <- read  {name:<10}"
+                         f" ret={ret}  data={data_str}")
+            return ret, data
 
         if not self.write_byte(constants.sync):
-            return -4, []
+            return _finish(-4, [])
         if not self.write_byte(self.addparity(wire_pid)):
-            return -4, []
+            return _finish(-4, [])
 
         data = []
         for _ in range(mbytes):
             response = self.ser.read(1)
             if len(response) != 1:
-                print("no response from slave (read timeout)")
-                return -5, []
+                logger.warning("no response from slave (read timeout)")
+                return _finish(-5, data)
             data.append(response[0])
 
         response = self.ser.read(1)
         if len(response) != 1:
-            print("no response from slave (checksum read timeout)")
-            return -5, []
+            logger.warning("no response from slave (checksum read timeout)")
+            return _finish(-5, data)
         if response[0] != self.checksum(data):
-            print("checksum not right")
-            return -3, []
+            logger.warning("checksum not right")
+            return _finish(-3, data)
 
-        return 0, data
+        return _finish(0, data)
 
     def close(self):
         self.ser.close()

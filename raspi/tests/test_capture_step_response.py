@@ -3,27 +3,62 @@ from unittest.mock import MagicMock, patch
 from capture_step_response import run
 
 
-def _fake_conn(rpm_values):
-    # First two recv() calls answer the "speed 0" / "speed <target>"
-    # setup commands, then one rpm reply per sample, then one more for
-    # the final "speed 0".
+class _FakeClock:
+    # Shared state between the mocked time.monotonic()/time.sleep() so
+    # sleeping actually advances what monotonic() reports next -- lets
+    # run()'s real scheduling logic (target_time vs now, current-sample
+    # interval) execute exactly as it would with a real clock, just
+    # instantly instead of over real wall-clock seconds.
+    def __init__(self):
+        self.now = 0.0
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+
+def _fake_conn(rpm_values, current_values=()):
+    # Replies based on the command actually sent, not just call order --
+    # needed since rpm and current are now interleaved on a different
+    # schedule (see run()'s current_sample_interval handling).
     conn = MagicMock()
     conn.__enter__.return_value = conn
-    conn.recv.side_effect = (
-        ["OK", "OK"]
-        + [f"OK ret=0 rpm={v} (hex=0x0000)" for v in rpm_values]
-        + ["OK"]
-    )
+    rpm_iter = iter(rpm_values)
+    current_iter = iter(current_values)
+    sent_commands = []
+
+    def fake_send(command):
+        sent_commands.append(command)
+
+    def fake_recv():
+        command = sent_commands[-1]
+        if command == "rpm":
+            return f"OK ret=0 rpm={next(rpm_iter)} (hex=0x0000)"
+        if command == "current":
+            val1, val2 = next(current_iter)
+            return f"OK ret=0 val1={val1} val2={val2}"
+        return "OK"  # speed 0 / speed <target>
+
+    conn.send.side_effect = fake_send
+    conn.recv.side_effect = fake_recv
     return conn
 
 
-def test_run_sends_zero_then_target_speed_first():
-    conn = _fake_conn([100, 200])
+def _run_with_fake_clock(conn, **kwargs):
+    clock = _FakeClock()
     with patch("capture_step_response.Client", return_value=conn), \
-         patch("capture_step_response.time.sleep"), \
-         patch("capture_step_response.time.monotonic", side_effect=iter(range(100))):
-        run(address="/tmp/fake.sock", target_speed=1000,
-            sample_interval=0.2, duration=0.4)
+         patch("capture_step_response.logsetup.configure"), \
+         patch("capture_step_response.time.sleep", clock.sleep), \
+         patch("capture_step_response.time.monotonic", clock.monotonic):
+        run(address="/tmp/fake.sock", **kwargs)
+
+
+def test_run_sends_zero_then_target_speed_first():
+    conn = _fake_conn([100, 200], [("1.00", "0.50")])
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.4)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
     assert sent[0] == "speed 0"
@@ -31,25 +66,23 @@ def test_run_sends_zero_then_target_speed_first():
     assert sent[-1] == "speed 0"
 
 
-def test_run_samples_expected_number_of_times():
-    conn = _fake_conn([100, 200, 300, 400])
-    with patch("capture_step_response.Client", return_value=conn), \
-         patch("capture_step_response.time.sleep"), \
-         patch("capture_step_response.time.monotonic", side_effect=iter(range(100))):
-        run(address="/tmp/fake.sock", target_speed=1000,
-            sample_interval=0.2, duration=0.8)
+def test_run_samples_rpm_expected_number_of_times():
+    conn = _fake_conn([100, 200, 300, 400], [("0.00", "0.00")])
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.8)
 
-    rpm_reads = sent = [
+    rpm_reads = [
         call.args[0] for call in conn.send.call_args_list if call.args[0] == "rpm"
     ]
     assert len(rpm_reads) == 4  # 0.8s / 0.2s
 
 
 def test_run_uses_one_persistent_connection_not_one_shot():
-    conn = _fake_conn([100])
+    conn = _fake_conn([100], [("0.00", "0.00")])
     with patch("capture_step_response.Client", return_value=conn) as fake_client, \
-         patch("capture_step_response.time.sleep"), \
-         patch("capture_step_response.time.monotonic", side_effect=iter(range(100))):
+         patch("capture_step_response.logsetup.configure"), \
+         patch("capture_step_response.time.sleep", _FakeClock().sleep), \
+         patch("capture_step_response.time.monotonic", _FakeClock().monotonic):
         run(address="/tmp/fake.sock", target_speed=1000,
             sample_interval=0.2, duration=0.2)
 
@@ -57,14 +90,51 @@ def test_run_uses_one_persistent_connection_not_one_shot():
 
 
 def test_run_prints_csv_rows(capsys):
-    conn = _fake_conn([425, -50])
-    with patch("capture_step_response.Client", return_value=conn), \
-         patch("capture_step_response.time.sleep"), \
-         patch("capture_step_response.time.monotonic", side_effect=iter(range(100))):
-        run(address="/tmp/fake.sock", target_speed=1000,
-            sample_interval=0.2, duration=0.4)
+    conn = _fake_conn([425, -50], [("1.00", "0.50")])
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.4)
 
     lines = capsys.readouterr().out.strip().splitlines()
-    assert lines[0] == "elapsed_ms,rpm"
-    assert lines[1].endswith(",425")
-    assert lines[2].endswith(",-50")
+    assert lines[0] == "elapsed_ms,rpm,current_val1,current_val2"
+    assert lines[1].startswith("0,425,")
+    assert lines[2].split(",")[1] == "-50"
+
+
+# --- current sampled at its own, slower interval ---
+
+def test_current_sampled_only_once_per_current_interval(capsys):
+    # sample_interval=0.2, current_sample_interval=1.0 -> current should
+    # be read every 5th rpm sample (i=0, i=5, ...), not every row.
+    # duration=1.6 (not 1.2) deliberately -- 1.2/0.2 is 5.999... in
+    # float64, int() truncates to 5 rows instead of 6; 1.6/0.2 is a
+    # clean 8.0.
+    conn = _fake_conn(
+        rpm_values=[0, 1, 2, 3, 4, 5, 6, 7],
+        current_values=[("1.00", "0.50"), ("1.20", "0.60")],
+    )
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          current_sample_interval=1.0, duration=1.6)
+
+    current_reads = [
+        call.args[0] for call in conn.send.call_args_list if call.args[0] == "current"
+    ]
+    assert len(current_reads) == 2  # rows 0 and 5 out of 8 rows
+
+
+def test_current_columns_blank_when_not_sampled_this_row(capsys):
+    conn = _fake_conn(
+        rpm_values=[0, 1, 2, 3, 4, 5, 6, 7],
+        current_values=[("1.00", "0.50"), ("1.20", "0.60")],
+    )
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          current_sample_interval=1.0, duration=1.6)
+
+    lines = capsys.readouterr().out.strip().splitlines()[1:]  # skip header
+    assert lines[0] == "0,0,1.00,0.50"       # first row -- current sampled
+    assert lines[1] == "200,1,,"             # no current this row
+    assert lines[2] == "400,2,,"
+    assert lines[3] == "600,3,,"
+    assert lines[4] == "800,4,,"
+    assert lines[5] == "1000,5,1.20,0.60"    # 1s elapsed -- current sampled again
+    assert lines[6] == "1200,6,,"
+    assert lines[7] == "1400,7,,"

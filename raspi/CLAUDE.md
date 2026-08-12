@@ -72,20 +72,37 @@ other. Same caution applies to any future same-named files across
   does **not** open `/dev/ttyS0` itself, no `RPi.GPIO`/`serial`
   dependency at all. See `watchdog/CLAUDE.md`'s Connection Model section
   for why it's persistent (instant disconnect detection) rather than
-  reconnecting per command.
+  reconnecting per command. Logs every command/reply to `motorcontrol.log`
+  (also echoed live to the terminal) via the shared `control/logsetup.py`
+  — see `watchdog/CLAUDE.md`'s log-format section for the full design
+  (rotation, why the file always has full detail).
+- `control/logsetup.py` — shared logging setup (`logsetup.configure()`)
+  used by all four `raspi/` scripts below and by `watchdog/watchdog.py`.
+  Rotating log file per script (one generation kept as `<name>.log.1`),
+  always full detail in the file, independently-leveled optional
+  terminal echo. See `watchdog/CLAUDE.md`'s log-format section — that's
+  where the design reasoning lives, not duplicated here.
 - `control/validate_speed.py` — standalone script implementing the
   speed-ramp validation sequence from root `CLAUDE.md`'s Open Points
   (0 → 400 → 800 → 1200 → 800 → 400 → 0 → -400 → -800 → -1200 → -800 →
-  -400 → 0, checking `rpm` after every step). Not a pytest test case
-  (real hardware, see Test Suite Policy below) — run it directly
-  (`python3 validate_speed.py`) with the watchdog already running
-  `--live`. Falls under Motor Execution Consent below like any other
+  -400 → 0, checking `rpm` and `current` after every step — `current`
+  read once per step, not on a separate schedule, since `SETTLE_TIME`
+  (3s default) already exceeds the current sensor's ~1s on-board
+  averaging window). Prints CSV
+  (`elapsed_ms,speed,rpm,current_val1,current_val2`) to stdout — same
+  shape `/plot-step-response` already knows how to plot, plus a `speed`
+  column since this is a multi-step ramp, not one fixed target. Not a
+  pytest test case (real hardware, see Test Suite Policy below) — run it
+  directly (`python3 validate_speed.py`) with the watchdog already
+  running `--live`. Falls under Motor Execution Consent below like any other
   motor command, whether run manually on the Pi or triggered remotely.
   Uses one persistent connection for the whole sequence (imports
   `SOCKET_ADDRESS` from `motorcontrol.py`), deliberately not the
   one-shot `send_command()` helper — a one-shot connection's immediate
   disconnect would trigger the watchdog's stop-on-disconnect after every
-  single step.
+  single step. Every command/reply also logged to `validate_speed.log`
+  (file only, not echoed to the terminal — stdout is reserved for the
+  CSV stream above).
 - `control/validate_motor_currentsensor.py` — standalone script
   regression-testing motor+currentsensor bus coexistence: steps speed
   through `[0, 500, 1000, 500, 0]`, and after each step (following a
@@ -100,18 +117,38 @@ other. Same caution applies to any future same-named files across
 - `control/capture_step_response.py` — standalone script: `speed 0` →
   `speed 1000` (step input), then samples `rpm` every 200ms for 8s
   (measured from the step, not from the initial `speed 0`), always
-  ending with `speed 0`. Prints CSV (`elapsed_ms,rpm`) to stdout — does
-  not write a file itself, the caller (human or Claude capturing the
-  SSH output) decides where it's saved, e.g. `runs/` in the main repo
-  (see root `CLAUDE.md`'s Repo Structure). Same one-persistent-
-  connection and Motor Execution Consent reasoning as
-  `validate_speed.py` above. Sampling is scheduled against the absolute
-  start time (not accumulated sleeps) so per-sample LIN round-trip
-  latency doesn't drift the interval over the run.
+  ending with `speed 0`. Prints CSV
+  (`elapsed_ms,rpm,current_val1,current_val2`) to stdout — does not
+  write a file itself, the caller (human or Claude capturing the SSH
+  output) decides where it's saved, e.g. `runs/` in the main repo (see
+  root `CLAUDE.md`'s Repo Structure). `current` is sampled at its own,
+  much slower `CURRENT_SAMPLE_INTERVAL` (default 1.0s, not every 200ms
+  row) — the current sensor's own on-board averaging window is ~1s (see
+  `currentsensor/CLAUDE.md`'s `countmax`/`OCR1A` tuning), so sampling it
+  faster would just re-read the same averaged value; `current_val1`/
+  `current_val2` are blank on rows where it wasn't sampled that tick.
+  Same one-persistent-connection and Motor Execution Consent reasoning
+  as `validate_speed.py` above. Sampling is scheduled against the
+  absolute start time (not accumulated sleeps) so per-sample LIN
+  round-trip latency doesn't drift the interval over the run. Every
+  command/reply also logged to `capture_step_response.log` (file only,
+  same stdout-stays-clean-for-CSV reasoning as `validate_speed.py`).
   Both this and `validate_speed.py` above have their pre-flight checks
   (watchdog running? client already connected?), consent gating, and
   output-saving convention written up once in the `/run-raspi-validation`
-  skill — use that instead of re-deriving the steps each time.
+  skill — use that instead of re-deriving the steps each time. Once a
+  capture CSV exists, `/plot-step-response` turns it into a dual-axis
+  rpm+current PNG chart.
+- `analyze_logs.py` — read-only static analysis over the four `.log`
+  files above (built 2026-08-12, together with the `/analyze-logs`
+  skill): flags unmatched `->` calls (the 2026-08-11 bus-hang
+  signature), non-zero `ret` codes, calls exceeding a fixed latency
+  threshold, `data=[...]` lengths that don't match `addresses.json`'s
+  `bytes` field, `WARNING`/`ERROR` lines (via the log level field), and
+  watchdog poll-loop cadence gaps. Not deployed to the Pi — runs
+  locally against fetched log copies (e.g. in `runs/`), no consent
+  needed. See its own docstring and `watchdog/CLAUDE.md`'s log-format
+  section for the exact checks and line-format details.
 - `watchdog/` — Independent safety barrier, runs as its own process
   separate from the rest, and is the sole LIN master (owns
   `/dev/ttyS0` — `control/` no longer does). See `watchdog/CLAUDE.md`
@@ -153,6 +190,16 @@ real-hardware-confirmed, not just "best current understanding."
 - `watchdog/linbus.py` returns bare magic-number error codes
   (`-1`/`-2`/`-3`/`-4`) from `Lin.write()`/`Lin.read()`. Replace with named
   constants (or an enum) — deferred.
+- **`validate_speed.py`/`capture_step_response.py` silently swallow
+  `ret!=0` reads** (2026-08-12, part of the bus-hang investigation — see
+  `STM32/CLAUDE.md`'s Open Points): `_read_rpm()`/`_read_current()`'s
+  regex just fails to match on a `None`/error reply, so the row prints
+  literal `"None"` in the CSV instead of raising an alarm — easy to miss
+  live, only visible on close inspection of the output afterward. Should
+  flag conspicuously (or abort) on `ret!=0`, similar to
+  `validate_motor_currentsensor.py`'s `_invalid_current_reason()` sanity
+  check. Not yet built — planned alongside the STM32/currentsensor error
+  counters for the same investigation.
 
 ## Test Suite Policy
 

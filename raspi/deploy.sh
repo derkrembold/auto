@@ -42,6 +42,7 @@ echo "Deploying to $HOST:$TARGET (copy only, nothing executed)"
 
 run_with_retry scp \
   "$REPO_ROOT/raspi/control/motorcontrol.py" \
+  "$REPO_ROOT/raspi/control/logsetup.py" \
   "$REPO_ROOT/raspi/control/validate_speed.py" \
   "$REPO_ROOT/raspi/control/validate_motor_currentsensor.py" \
   "$REPO_ROOT/raspi/control/capture_step_response.py" \

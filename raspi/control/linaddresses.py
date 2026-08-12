@@ -21,6 +21,10 @@ class constants:
     pids = [cntl0mot, cntl1mot, cntl2mot, cntl3mot, st0mot, st1mot, st2mot, cntl0cur, st0cur, cntl0lig, st0lig]
     messagebytes = [2, 2, 6, 2, 3, 2, 2, 2, 4, 2, 4]
 
+    # pid value -> its own message name, for human-readable logging
+    # (e.g. watchdog/linbus.py's --debug bus-call tracing).
+    pid_names = {cntl0mot: 'cntl0mot', cntl1mot: 'cntl1mot', cntl2mot: 'cntl2mot', cntl3mot: 'cntl3mot', st0mot: 'st0mot', st1mot: 'st1mot', st2mot: 'st2mot', cntl0cur: 'cntl0cur', st0cur: 'st0cur', cntl0lig: 'cntl0lig', st0lig: 'st0lig'}
+
     # source/destination are always strings (including "master") --
     # they name a device *class*, not a fixed wire address. Combine
     # a message's base pid with the target instance's id below to

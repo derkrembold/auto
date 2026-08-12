@@ -41,6 +41,14 @@ STM32/build.log
 STM32/flash.log
 raspi/deploy.log
 
+# Runtime logs (watchdog.py, motorcontrol.py, validate_speed.py,
+# capture_step_response.py -- see logsetup.py) - rotated (one generation
+# kept as *.log.1), regenerated every run, not repo content.
+raspi/control/*.log
+raspi/control/*.log.1
+raspi/watchdog/*.log
+raspi/watchdog/*.log.1
+
 # AVR Build-Artefakte (currentsensor/lightsensor) - regenerierbar via
 # make (siehe jeweiliges CLAUDE.md), sonst riesige Diffs
 currentsensor/firmware/*.o

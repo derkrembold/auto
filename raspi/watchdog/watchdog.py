@@ -1,12 +1,22 @@
+import logging
 import sys
 import threading
 import time
 from multiprocessing.connection import Listener
 
 import linbus
+import logsetup
 
 # Must match motorcontrol.py's SOCKET_ADDRESS.
 SOCKET_ADDRESS = '/tmp/motorwatchdog.sock'
+
+# Rotated (one generation kept, see logsetup.rotate_log()) on every
+# serve() start -- always full detail, independent of --debug (which
+# only controls terminal echo). See raspi/watchdog/CLAUDE.md's
+# log-format notes.
+LOG_PATH = "watchdog.log"
+
+logger = logging.getLogger("watchdog")
 
 KNOWN_COMMANDS = {"speed", "on", "off", "hal", "rpm", "temp", "current"}
 
@@ -34,6 +44,15 @@ RPM_POLL_INTERVAL = 1.0
 # Grace period after a 0 -> nonzero speed command during which rpm==0 is
 # NOT treated as stall evidence (startup torque/static friction delay).
 STALL_GRACE_PERIOD = 3.0
+
+# Upper-layer stall signature (see "Two-Layer Safety Check" below):
+# "no current" baseline for linbus.get_current()'s val1 (amps). Needs
+# real headroom above ACS712 chip-to-chip offset tolerance -- observed
+# ~0.05-0.09A between the two sensor chips on real hardware, see
+# currentsensor/CLAUDE.md's Hardware section. Kept as its own named
+# constant (not inlined) so it's easy to find and retune once more
+# real-world data exists.
+CURRENT_STALL_THRESHOLD = 0.15
 
 SPINNER_CHARS = "-\\|/"
 
@@ -80,11 +99,16 @@ class Watchdog:
         self.stopped_for_idle = False
         self.spinner_index = 0
 
-        # Interim rpm-only stall check (lower layer). Upper layer
-        # (current sensor) not built yet — sensor hardware isn't
-        # operational yet, see currentsensor/CLAUDE.md.
+        # Lower layer: rpm-only stall check (self-stopping, live).
         self.last_commanded_speed = 0
         self.speed_became_nonzero_at = None
+
+        # Upper layer: current-based stall *signature* — observe-only
+        # for now (logs, does not stop the motor yet). See "Two-Layer
+        # Safety Check" in raspi/watchdog/CLAUDE.md for why: the sensor
+        # only just started working reliably (2026-08-10/11), not yet
+        # trusted enough to act on autonomously.
+        self.last_known_rpm = None
 
     def _advance_spinner(self):
         char = SPINNER_CHARS[self.spinner_index % len(SPINNER_CHARS)]
@@ -92,7 +116,7 @@ class Watchdog:
         print(f"\rwatchdog: {char}  ", end="", flush=True)
 
     def _stop_motor(self, reason):
-        print(f"\nwatchdog: {reason} — stopping motor")
+        logger.warning(f"{reason} — stopping motor")
         with self.lock:
             linbus.set_speed(self.lin, 0)
         self.last_commanded_speed = 0
@@ -177,11 +201,31 @@ class Watchdog:
         # Self-polls the bus directly — does not depend on a client
         # asking for `rpm`, so stall detection works even with nobody
         # connected at all (motor should never be spinning in that case
-        # anyway, but this doesn't assume that).
+        # anyway, but this doesn't assume that). Per-call tracing (which
+        # thread, timing, raw bytes) now lives in linbus.Lin itself (see
+        # its --debug support) rather than being duplicated here.
         with self.lock:
             ret, value = linbus.get_rpm(self.lin)
         if ret == 0 and value is not None:
+            self.last_known_rpm = value
             self._check_stall(value)
+
+    def poll_current(self):
+        # Upper-layer stall *signature* check (see "Two-Layer Safety
+        # Check" in raspi/watchdog/CLAUDE.md): current flowing while rpm
+        # reads 0. Observe-only — logs conspicuously, does NOT call
+        # _stop_motor() yet. Only val1 (val2 is reserved for a second
+        # motor once one exists on the bus, not a redundant reading of
+        # this one — see currentsensor/CLAUDE.md's Hardware section).
+        # Uses the rpm value poll_rpm() already cached this same tick
+        # rather than issuing a second rpm read.
+        with self.lock:
+            ret, val1, val2 = linbus.get_current(self.lin)
+        if ret != 0 or val1 is None:
+            return
+        if self.last_known_rpm == 0 and abs(val1) > CURRENT_STALL_THRESHOLD:
+            logger.warning(f"*** OBSERVED STALL SIGNATURE (not acted on "
+                            f"yet) — current={val1:.2f}A while rpm=0 ***")
 
     def monitor(self):
         # Runs in its own thread, independent of client connections. Must
@@ -194,25 +238,41 @@ class Watchdog:
             try:
                 self.check_idle()
                 self.poll_rpm()
+                self.poll_current()
             except Exception as exc:
-                print(f"\nwatchdog: monitor loop error (continuing): {exc}")
+                logger.error(f"monitor loop error (continuing): {exc}")
 
 
-def serve(address=SOCKET_ADDRESS, live=False):
+def serve(address=SOCKET_ADDRESS, live=False, debug=False):
+    # File always gets full detail (DEBUG level); terminal only mirrors
+    # it if --debug. Log file is rotated (one generation kept) here, not
+    # overwritten -- a rare bug's evidence must survive an untimely
+    # restart. See raspi/watchdog/CLAUDE.md's log-format notes.
+    logsetup.configure(
+        "watchdog", LOG_PATH,
+        terminal_level=logging.DEBUG if debug else logging.INFO,
+    )
+
+    # One-time session header -- which process, live vs dry-run, whether
+    # --debug is on. Session-level facts belong here, not repeated on
+    # every subsequent log line.
+    mode = "LIVE bus" if live else "dry-run (no real bus access)"
+    debug_note = " [debug]" if debug else ""
+    logger.info(f"=== watchdog.py — {mode}{debug_note} ===")
+
     lin = linbus.Lin() if live else linbus.DryRunLin()
-    print(f"watchdog: {'LIVE bus' if live else 'dry-run (no real bus access)'}")
 
     wd = Watchdog(lin)
     monitor_thread = threading.Thread(target=wd.monitor, daemon=True)
     monitor_thread.start()
 
     listener = Listener(address, family='AF_UNIX')
-    print(f"watchdog listening on {address}")
+    logger.info(f"listening on {address}")
     try:
         while True:
             with listener.accept() as conn:
                 wd.on_connect()
-                print("\nwatchdog: client connected")
+                logger.info("client connected")
                 try:
                     while True:
                         try:
@@ -222,9 +282,9 @@ def serve(address=SOCKET_ADDRESS, live=False):
                         conn.send(wd.execute(command))
                 finally:
                     wd.on_disconnect()
-                    print("watchdog: client disconnected")
+                    logger.info("client disconnected")
     except KeyboardInterrupt:
-        print("\nwatchdog: shutting down (Ctrl+C)")
+        logger.info("shutting down (Ctrl+C)")
     finally:
         listener.close()
         lin.close()
@@ -234,4 +294,8 @@ if __name__ == "__main__":
     # Dry-run by default — real bus access requires the explicit --live
     # flag, so an accidental start can never move the motor. See
     # raspi/CLAUDE.md's Motor Execution Consent rule.
-    serve(live='--live' in sys.argv[1:])
+    # --debug: also echo the full LIN bus-call trace (linbus.Lin,
+    # timestamped, ->/<- entry+exit, which thread) to the terminal, not
+    # just watchdog.log (which always has it regardless of this flag).
+    # See raspi/watchdog/CLAUDE.md's log-format notes.
+    serve(live='--live' in sys.argv[1:], debug='--debug' in sys.argv[1:])
