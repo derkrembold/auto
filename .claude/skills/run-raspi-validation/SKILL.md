@@ -52,7 +52,8 @@ see `raspi/watchdog/CLAUDE.md`'s Connection Model.
 
 None of the scripts write a file themselves — all print to stdout and
 leave saving up to the caller. For `capture_step_response.py`'s CSV
-(`elapsed_ms,rpm` rows), save the captured stdout into `runs/` in the
+(`elapsed_ms,rpm,current_val1,current_val2` rows — current columns blank
+except once per second, see `raspi/CLAUDE.md`), save the captured stdout into `runs/` in the
 main repo (not on the Pi), named
 `runs/<date>_step_response_<from>_to_<target>.csv`. If a plot is useful,
 matplotlib works locally (`pip install matplotlib` if not already

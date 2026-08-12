@@ -1,6 +1,7 @@
 //#define F_CPU 16000000UL // CPU-Frequenz des ATmega328P (16 MHz)
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <util/atomic.h>
 #include <unistd.h>
 #include <signal.h>
 #include <stdio.h>
@@ -21,6 +22,71 @@
 #define CS_PIN PD2
 
 const uint16_t BAUD = 19200;
+
+volatile uint32_t adcvaltemp0 = 0;
+volatile uint32_t adcvaltemp1 = 0;
+volatile uint16_t adcval0 = 0;
+volatile uint16_t adcval1 = 0;
+
+volatile bool done0 = true;
+volatile bool done1 = true;
+
+// ~1s averaging window: the ISR needs 3 ticks per channel sample (start
+// conversion, collect+start next channel, collect+reset channel), so at
+// a 5ms ISR period that's 15ms/sample -> ~67 samples for ~1s (1000/15).
+volatile uint16_t countmax = 67;
+volatile uint16_t count0 = 0;
+volatile uint16_t count1 = 0;
+volatile uint16_t channel = 2;
+
+
+ISR (TIMER1_COMPA_vect)
+{
+
+  if (done0 == true && channel == 2) {
+    ADMUX = (ADMUX & 0xf0) | (channel & 0x07);  //select input and ref
+    ADCSRA |= (1 << ADSC);
+    done0 = false;
+  }
+
+  if (done0 == false && channel == 2) {
+
+    if ((ADCSRA & (1 << ADSC)) == 0) {
+      done0 = true;
+      adcvaltemp0 += ADC;
+      count0++;
+      if (count0 >= countmax) {
+	adcval0 = adcvaltemp0/countmax;
+	adcvaltemp0 = 0;
+	count0 = 0;
+      }
+      channel = 3;
+    }
+  }
+  
+  if (done1 == true && channel == 3) {
+    ADMUX = (ADMUX & 0xf0) | (channel & 0x07);  //select input and ref
+    ADCSRA |= (1 << ADSC);
+    done1 = false;
+  }
+
+  if (done1 == false && channel == 3) {
+
+    if ((ADCSRA & (1 << ADSC)) == 0) {
+      done1 = true;
+      adcvaltemp1 += ADC;
+      count1++;
+      if (count1 >= countmax) {
+	adcval1 = adcvaltemp1/countmax;
+	adcvaltemp1 = 0;
+	count1 = 0;
+      }
+      channel = 2;
+    }
+  }
+}
+
+
 
 void init(uint16_t baud)
 {
@@ -71,6 +137,21 @@ void init(uint16_t baud)
   //enable and prescale = 128 (16MHz/128 = 125kHz)
   ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 
+
+
+  TCCR1A |= (0x00 << WGM10 | 0x00 << WGM11); // normal mode of operation
+  TCCR1A |= (0x00 << COM1A0 | 0x00 << COM1A1 | 0x00 << COM1B0 |
+	     0x00 << COM1B1);                // no output on pins
+  TCCR1B |= (0x01 << WGM12 | 0x00 << WGM13); // ctc mode of operation
+  TCCR1B |= (0x01 << CS12 | 0x00 << CS11 | 0x01 << CS10); // 1024 prescaler
+
+  OCR1A = 77;  // ~5ms: (77+1) * 1024 / 16MHz ≈ 4.99ms
+  //OCR1AH = 0x01;
+
+  //TIMSK1 |= (0x00 << TOIE1 | 0x01 << OCIE1A | 0x00 << OCIE1B); // enable interrupts
+  TIMSK1 |= (0x00 << TOIE1 | 0x01 << OCIE1A); // enable interrupts
+  
+  
   sei();  ////Serial Interrupt enable
 }
 
@@ -275,12 +356,8 @@ int main() {
 
     for(;;) {
       int syncbyte = receivebyte();
-      /*if(syncbyte==LIN_TIM_ERR){
-	error(LIN_TIM_ERR);
-	continue;
-	}*/
+
       if(syncbyte!=sync){
-	//error(LIN_SYN_ERR);
 	continue;
       } else {
 	break;
@@ -301,8 +378,11 @@ int main() {
 	continue;
       }
 
-      uint16_t val1 = readadc(2);
-      uint16_t val2 = readadc(3);
+      uint16_t val1, val2;
+      ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        val1 = adcval0;
+        val2 = adcval1;
+      }
 
       data[0] = val1 & 0xFF;
       data[1] = (val1 >> 8) & 0x03;
