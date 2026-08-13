@@ -101,10 +101,13 @@ uint8_t linbodysize = 0;
 uint8_t tx_body[10];
 
 
-bool headerrecvd = false;
-bool bodyrecvd = false;
-bool bodysent = false;
-
+volatile bool headerrecvd = false;
+volatile bool bodyrecvd = false;
+volatile bool bodysent = false;
+volatile uint32_t bodyWaitStartTick = 0;
+volatile bool bodyTimedOut = false;
+volatile uint32_t bodyTimeoutCount = 0;
+#define LIN_BODY_TIMEOUT_MS 50
 
 
 
@@ -298,6 +301,13 @@ int main(void)
 			  done = 0;
 		  }
 
+		  if (headerrecvd == true && (HAL_GetTick() - bodyWaitStartTick) > LIN_BODY_TIMEOUT_MS) {
+			  HAL_UART_AbortReceive(&huart4);  // blockierend, kein DMA im Spiel -> praktisch sofort
+			  headerrecvd = false;
+			  bodyTimedOut = true;
+			  bodyrecvd = true;  // bricht die while-Schleife ab
+			  bodyTimeoutCount++;
+		  }
 
 		  if(HAL_GPIO_ReadPin (GPIOE, GPIO_PIN_5) ==  GPIO_PIN_RESET)
 		  {
@@ -370,6 +380,10 @@ int main(void)
 	  }
 	  // some LIN message was received.
 	  bodyrecvd = false;
+	  if (bodyTimedOut) {
+		  bodyTimedOut = false;
+		  continue;  // Body nie angekommen -> verwerfen, neu auf Sync-Byte warten
+	  }
 	  if ((rx_header[1]&0x3f) == (cntl0mot | hwbits) && rx_body[0] == 0x01 && rx_body[1] == 0xdb) {
 		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
 	  }
@@ -764,6 +778,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 				  if (sources[linindex] == master) {
 				    linbodysize = messagebytes[linindex];
 				    HAL_UART_Receive_IT(&huart4, rx_body, linbodysize + 1);
+				    bodyWaitStartTick = HAL_GetTick();
 				    // checksum sollte noch hier berechnet werden und gecheckt werden.
 				    headerrecvd = true;
 				  } else if ((sources[linindex] == motor) && ((rx_header[1]&0x03) == hwbits)) {
@@ -771,13 +786,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 				    fillbody(rx_header[1]&0x3c, tx_body, linbodysize);
 				    tx_body[linbodysize] = checksum(tx_body, linbodysize);
 				    HAL_UART_Receive_IT(&huart4, rx_body, linbodysize + 1);
+				    bodyWaitStartTick = HAL_GetTick();
 				    HAL_UART_Transmit_IT(&huart4, tx_body, linbodysize + 1);
-				    
+
 				    headerrecvd = true;
 				    bodysent = true;
 				  } else {
 				    linbodysize = messagebytes[linindex];
 				    HAL_UART_Receive_IT(&huart4, rx_body, linbodysize + 1);
+				    bodyWaitStartTick = HAL_GetTick();
 				    headerrecvd = true;
 				    bodysent = false;
 				  }
@@ -938,9 +955,14 @@ void fillbody(uint8_t addr, uint8_t *data, uint8_t len) {
     uint32_t val = HAL_ADC_GetValue(&hadc2);
     data[0] = 0xFF & val;
     data[1] = (0xFF00 & val) >> 8;
-  } else 	if(addr == st2mot) {
+  } else if(addr == st2mot) {
     data[0] = 0xFF & rpm;
     data[1] = (0xFF00 & rpm) >> 8;
+  } else if (addr == st3mot) {
+    data[0] = (uint8_t)(bodyTimeoutCount & 0xFF);
+    data[1] = (uint8_t)((bodyTimeoutCount >> 8) & 0xFF);
+    data[2] = (uint8_t)((bodyTimeoutCount >> 16) & 0xFF);
+    data[3] = (uint8_t)((bodyTimeoutCount >> 24) & 0xFF);
   }
 }
 

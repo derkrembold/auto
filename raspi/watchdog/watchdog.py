@@ -18,7 +18,7 @@ LOG_PATH = "watchdog.log"
 
 logger = logging.getLogger("watchdog")
 
-KNOWN_COMMANDS = {"speed", "on", "off", "hal", "rpm", "temp", "current", "errors"}
+KNOWN_COMMANDS = {"speed", "on", "off", "hal", "rpm", "temp", "current", "errors", "selftest"}
 
 # Business/safety speed limit — separate from the protocol-level int16
 # range linbus.set_speed() clamps to. Deliberately below the motor's
@@ -173,13 +173,46 @@ class Watchdog:
             val2_str = f"{val2:.2f}" if val2 is not None else None
             return f"OK ret={ret} val1={val1_str} val2={val2_str}"
         if verb == "errors":
-            # Currentsensor-only for now -- the motor's equivalent
-            # (st3mot) isn't wired up on the STM32 side yet, see
-            # STM32/CLAUDE.md's Open Points.
+            # Currentsensor's own errorstorage ring buffer -- the motor
+            # side has no equivalent (its st3mot is a single running
+            # counter, not a per-error-type history, see "selftest"
+            # below).
             ret, codes = linbus.get_error_history(self.lin)
             names = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes]
                       if codes is not None else None)
             return f"OK ret={ret} codes={codes} names={names}"
+        if verb == "selftest":
+            # Part 1: currentsensor's cntl0cur test hook, round-trip
+            # inject-then-reset of errorstorage via st1cur.
+            (ret_inject, ret_injected, codes_injected,
+             ret_reset, ret_after_reset, codes_after_reset) = linbus.currentsensor_selftest(self.lin)
+            names_injected = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_injected]
+                                if codes_injected is not None else None)
+            names_after_reset = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_after_reset]
+                                   if codes_after_reset is not None else None)
+
+            # Part 2: deliberately provoke the STM32 bus-hang timeout
+            # (see linbus.provoke_bus_hang_timeout()'s docstring) and
+            # confirm both sides actually caught it -- STM32's
+            # bodyTimeoutCount (st3mot) went up, currentsensor logged a
+            # CHK error (st1cur). Takes ~2s (the master's own read
+            # timeout on the deliberately-sabotaged reply).
+            ret_timeout_before, timeout_before = linbus.get_timeout_count(self.lin)
+            ret_arm, ret_trigger = linbus.provoke_bus_hang_timeout(self.lin)
+            ret_timeout_after, timeout_after = linbus.get_timeout_count(self.lin)
+            ret_errors_after, codes_after_provoke = linbus.get_error_history(self.lin)
+            names_after_provoke = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_after_provoke]
+                                     if codes_after_provoke is not None else None)
+
+            return (f"OK inject_ret={ret_inject} "
+                    f"injected(ret={ret_injected} codes={codes_injected} names={names_injected}) "
+                    f"reset_ret={ret_reset} "
+                    f"after_reset(ret={ret_after_reset} codes={codes_after_reset} names={names_after_reset}) "
+                    f"bushang_test(timeout_before(ret={ret_timeout_before} count={timeout_before}) "
+                    f"arm_ret={ret_arm} trigger_ret={ret_trigger} "
+                    f"timeout_after(ret={ret_timeout_after} count={timeout_after}) "
+                    f"currentsensor_after(ret={ret_errors_after} codes={codes_after_provoke} "
+                    f"names={names_after_provoke}))")
         return f"ERR unhandled command: {verb}"  # unreachable if validate() is correct
 
     def execute(self, command):

@@ -58,15 +58,42 @@ other. Same caution applies to any future same-named files across
   buffer), decoded via `linbus.get_error_history()`/
   `CURRENTSENSOR_ERROR_NAMES` into both raw codes and names (`SYN`/
   `PAR`/`PID`/`MSI`/`CHK`/`TIM`/`IND`/`NUM`, mirroring
-  `currentsensor/firmware/errors.hpp`). Currentsensor-only for
-  now — the motor's equivalent (`st3mot`) isn't dispatched on the
-  STM32 side yet, see `STM32/CLAUDE.md`'s Open Points. Deliberately
+  `currentsensor/firmware/errors.hpp`). Currentsensor-only — the motor
+  side has no equivalent error-*history* ring buffer (its `st3mot` is a
+  single running counter for a different, specific purpose, see
+  `selftest` below). Deliberately
   **not** auto-triggered by a failed `current` read — kept as its own
   explicit, manually-invoked command (discussed 2026-08-12): automatic
   follow-up queries would make `current`'s behavior context-dependent
   and harder to predict/test, and conflicts with this project's general
   preference for explicit over implicit bus activity (e.g.
-  `poll_current()`'s observe-only stall signature, below). `current` reads the current sensor board's two
+  `poll_current()`'s observe-only stall signature, below).
+
+  `selftest` (added 2026-08-13, extended same day) does two things in
+  one call, ~2s total:
+  1. Exercises the currentsensor's `cntl0cur` test hook end to end via
+     `linbus.currentsensor_selftest()`: injects a known non-zero pattern
+     into `errorstorage` (`0x01`/`0xab`), reads it back via `st1cur`,
+     resets it to zero (`0xcd`/`0x0c`), reads it back again. Piggybacks
+     on `cntl0cur`'s pre-existing LED-test bytes rather than a dedicated
+     pid — deliberate, discussed 2026-08-13: the only caller is this
+     project's own `motorcontrol.py`, so the coupling (LED test and
+     errorstorage inject/reset always happening together) has no real
+     cost.
+  2. Deliberately reproduces, on demand, the 2026-08-11 STM32 bus-hang
+     scenario and confirms both sides actually caught it
+     (`linbus.provoke_bus_hang_timeout()`, see `STM32/CLAUDE.md`'s and
+     `currentsensor/CLAUDE.md`'s Status sections for the full story):
+     arms a `cntl0cur [0xfa,0x17]` sabotage flag on the currentsensor
+     that forces its next `st0cur`/`st1cur` reply to abort after 1 byte,
+     triggers a real `st0cur` read to fire it (this read times out,
+     `ret=-5`, expected), then reads `st3mot` (`linbus.get_timeout_count()`
+     — the STM32's `HAL_GetTick()` bus-hang-timeout counter) and `st1cur`
+     before/after to confirm both incremented/logged the event.
+     Confirmed against real hardware repeatedly, motor both idle and
+     running — see the CLAUDE.md sections above.
+
+  `current` reads the current sensor board's two
   ACS712xLCTR-20A chips (one per motor — see `currentsensor/CLAUDE.md`'s
   Hardware section) via `linbus.get_current()`: `val1`/`val2` are amps,
   converted from the raw 10-bit ADC reading on this (Raspi) side, not on

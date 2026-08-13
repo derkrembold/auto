@@ -313,6 +313,91 @@ same-day wrong-source correction, and current build/flash state.
 structure in general; it predates the actual import and hasn't been
 re-verified against the corrected `demoboard` source specifically.
 
+**Bus-hang investigation (2026-08-11) — resolved and confirmed against
+real hardware (2026-08-13).** Root cause: `HAL_UART_RxCpltCallback`'s
+`else` branch (foreign-but-known pid, e.g. `st0cur` — the STM32 isn't
+the addressee, it's only tracking the frame to keep its own header/body
+sync) arms `HAL_UART_Receive_IT` for the full expected reply length with
+no timeout. If the replying device (currentsensor) aborts mid-reply
+(its own `aborted`/`break` echo-check logic, see
+`currentsensor/CLAUDE.md`), the STM32 waited forever for bytes that
+would never come — permanently deaf to all further LIN traffic, not
+just to that one device, since the main loop never gets back to
+re-arming the header receive.
+
+- **Fix:** new globals near `rx_header`/`bodyrecvd` (`main.c:104-109`):
+  `headerrecvd`/`bodyrecvd`/`bodysent` now `volatile` (were previously
+  not — harmless only because the project builds at `-O0`, see below),
+  plus `bodyWaitStartTick`, `bodyTimedOut`, `bodyTimeoutCount`,
+  `LIN_BODY_TIMEOUT_MS` (50ms, generous above the ~4.7ms worst-case
+  transmission time at 19200 baud). `bodyWaitStartTick = HAL_GetTick()`
+  set right after each of the three `HAL_UART_Receive_IT(&huart4,
+  rx_body, ...)` arm points in `HAL_UART_RxCpltCallback`
+  (`main.c:779,787,795`). The timeout check lives in the main loop's
+  `while (bodyrecvd == false)` wait (`main.c:303-309`): past
+  `LIN_BODY_TIMEOUT_MS`, calls `HAL_UART_AbortReceive(&huart4)`
+  (blocking variant — no DMA in use, effectively immediate; confirmed
+  via `stm32h7xx_hal_uart.c:1807` that it resets `RxState` to `READY`
+  cleanly, no side-effect callback), increments `bodyTimeoutCount`, and
+  sets `bodyTimedOut` so the post-loop dispatch code
+  (`main.c:381-384`) discards the partial/missing body and `continue`s
+  straight back to re-arming `HAL_UART_Receive_IT(&huart4, rx_header,
+  2)` instead of processing garbage.
+- **`volatile` fix, same pass:** `headerrecvd`/`bodyrecvd`/`bodysent`
+  are written in the ISR and read in the main loop but weren't marked
+  `volatile` — silently relied on the project's current `-O0` build
+  (confirmed via `STM32/firmware/Debug/Core/Src/subdir.mk`) never
+  caching them across loop iterations. At any higher optimization level
+  the compiler could legally hoist the `bodyrecvd` read out of
+  `while (bodyrecvd == false)` entirely, turning it into a silent
+  infinite loop. Fixed while touching this exact block.
+- **`bodyTimeoutCount` exposed via `st3mot`** (`fillbody()`,
+  `main.c:961-964`, 4 bytes little-endian, same convention as
+  `st1mot`/`st2mot`) — this PID already existed in `addresses.json`
+  reserved for exactly this purpose (motor's counterpart to
+  currentsensor's `st1cur`); an earlier draft of this note incorrectly
+  called it a "free block" needing reassignment, which was wrong — it
+  was never free, just not dispatched yet. `raspi/watchdog/linbus.py`'s
+  `get_timeout_count()` reads/decodes it.
+- **Known accepted minor race, left as-is:** the timeout check
+  (`main.c:303`) reads `headerrecvd`/`HAL_GetTick()` non-atomically. If
+  `HAL_UART_RxCpltCallback` fires in that handful-of-CPU-cycles window
+  (the real body completes right as the timeout is about to fire), a
+  legitimate message could be discarded as if it were the failure case.
+  Consequence is minor (master sees one spurious timeout on that read,
+  can just retry) — would need `__disable_irq()`/`__enable_irq()` around
+  the check to close fully, not done.
+- **Confirmed against the real failure scenario (2026-08-13), not just
+  built/flashed.** `raspi/control/motorcontrol.py`'s `selftest` command
+  was extended (`linbus.provoke_bus_hang_timeout()`) to deliberately
+  reproduce the original bug on demand: arms a matching sabotage flag on
+  the currentsensor (`cntl0cur [0xfa,0x17]`, see
+  `currentsensor/CLAUDE.md`) that forces its *own* echo-check to fail on
+  the first byte of its next `st0cur`/`st1cur` reply, then triggers a
+  real `st0cur` read. Run three times against real hardware, all
+  consistent (`runs/2026-08-13_selftest_bushang*/`,
+  `runs/2026-08-13_validate_capture/`):
+  - Motor idle, twice back-to-back: `bodyTimeoutCount` `0→1`, then
+    `1→2`; currentsensor's `st1cur` showed a fresh `CHK` entry both
+    times; the *same* `selftest` call that provoked the hang could
+    immediately read `st3mot`/`st1cur` back successfully (`ret=0`) —
+    the STM32 was never stuck.
+  - **Motor running at commanded speed 500 throughout:**
+    `bodyTimeoutCount` `2→3`, `st0cur`'s reply cut off after exactly 1
+    byte (`data=['0xf8']`, expected 4) as designed, and — the key
+    result — `st2mot` read back **exactly 500 in the very next poll
+    cycle** immediately after the ~2s provocation. `driveStep()`/
+    `picontrol()` never glitched; the motor was fully controllable
+    throughout and `speed 0` right after worked normally.
+  - `validate_speed.py` and `capture_step_response.py` run clean
+    afterward (`raspi/analyze_logs.py`: no anomalies) — no regression
+    from the fix in normal operation.
+  - The originally-planned *separate* currentsensor-side error counter
+    (to correlate against `bodyTimeoutCount`) turned out unnecessary —
+    the existing `errorstorage`/`st1cur` already gave that signal, and
+    the correlation (STM32 counter and currentsensor `CHK` entry moving
+    together, every time) was directly observed via this test.
+
 
 ## Motor Information
 Produktinformationen "BLDC-Motor 1000W, Bosch, 1.607.022.68B, 36 V-, 35 A -brushless"
@@ -340,31 +425,6 @@ Leerlauf Stromverbrauch: bei 5V: ca.: 0,5A,  bei 48V ca.: 1,4A
 
 ## Open Points (STM32-specific)
 
-- **Bus-hang investigation (2026-08-11), continuing next session.** Real
-  hardware trace (`raspi/watchdog/watchdog.py --debug`, see
-  `raspi/watchdog/CLAUDE.md`) caught the STM32 going completely silent
-  mid-`validate_speed.py`-run — both `rpm` and `current` reads started
-  returning `-5` ("no response from slave") simultaneously, mid-ramp,
-  after many prior successful transactions. Leading (unconfirmed)
-  hypothesis: `HAL_UART_RxCpltCallback`'s `else` branch (foreign-but-
-  known pid, e.g. `st0cur`) arms `HAL_UART_Receive_IT` for the full
-  expected reply length with **no timeout** — if the replying device
-  (currentsensor) aborts mid-reply (its own `aborted`/`break` echo-check
-  logic can do exactly this, see `currentsensor/CLAUDE.md`), the STM32
-  waits forever, jamming the whole shared bus for every device, not just
-  itself. Two concrete next steps agreed for next session:
-  - Add a `HAL_GetTick()`-based timeout (**not** `htim4`/`htim5` — both
-    already actively used elsewhere: `htim4` for the 100ms rpm-sampling
-    window inside the same wait loop, `htim5` for `driveState()`'s
-    commutation timing — reusing either would corrupt that other use).
-    Code sketch already handed to the user (2026-08-11), user is
-    implementing it themselves in `main.c`.
-  - Add a counter for how often that timeout actually fires, exposed via
-    a new status message (free block at `0x1C`, e.g. `st3mot` — see
-    `addresses.md`). Pairs with a similar error counter planned for
-    `currentsensor` (see its CLAUDE.md's Open Points) — together they'd
-    show whether the two events actually correlate, confirming or
-    refuting the hypothesis above instead of leaving it a guess.
 - `STM32/notes.md`'s file-tree section needs re-verification against the
   corrected `demoboard` source — written before the import, may not
   match exactly.

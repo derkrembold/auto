@@ -1,0 +1,21 @@
+11:36:23.577  INFO    connected to watchdog
+11:36:45.734  INFO    -> errors
+11:36:45.743  INFO    <- OK ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']
+11:36:50.807  INFO    -> hal
+11:36:50.813  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+11:36:55.335  INFO    -> hal
+11:36:55.341  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+11:37:02.808  INFO    -> selftest
+11:37:02.832  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])
+11:37:19.899  INFO    -> errors
+11:37:19.907  INFO    <- OK ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']
+11:37:24.379  INFO    -> selftest
+11:37:24.403  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])
+11:37:43.630  INFO    -> errors
+11:37:43.638  INFO    <- OK ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']
+11:37:57.103  INFO    -> speed 0
+11:37:57.108  INFO    <- OK
+11:38:05.841  INFO    -> speed 500
+11:38:05.846  INFO    <- OK
+11:38:09.521  INFO    -> speed 0
+11:38:09.526  INFO    <- OK

@@ -1,7 +1,7 @@
 import pytest
 
 from watchdog import validate, Watchdog, SPEED_MIN, SPEED_MAX, IDLE_TIMEOUT
-from linbus import DryRunLin, MOTOR_INSTANCE_ID
+from linbus import DryRunLin, MOTOR_INSTANCE_ID, CURRENT_INSTANCE_ID
 from linaddresses import constants
 
 # Unit tests only — pure logic, no sockets, no hardware. Runs anywhere,
@@ -16,6 +16,7 @@ RANGE_ERROR = f"speed value out of range ({SPEED_MIN}..{SPEED_MAX})"
 # TARGET_MOTOR_INSTANCE comment.
 CNTL0MOT_WIRE = constants.cntl0mot | MOTOR_INSTANCE_ID
 CNTL3MOT_WIRE = constants.cntl3mot | MOTOR_INSTANCE_ID
+CNTL0CUR_WIRE = constants.cntl0cur | CURRENT_INSTANCE_ID
 
 
 @pytest.mark.parametrize("command,expected", [
@@ -36,6 +37,7 @@ CNTL3MOT_WIRE = constants.cntl3mot | MOTOR_INSTANCE_ID
     ("temp", (True, None)),
     ("current", (True, None)),
     ("errors", (True, None)),
+    ("selftest", (True, None)),
     ("on extra", (False, "usage: on")),
     ("banana", (False, "unknown command: banana")),
     ("", (False, "empty command")),
@@ -130,6 +132,58 @@ def test_execute_errors_defaults_to_no_errors_when_not_injected():
     reply = wd.execute("errors")
     assert reply == ("OK ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] "
                       "names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']")
+
+
+def test_execute_selftest_writes_inject_reset_then_sabotage_arm_in_order():
+    wd = Watchdog(DryRunLin())
+    wd.execute("selftest")
+    assert wd.lin.writes == [
+        (CNTL0CUR_WIRE, [0x01, 0xab]),
+        (CNTL0CUR_WIRE, [0xcd, 0x0c]),
+        (CNTL0CUR_WIRE, [0xfa, 0x17]),
+    ]
+
+
+def test_execute_selftest_reads_and_decodes_st1cur_after_each_write():
+    wd = Watchdog(DryRunLin())
+    # DryRunLin has no real firmware state behind it, so all reads below
+    # return the same injected value regardless of the writes above --
+    # this test only exercises the read/decode plumbing, not real
+    # inject-then-reset or provoke-then-catch state transitions (those
+    # need real/dry-run hardware, see raspi/watchdog/CLAUDE.md's Test
+    # Suite section).
+    wd.lin.read_responses[constants.st1cur] = [0xfb, 0, 0, 0, 0, 0, 0, 0]
+    wd.lin.read_responses[constants.st3mot] = [0x05, 0x00, 0x00, 0x00]
+    reply = wd.execute("selftest")
+    assert reply == (
+        "OK inject_ret=0 "
+        "injected(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] "
+        "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) "
+        "reset_ret=0 "
+        "after_reset(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] "
+        "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) "
+        "bushang_test(timeout_before(ret=0 count=5) "
+        "arm_ret=0 trigger_ret=0 "
+        "timeout_after(ret=0 count=5) "
+        "currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] "
+        "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']))"
+    )
+
+
+def test_get_timeout_count_decodes_little_endian_uint32():
+    from linbus import get_timeout_count
+    lin = DryRunLin()
+    lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x00, 0x00]  # 300
+    ret, count = get_timeout_count(lin)
+    assert (ret, count) == (0, 300)
+
+
+def test_provoke_bus_hang_timeout_arms_sabotage_and_triggers_current_read():
+    from linbus import provoke_bus_hang_timeout
+    lin = DryRunLin()
+    ret_arm, ret_trigger = provoke_bus_hang_timeout(lin)
+    assert (ret_arm, ret_trigger) == (0, 0)  # dry-run: no real failure to see
+    assert lin.writes == [(CNTL0CUR_WIRE, [0xfa, 0x17])]
 
 
 # --- Connection lifecycle: disconnect + idle timeout ---

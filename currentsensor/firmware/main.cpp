@@ -42,6 +42,13 @@ volatile uint16_t channel = 2;
 
 int8_t errorstorage[] = {0,0,0,0,0,0,0,0};
 
+// Set via cntl0cur [0xfa,0x17] (see below) -- deliberately corrupts the
+// very first echo-check of the next st0cur/st1cur reply so the reply
+// aborts after 1 byte, reproducing on demand the short-reply condition
+// that the STM32's HAL_GetTick() bus-hang timeout (main.c) is meant to
+// catch. Self-clearing: only sabotages one single reply.
+volatile bool sabotageNextReply = false;
+
 
 ISR (TIMER1_COMPA_vect)
 {
@@ -216,12 +223,12 @@ void error (int status) {
 
   for (int i = 0; i < sts; i++) {
     portb(YELLOW_LED_PIN, 0);
-    _delay_ms(250);
+    //_delay_ms(250);
     portb(YELLOW_LED_PIN, 1);
-    _delay_ms(250);    
+    //_delay_ms(250);    
   }
   portb(YELLOW_LED_PIN, 0);
-  _delay_ms(500);
+  //_delay_ms(500);
 }
 
 void transmitbyte(uint8_t data)
@@ -413,7 +420,12 @@ int main() {
       for (unsigned i = 0; i < len; i++) {
 	transmitbyte(data[i]);
 	check = receivebyte();
-	if (check != data[i]) {
+	uint8_t expected = data[i];
+	if (i == 0 && sabotageNextReply) {
+	  expected = ~data[i] & 0xFF;
+	  sabotageNextReply = false;
+	}
+	if (check != expected) {
 	  error(LIN_CHK_ERR);
 	  aborted = true;
 	  break;
@@ -429,7 +441,7 @@ int main() {
 	continue;
       }
       continue;
-      
+
     } else if((pid&0x3f)== st1cur){
 
       int8_t index = getindex(pid&0x3c);
@@ -453,7 +465,12 @@ int main() {
       for (unsigned i = 0; i < len; i++) {
 	transmitbyte(data[i]);
 	check = receivebyte();
-	if (check != data[i]) {
+	uint8_t expected = data[i];
+	if (i == 0 && sabotageNextReply) {
+	  expected = ~data[i] & 0xFF;
+	  sabotageNextReply = false;
+	}
+	if (check != expected) {
 	  error(LIN_CHK_ERR);
 	  aborted = true;
 	  break;
@@ -469,7 +486,7 @@ int main() {
 	continue;
       }
       continue;
-      
+
     } else if((pid&0x3f)== cntl0cur){
       uint8_t data[2];
       data[0] = receivebyte();
@@ -479,14 +496,33 @@ int main() {
         portd(RED_LED_PIN, 1);
         portd(GREEN_LED_PIN, 1);
         portd(BLUE_LED_PIN, 1);
+	if (sizeof(errorstorage) != 8) {
+	  error(LIN_IND_ERR);
+	  continue;
+	}
+	errorstorage[0] = 0x11;
+	errorstorage[1] = 0x55;
+	errorstorage[2] = 0x77;
+	errorstorage[3] = 0xaa;
+	errorstorage[4] = 0xbb;
+	errorstorage[5] = 0xcc;
+	errorstorage[6] = 0xdd;
+	errorstorage[7] = 0xff;
       }
       if(data[0] == 0xcd && data[1] == 0x0c){
         portb(YELLOW_LED_PIN, 0);
         portd(RED_LED_PIN, 0);
         portd(GREEN_LED_PIN, 0);
         portd(BLUE_LED_PIN, 0);
+	for (unsigned int i = 0; i < sizeof(errorstorage); i++) {
+	  errorstorage[i] = 0;
+	}
       }
-      
+      if(data[0] == 0xfa && data[1] == 0x17){
+        // Arms sabotageNextReply -- see its declaration above.
+        sabotageNextReply = true;
+      }
+
       int check = receivebyte();
       if (check != checksum(data,2)) {
 	error(LIN_CHK_ERR);

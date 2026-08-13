@@ -322,6 +322,19 @@ def get_temp(lin):
     return ret, data[0] + 256 * data[1]
 
 
+def get_timeout_count(lin):
+    # 4-byte reply: STM32/firmware/Core/Src/main.c's bodyTimeoutCount
+    # (uint32_t) -- how many times the HAL_GetTick() bus-hang timeout has
+    # fired since boot (see STM32/CLAUDE.md's Open Points). Little-endian,
+    # plain unsigned -- unlike get_error_history()'s codes, this is a
+    # counter, not two's-complement error codes.
+    ret, data = lin.read(constants.st3mot, instance=MOTOR_INSTANCE_ID)
+    if ret < 0:
+        return ret, None
+    count = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)
+    return ret, count
+
+
 # currentsensor/firmware/main.cpp's storeerror() ring buffer (see
 # errors.hpp) -- names for st1cur's raw codes, purely for human-readable
 # display (motorcontrol.py's `errors` command). 0 = unused slot/no error.
@@ -349,6 +362,38 @@ def get_error_history(lin):
         return ret, None
     codes = [b - 256 if b >= 128 else b for b in data]
     return ret, codes
+
+
+def currentsensor_selftest(lin):
+    # Exercises currentsensor/firmware/main.cpp's cntl0cur test hook end
+    # to end: inject a known non-zero pattern into errorstorage (0x01,
+    # 0xab), read it back via st1cur, then reset errorstorage to zero
+    # (0xcd, 0x0c) and read it back again. Confirms both the write path
+    # (cntl0cur) and the read path (st1cur) actually work, independent
+    # of whether a real error has ever occurred.
+    ret_inject = lin.write(constants.cntl0cur, [0x01, 0xab], instance=CURRENT_INSTANCE_ID)
+    ret_injected, codes_injected = get_error_history(lin)
+    ret_reset = lin.write(constants.cntl0cur, [0xcd, 0x0c], instance=CURRENT_INSTANCE_ID)
+    ret_after_reset, codes_after_reset = get_error_history(lin)
+    return ret_inject, ret_injected, codes_injected, ret_reset, ret_after_reset, codes_after_reset
+
+
+def provoke_bus_hang_timeout(lin):
+    # Deliberately reproduces, on demand, the short-reply condition that
+    # the STM32's HAL_GetTick() bus-hang timeout (main.c) exists to catch
+    # (see STM32/CLAUDE.md's Open Points): arms currentsensor's
+    # sabotageNextReply (cntl0cur [0xfa,0x17], main.cpp), then triggers a
+    # real st0cur read so the sabotage actually fires -- the currentsensor
+    # aborts after 1 byte, so this read is expected to time out (ret=-5)
+    # on the master's own ~2s pyserial timeout too, same as it would for
+    # any other short/missing reply. Caller reads get_timeout_count()/
+    # get_error_history() before and after to confirm the STM32 and the
+    # currentsensor both actually caught it. Takes ~2s to return (the
+    # master's own read timeout on the sabotaged reply) -- expected, not
+    # a bug.
+    ret_arm = lin.write(constants.cntl0cur, [0xfa, 0x17], instance=CURRENT_INSTANCE_ID)
+    ret_trigger, _val1, _val2 = get_current(lin)
+    return ret_arm, ret_trigger
 
 
 def get_current(lin):

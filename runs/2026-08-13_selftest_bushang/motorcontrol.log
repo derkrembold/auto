@@ -1,0 +1,85 @@
+14:03:24.192  INFO    connected to watchdog
+14:03:44.636  INFO    -> hal
+14:03:44.642  INFO    <- OK ret=0 data=['0x01', '0x01', '0x01']
+14:03:48.797  INFO    -> hal
+14:03:48.803  INFO    <- OK ret=0 data=['0x01', '0x01', '0x01']
+14:03:52.541  INFO    -> hal
+14:03:52.546  INFO    <- OK ret=0 data=['0x01', '0x01', '0x01']
+14:03:53.965  INFO    -> hal
+14:03:53.971  INFO    <- OK ret=0 data=['0x01', '0x01', '0x01']
+14:03:58.542  INFO    -> hal
+14:03:58.548  INFO    <- OK ret=0 data=['0x01', '0x01', '0x01']
+14:04:00.958  INFO    -> rpm
+14:04:00.964  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+14:04:04.511  INFO    -> rpm
+14:04:04.516  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+14:04:06.143  INFO    -> rpm
+14:04:06.150  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+14:04:14.400  INFO    -> hal
+14:04:14.406  INFO    <- OK ret=0 data=['0x01', '0x01', '0x01']
+14:04:21.249  INFO    -> hal
+14:04:21.291  INFO    <- OK ret=0 data=['0x01', '0x01', '0x01']
+14:04:22.337  INFO    -> hal
+14:04:22.343  INFO    <- OK ret=0 data=['0x01', '0x01', '0x01']
+14:04:32.034  INFO    -> rpm
+14:04:32.040  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+14:04:36.451  INFO    -> hal
+14:04:36.457  INFO    <- OK ret=0 data=['0x01', '0x01', '0x01']
+14:04:52.774  INFO    -> hal
+14:04:52.780  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+14:04:57.590  INFO    -> hal
+14:04:57.596  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+14:05:00.966  INFO    -> hal
+14:05:00.972  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+14:05:09.111  INFO    -> hal
+14:05:09.118  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+14:05:12.120  INFO    -> hal
+14:05:12.126  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+14:05:14.120  INFO    -> hal
+14:05:14.126  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+14:05:16.600  INFO    -> hal
+14:05:16.606  INFO    <- OK ret=0 data=['0x01', '0x00', '0x01']
+14:05:19.705  INFO    -> hal
+14:05:19.711  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+14:05:22.937  INFO    -> rpm
+14:05:22.943  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+14:05:30.346  INFO    -> current
+14:05:30.353  INFO    <- OK ret=0 val1=0.05 val2=0.00
+14:05:37.003  INFO    -> speed 0
+14:05:37.011  INFO    <- OK
+14:05:42.716  INFO    -> speed 500
+14:05:42.721  INFO    <- OK
+14:05:45.308  INFO    -> speed 0
+14:05:45.314  INFO    <- OK
+14:05:50.973  INFO    -> hal
+14:05:50.979  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+14:05:56.350  INFO    -> hal
+14:05:56.356  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+14:07:16.392  INFO    -> hal
+14:07:16.398  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+14:07:21.145  INFO    -> hal
+14:07:21.151  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+14:11:43.867  INFO    -> hal
+14:11:43.873  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+14:11:47.692  INFO    -> hal
+14:11:47.697  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+14:11:50.428  INFO    -> selftest
+14:11:52.479  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) bushang_test(timeout_before(ret=0 count=0) arm_ret=0 trigger_ret=-5 timeout_after(ret=0 count=1) currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']))
+14:11:58.957  INFO    -> hal
+14:11:58.963  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+14:12:02.862  INFO    -> hal
+14:12:02.868  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+14:12:33.538  INFO    -> selftest
+14:12:35.588  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) bushang_test(timeout_before(ret=0 count=1) arm_ret=0 trigger_ret=-5 timeout_after(ret=0 count=2) currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']))
+14:12:37.939  INFO    -> rpm
+14:12:37.946  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+14:12:42.019  INFO    -> hal
+14:12:42.025  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+14:12:45.219  INFO    -> hal
+14:12:45.225  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+14:12:55.205  INFO    -> speed 0
+14:12:55.210  INFO    <- OK
+14:13:00.886  INFO    -> hal
+14:13:00.892  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+14:13:03.878  INFO    -> hal
+14:13:03.884  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']

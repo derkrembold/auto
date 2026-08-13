@@ -145,24 +145,41 @@ originally exposed a matching STM32-side bug (`HAL_UART_RxCpltCallback`
 not re-arming UART reception for a recognized-but-foreign pid) — see
 `STM32/CLAUDE.md`.
 
+**`selftest`'s `cntl0cur` test hook confirmed on real hardware
+(2026-08-13)** — see `raspi/CLAUDE.md`'s `motorcontrol.py` entry for what
+the command does. `watchdog.log` (fetched and run through
+`raspi/analyze_logs.py`) shows two full round trips, both `ret=0`
+throughout: `cntl0cur [0x01,0xab]` → `st1cur` reads back the exact
+firmware-hardcoded pattern `0x11 55 77 aa bb cc dd ff`, then
+`cntl0cur [0xcd,0x0c]` → `st1cur` reads back all zero. Confirms the real
+inject-then-reset state transition on the AVR itself, which the
+`DryRunLin`-based unit tests in `raspi/tests/test_watchdog.py` can't
+exercise (no real firmware state behind the dry-run stub).
+
+**Bus-hang investigation (2026-08-11) — resolved, root cause confirmed
+against real hardware (2026-08-13).** See `STM32/CLAUDE.md`'s Status
+section for the full STM32-side writeup; this device's role: a
+`sabotageNextReply` flag (`main.cpp`, set via a new `cntl0cur`
+sub-command `[0xfa,0x17]`) deliberately forces the very first
+echo-check of the *next* `st0cur`/`st1cur` reply to fail — reusing the
+existing `error(LIN_CHK_ERR)`/`aborted`/`break` path unchanged, so the
+real byte-count-short-on-the-wire condition is reproduced faithfully
+(not simulated) on demand, self-clearing after one reply.
+`raspi/control/motorcontrol.py`'s `selftest` arms this
+(`linbus.provoke_bus_hang_timeout()`) and then triggers a real `st0cur`
+read. Confirmed three times against real hardware, motor idle twice and
+once at commanded speed 500: the sabotaged reply cut off after exactly
+1 byte every time (as designed), `errorstorage` logged a fresh `CHK`
+entry every time, and the STM32's new timeout (`st3mot`'s
+`bodyTimeoutCount`) incremented in lockstep every time — direct,
+repeated confirmation that the original hypothesis (this device's own
+abort-mid-reply behavior was the trigger) was correct, not just
+plausible. The separate currentsensor-side error counter once planned
+for this (to correlate against the STM32's counter) turned out
+unnecessary — `errorstorage`/`st1cur` already gave that signal.
+
 ## Open Points (currentsensor-specific)
 
-- **Bus-hang investigation (2026-08-11), continuing next session** — see
-  `STM32/CLAUDE.md`'s Open Points for the full writeup (real hardware
-  trace caught the STM32 going silent on both `rpm` and `current` reads
-  mid-`validate_speed.py`-run). Leading hypothesis: the `st0cur` reply
-  loop's `aborted`/`break` echo-check logic (`main.cpp`) sends fewer
-  bytes than the STM32 expects when it fires, and the STM32 has no
-  timeout waiting for the rest — possibly triggered by the new ~5ms
-  Timer1 ISR (added this week for ADC averaging) introducing timing
-  jitter into the still-polling-based `receivebyte()`/`transmitbyte()`.
-  Unconfirmed — no visibility yet into whether/how often this actually
-  fires. Next step planned: an error counter (ideally per error type —
-  `LIN_SYN_ERR`/`LIN_CHK_ERR`/`LIN_IND_ERR`/`LIN_NUM_ERR`, or at least
-  the `st0cur`-echo-abort case specifically), queryable via a new
-  status message (free block at `0x28`, see `addresses.md`). Pairs with
-  a similar timeout-counter planned for the STM32 side — together
-  they'd show whether the two events actually correlate.
 - No hardware instance-strap-pin reading yet (unlike the motor's
   `hwbits`, see `STM32/CLAUDE.md`'s Instance-Selection Jumper section) —
   always answers as instance 0. Fine while only one physical current

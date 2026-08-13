@@ -1,0 +1,13 @@
+14:16:16.902  INFO    connected to watchdog
+14:16:27.153  INFO    -> hal
+14:16:27.159  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+14:16:31.201  INFO    -> hal
+14:16:31.207  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+14:16:41.394  INFO    -> speed 0
+14:16:41.400  INFO    <- OK
+14:16:53.636  INFO    -> speed 500
+14:16:53.641  INFO    <- OK
+14:16:58.741  INFO    -> selftest
+14:17:00.790  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) bushang_test(timeout_before(ret=0 count=2) arm_ret=0 trigger_ret=-5 timeout_after(ret=0 count=3) currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']))
+14:17:03.926  INFO    -> speed 0
+14:17:03.931  INFO    <- OK

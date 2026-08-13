@@ -1,0 +1,21 @@
+12:04:08.910  INFO    connected to watchdog
+12:04:14.128  INFO    -> hal
+12:04:16.227  INFO    <- OK ret=-5 data=[]
+12:04:25.457  INFO    -> ha
+12:04:25.459  INFO    <- ERR unknown command: ha
+12:04:28.274  INFO    -> hal
+12:04:28.280  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+12:04:32.546  INFO    -> hal
+12:04:32.552  INFO    <- OK ret=0 data=['0x01', '0x00', '0x01']
+12:04:50.580  INFO    -> current
+12:04:50.587  INFO    <- OK ret=0 val1=0.05 val2=0.00
+12:04:53.413  INFO    -> hal
+12:04:53.419  INFO    <- OK ret=0 data=['0x01', '0x00', '0x01']
+12:04:57.621  INFO    -> hal
+12:04:57.627  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+12:05:21.625  INFO    -> speed 0
+12:05:21.630  INFO    <- OK
+12:05:39.755  INFO    -> speed 500
+12:05:39.760  INFO    <- OK
+12:05:43.052  INFO    -> speed 0
+12:05:43.057  INFO    <- OK
