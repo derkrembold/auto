@@ -197,22 +197,37 @@ class Watchdog:
             # bodyTimeoutCount (st3mot) went up, currentsensor logged a
             # CHK error (st1cur). Takes ~2s (the master's own read
             # timeout on the deliberately-sabotaged reply).
-            ret_timeout_before, timeout_before = linbus.get_timeout_count(self.lin)
+            ret_counters_before, timeout_before, checksum_before = linbus.get_motor_counters(self.lin)
             ret_arm, ret_trigger = linbus.provoke_bus_hang_timeout(self.lin)
-            ret_timeout_after, timeout_after = linbus.get_timeout_count(self.lin)
+            ret_counters_after, timeout_after, checksum_after = linbus.get_motor_counters(self.lin)
             ret_errors_after, codes_after_provoke = linbus.get_error_history(self.lin)
             names_after_provoke = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_after_provoke]
                                      if codes_after_provoke is not None else None)
+
+            # Part 3: deliberately provoke the STM32's checksum_ok gate
+            # (see linbus.provoke_checksum_error()'s docstring) and
+            # confirm checksumErrorCount went up by exactly 1. Safe
+            # without Motor Execution Consent -- the corrupted write is a
+            # "speed 0", harmless even if the gate were somehow broken.
+            # Only proves detection, not that the motor's setpoint truly
+            # didn't change -- see that function's docstring for the
+            # (not yet built) direct rpm-based proof.
+            ret_counters_before2, timeout_before2, checksum_before2 = linbus.get_motor_counters(self.lin)
+            ret_bad_write = linbus.provoke_checksum_error(self.lin)
+            ret_counters_after2, timeout_after2, checksum_after2 = linbus.get_motor_counters(self.lin)
 
             return (f"OK inject_ret={ret_inject} "
                     f"injected(ret={ret_injected} codes={codes_injected} names={names_injected}) "
                     f"reset_ret={ret_reset} "
                     f"after_reset(ret={ret_after_reset} codes={codes_after_reset} names={names_after_reset}) "
-                    f"bushang_test(timeout_before(ret={ret_timeout_before} count={timeout_before}) "
+                    f"bushang_test(before(ret={ret_counters_before} timeout={timeout_before} checksum={checksum_before}) "
                     f"arm_ret={ret_arm} trigger_ret={ret_trigger} "
-                    f"timeout_after(ret={ret_timeout_after} count={timeout_after}) "
+                    f"after(ret={ret_counters_after} timeout={timeout_after} checksum={checksum_after}) "
                     f"currentsensor_after(ret={ret_errors_after} codes={codes_after_provoke} "
-                    f"names={names_after_provoke}))")
+                    f"names={names_after_provoke})) "
+                    f"checksum_test(before(ret={ret_counters_before2} timeout={timeout_before2} checksum={checksum_before2}) "
+                    f"bad_write_ret={ret_bad_write} "
+                    f"after(ret={ret_counters_after2} timeout={timeout_after2} checksum={checksum_after2}))")
         return f"ERR unhandled command: {verb}"  # unreachable if validate() is correct
 
     def execute(self, command):

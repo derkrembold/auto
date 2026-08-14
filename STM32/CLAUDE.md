@@ -358,7 +358,46 @@ re-arming the header receive.
   currentsensor's `st1cur`); an earlier draft of this note incorrectly
   called it a "free block" needing reassignment, which was wrong — it
   was never free, just not dispatched yet. `raspi/watchdog/linbus.py`'s
-  `get_timeout_count()` reads/decodes it.
+  `get_motor_counters()` reads/decodes it.
+- **Checksum handling added for master writes (2026-08-14).** The
+  `sources[linindex] == master` ISR branch had a long-standing
+  `// checksum sollte noch hier berechnet werden und gecheckt werden.`
+  TODO — removed, since a checksum can't actually be verified there
+  anyway (only the header has arrived at that point, not the body).
+  Fix lives in the main loop instead, right after the `bodyTimedOut`
+  guard, before the `cntl0mot`/`cntl1mot`/`cntl2mot`/`cntl3mot` dispatch
+  blocks: `bool checksum_ok = (checksum(rx_body, linbodysize) ==
+  rx_body[linbodysize]);`, ANDed into all five dispatch `if`s so a
+  corrupted master write is silently dropped (fails closed) instead of
+  acted on. `st3mot`'s `bodyTimeoutCount` (4 bytes) was split into two
+  `uint16_t` fields the same day to add a matching
+  `checksumErrorCount` without needing a new pid: `data[0:2]` =
+  `bodyTimeoutCount` (unchanged, just narrowed from `uint32_t` — 16 bits
+  is generous for a rare-event counter), `data[2:4]` =
+  `checksumErrorCount`, incremented only when the failing checksum
+  belonged to one of *our own* four `cntl*mot` pids (a separate
+  `is_our_write` check), not any checksum mismatch merely snooped on the
+  shared bus. See `raspi/CLAUDE.md`'s `selftest` entry for the raspi-side
+  `provoke_checksum_error()` check built the same day.
+
+  **Confirmed against real hardware (2026-08-14), same day as built.**
+  `/build-stm32` clean (no warnings), flashed, then `selftest` run twice
+  via `motorcontrol.py` (`runs/2026-08-14_checksum_test/`): motor idle
+  the first time, running at commanded speed 500 the second time.
+  `checksumErrorCount` went up by exactly 1 both times (`0→1`, then
+  `1→2`), `bodyTimeoutCount` (from the same call's `bushang_test` part)
+  climbed independently and `checksum` stayed flat during *that* part —
+  confirms the two counters are genuinely independent, not
+  cross-contaminating. Bonus indirect confirmation from the second run's
+  `st2mot` poll trace: rpm climbed smoothly toward 500 (475→500) right
+  through and after the corrupted "speed 0" write, with no dip — the
+  rejected write visibly had zero effect on the real setpoint, not just
+  on the counter. A **dedicated, deliberate** `rpm`-based before/after
+  proof (send a corrupted *nonzero* target, confirm rpm does NOT chase
+  it, then repeat with a correct checksum as a positive control) is
+  still open — needs its own consent-gated command, discussed but not
+  built yet (this session's confirmation was incidental, from a value
+  chosen to be safe-by-default, not designed as the definitive test).
 - **Known accepted minor race, left as-is:** the timeout check
   (`main.c:303`) reads `headerrecvd`/`HAL_GetTick()` non-atomically. If
   `HAL_UART_RxCpltCallback` fires in that handful-of-CPU-cycles window

@@ -106,7 +106,8 @@ volatile bool bodyrecvd = false;
 volatile bool bodysent = false;
 volatile uint32_t bodyWaitStartTick = 0;
 volatile bool bodyTimedOut = false;
-volatile uint32_t bodyTimeoutCount = 0;
+volatile uint16_t bodyTimeoutCount = 0;
+volatile uint16_t checksumErrorCount = 0;
 #define LIN_BODY_TIMEOUT_MS 50
 
 
@@ -384,13 +385,24 @@ int main(void)
 		  bodyTimedOut = false;
 		  continue;  // Body nie angekommen -> verwerfen, neu auf Sync-Byte warten
 	  }
-	  if ((rx_header[1]&0x3f) == (cntl0mot | hwbits) && rx_body[0] == 0x01 && rx_body[1] == 0xdb) {
+
+	  bool checksum_ok = (checksum(rx_body, linbodysize) == rx_body[linbodysize]);
+
+	  bool is_our_write = ((rx_header[1]&0x3f) == (cntl0mot | hwbits))
+	    || ((rx_header[1]&0x3f) == (cntl1mot | hwbits))
+	    || ((rx_header[1]&0x3f) == (cntl2mot | hwbits))
+	    || ((rx_header[1]&0x3f) == (cntl3mot | hwbits));
+	  if (is_our_write && !checksum_ok) {
+	    checksumErrorCount++;
+	  }
+	
+	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl0mot | hwbits) && rx_body[0] == 0x01 && rx_body[1] == 0xdb) {
 		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
 	  }
-	  if ((rx_header[1]&0x3f) == (cntl0mot | hwbits) && rx_body[0] == 0xcd && rx_body[1] == 0x0c) {
+	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl0mot | hwbits) && rx_body[0] == 0xcd && rx_body[1] == 0x0c) {
 		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
 	  }
-	  if ((rx_header[1]&0x3f) == (cntl1mot | hwbits)) {
+	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl1mot | hwbits)) {
 		  int16_t speedlocal = (int16_t)((rx_body[0] << 8) | rx_body[1]);
 		  driveStep(speedlocal);
 		  driveStep(0);
@@ -402,7 +414,7 @@ int main(void)
 		  driveStep(0);
 		  driveStep(0);
 	  }
-	  if ((rx_header[1]&0x3f) == (cntl2mot | hwbits)) {
+	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl2mot | hwbits)) {
 		  driveMOSFET(AL, rx_body[0] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(AH, rx_body[1] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(BL, rx_body[2] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
@@ -410,7 +422,7 @@ int main(void)
 		  driveMOSFET(CL, rx_body[4] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(CH, rx_body[5] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 	  }
-	  if ((rx_header[1]&0x3f) == (cntl3mot | hwbits)) {
+	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl3mot | hwbits)) {
 		  controlvariableinput = (int16_t)((rx_body[0] << 8) | rx_body[1]);
 	  }
   }
@@ -779,7 +791,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 				    linbodysize = messagebytes[linindex];
 				    HAL_UART_Receive_IT(&huart4, rx_body, linbodysize + 1);
 				    bodyWaitStartTick = HAL_GetTick();
-				    // checksum sollte noch hier berechnet werden und gecheckt werden.
 				    headerrecvd = true;
 				  } else if ((sources[linindex] == motor) && ((rx_header[1]&0x03) == hwbits)) {
 				    linbodysize = messagebytes[linindex];
@@ -961,8 +972,8 @@ void fillbody(uint8_t addr, uint8_t *data, uint8_t len) {
   } else if (addr == st3mot) {
     data[0] = (uint8_t)(bodyTimeoutCount & 0xFF);
     data[1] = (uint8_t)((bodyTimeoutCount >> 8) & 0xFF);
-    data[2] = (uint8_t)((bodyTimeoutCount >> 16) & 0xFF);
-    data[3] = (uint8_t)((bodyTimeoutCount >> 24) & 0xFF);
+    data[2] = (uint8_t)(checksumErrorCount & 0xFF);
+    data[3] = (uint8_t)((checksumErrorCount >> 8) & 0xFF);
   }
 }
 

@@ -56,6 +56,27 @@ printed report.
   known 2026-08-11 bus-hang signature (an `unmatched` finding on a
   `[poll]`/`[client]` linbus read) say so explicitly — that's the
   specific failure mode this whole logging system was built to catch.
+- **Known expected signature, not a bug: `selftest`'s deliberate
+  provocations (added 2026-08-13/14).** Every time `motorcontrol.py`'s
+  `selftest` command runs, its `bushang_test` part *deliberately*
+  breaks one `st0cur` read on purpose (arms currentsensor's
+  `sabotageNextReply` via a `write cntl0cur data=['0xfa', '0x17']`
+  line, then triggers a `current` read) — this always shows up as a
+  `ret_nonzero` (`ret=-5`), a `latency` (~2s), and a `length` (1 byte
+  instead of 4) finding for that one `st0cur` call, every single time,
+  on a working system. Recognize it by the `write cntl0cur
+  data=['0xfa', '0x17']` line immediately preceding the failing
+  `st0cur` call — report it as "expected, `selftest`'s own bus-hang
+  provocation, not a bug" rather than as an unexplained anomaly. Don't
+  confuse this with the 2026-08-11 signature above — this one always
+  resolves (a `ret=-5`/`length` finding, not `unmatched`); an
+  `unmatched` finding anywhere near a `selftest` run would still mean
+  the STM32 failed to recover and is the real bug the fix (see
+  `STM32/CLAUDE.md`'s Status section) is supposed to prevent.
+  `selftest`'s `checksum_test` part (a `write cntl3mot ... (DELIBERATELY
+  BAD CHECKSUM)` line) is quieter — it doesn't itself produce a finding
+  (the corrupted write gets no reply, by LIN design), so nothing needs
+  explaining away there.
 - Note if `--addresses` fell back to `None` (no `addresses.json`
   found) — the data-length check silently does nothing in that case,
   worth flagging so a truly clean report isn't mistaken for "checked

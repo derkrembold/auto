@@ -127,6 +127,33 @@ def test_data_length_mismatch_flagged_on_write(tmp_path):
     assert _kinds(findings) == ["length"]
 
 
+def test_annotated_write_line_still_parsed_and_counted(tmp_path):
+    # linbus.py's write_bad_checksum() (added 2026-08-14) appends
+    # "(DELIBERATELY BAD CHECKSUM)" after data=[...] -- must not be
+    # silently dropped from parsing (was a real bug: the trailing text
+    # broke LINBUS_OPEN_RE's `\s*$` anchor, so this line used to be
+    # skipped entirely -- not counted, not length-checked).
+    log = tmp_path / "watchdog.log"
+    log.write_text(
+        "09:50:00.000  DEBUG   [client]  -> write cntl3mot   data=['0x00', '0x00'] "
+        "(DELIBERATELY BAD CHECKSUM)\n"
+    )
+    findings, counts = analyze(log, addresses=ADDRESSES)
+    assert findings == []
+    assert counts == {"read": 0, "write": 1}
+
+
+def test_annotated_write_line_with_wrong_length_still_flagged(tmp_path):
+    log = tmp_path / "watchdog.log"
+    log.write_text(
+        # cntl3mot should be 2 bytes -- 1 here
+        "09:50:00.000  DEBUG   [client]  -> write cntl3mot   data=['0x00'] "
+        "(DELIBERATELY BAD CHECKSUM)\n"
+    )
+    findings, _ = analyze(log, addresses=ADDRESSES)
+    assert _kinds(findings) == ["length"]
+
+
 def test_data_length_not_checked_without_addresses(tmp_path):
     log = tmp_path / "watchdog.log"
     log.write_text(

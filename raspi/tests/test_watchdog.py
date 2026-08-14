@@ -134,13 +134,14 @@ def test_execute_errors_defaults_to_no_errors_when_not_injected():
                       "names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']")
 
 
-def test_execute_selftest_writes_inject_reset_then_sabotage_arm_in_order():
+def test_execute_selftest_writes_inject_reset_sabotage_then_bad_checksum_in_order():
     wd = Watchdog(DryRunLin())
     wd.execute("selftest")
     assert wd.lin.writes == [
         (CNTL0CUR_WIRE, [0x01, 0xab]),
         (CNTL0CUR_WIRE, [0xcd, 0x0c]),
         (CNTL0CUR_WIRE, [0xfa, 0x17]),
+        (CNTL3MOT_WIRE, [0x00, 0x00]),  # provoke_checksum_error()'s speed-0 write
     ]
 
 
@@ -153,7 +154,7 @@ def test_execute_selftest_reads_and_decodes_st1cur_after_each_write():
     # need real/dry-run hardware, see raspi/watchdog/CLAUDE.md's Test
     # Suite section).
     wd.lin.read_responses[constants.st1cur] = [0xfb, 0, 0, 0, 0, 0, 0, 0]
-    wd.lin.read_responses[constants.st3mot] = [0x05, 0x00, 0x00, 0x00]
+    wd.lin.read_responses[constants.st3mot] = [0x05, 0x00, 0x00, 0x00]  # timeout=5, checksum=0
     reply = wd.execute("selftest")
     assert reply == (
         "OK inject_ret=0 "
@@ -162,20 +163,31 @@ def test_execute_selftest_reads_and_decodes_st1cur_after_each_write():
         "reset_ret=0 "
         "after_reset(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] "
         "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) "
-        "bushang_test(timeout_before(ret=0 count=5) "
+        "bushang_test(before(ret=0 timeout=5 checksum=0) "
         "arm_ret=0 trigger_ret=0 "
-        "timeout_after(ret=0 count=5) "
+        "after(ret=0 timeout=5 checksum=0) "
         "currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] "
-        "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']))"
+        "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])) "
+        "checksum_test(before(ret=0 timeout=5 checksum=0) "
+        "bad_write_ret=0 "
+        "after(ret=0 timeout=5 checksum=0))"
     )
 
 
-def test_get_timeout_count_decodes_little_endian_uint32():
-    from linbus import get_timeout_count
+def test_get_motor_counters_decodes_two_little_endian_uint16_fields():
+    from linbus import get_motor_counters
     lin = DryRunLin()
-    lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x00, 0x00]  # 300
-    ret, count = get_timeout_count(lin)
-    assert (ret, count) == (0, 300)
+    lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x00]  # timeout=300, checksum=3
+    ret, timeout_count, checksum_error_count = get_motor_counters(lin)
+    assert (ret, timeout_count, checksum_error_count) == (0, 300, 3)
+
+
+def test_provoke_checksum_error_writes_safe_speed_zero_via_bad_checksum():
+    from linbus import provoke_checksum_error
+    lin = DryRunLin()
+    ret = provoke_checksum_error(lin)
+    assert ret == 0
+    assert lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
 
 
 def test_provoke_bus_hang_timeout_arms_sabotage_and_triggers_current_read():

@@ -9,6 +9,9 @@ Two line formats both come out of logsetup.py-based logging, at
 different protocol layers, and are both understood here:
   - linbus-level (watchdog.log only): "[client]/[poll]  -> read NAME"
     / "... <- read NAME  ret=N  data=[...]" / "... -> write NAME data=[...]"
+    -- either linbus line may carry an optional trailing "(ANNOTATION)"
+    (e.g. linbus.py's write_bad_checksum(): "... (DELIBERATELY BAD
+    CHECKSUM)"), tolerated but not otherwise interpreted here.
   - command-level (motorcontrol.py/validate_speed.py/
     capture_step_response.py): "-> <command>" / "<- <reply text>"
 
@@ -55,11 +58,11 @@ LINE_RE = re.compile(
 )
 LINBUS_OPEN_RE = re.compile(
     r"^\[(?P<tag>client|poll)\]\s+-> (?P<kind>read|write)\s+(?P<name>\S+)"
-    r"(?:\s+data=(?P<data>\[.*\]))?\s*$"
+    r"(?:\s+data=(?P<data>\[.*\]))?(?:\s+\([^)]*\))?\s*$"
 )
 LINBUS_CLOSE_RE = re.compile(
     r"^\[(?P<tag>client|poll)\]\s+<- read\s+(?P<name>\S+)\s+"
-    r"ret=(?P<ret>-?\d+)\s+data=(?P<data>\[.*\])\s*$"
+    r"ret=(?P<ret>-?\d+)\s+data=(?P<data>\[.*\])(?:\s+\([^)]*\))?\s*$"
 )
 CMD_OPEN_RE = re.compile(r"^-> (?P<cmd>.+)$")
 CMD_CLOSE_RE = re.compile(r"^<- (?P<reply>.*)$")

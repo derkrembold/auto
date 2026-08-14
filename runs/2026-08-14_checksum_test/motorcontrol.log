@@ -1,0 +1,21 @@
+09:47:27.801  INFO    connected to watchdog
+09:47:41.927  INFO    -> hal
+09:47:41.933  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+09:47:45.927  INFO    -> hal
+09:47:45.933  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+09:47:48.872  INFO    -> hal
+09:47:48.877  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+09:47:56.057  INFO    -> selftest
+09:47:58.120  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) bushang_test(before(ret=0 timeout=0 checksum=0) arm_ret=0 trigger_ret=-5 after(ret=0 timeout=1 checksum=0) currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])) checksum_test(before(ret=0 timeout=1 checksum=0) bad_write_ret=0 after(ret=0 timeout=1 checksum=1))
+09:48:02.922  INFO    -> hal
+09:48:02.928  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+09:48:07.338  INFO    -> hal
+09:48:07.344  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+09:48:15.324  INFO    -> speed 0
+09:48:15.329  INFO    <- OK
+09:48:22.284  INFO    -> speed 500
+09:48:22.290  INFO    <- OK
+09:48:26.109  INFO    -> selftest
+09:48:28.171  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) bushang_test(before(ret=0 timeout=1 checksum=1) arm_ret=0 trigger_ret=-5 after(ret=0 timeout=2 checksum=1) currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])) checksum_test(before(ret=0 timeout=2 checksum=1) bad_write_ret=0 after(ret=0 timeout=2 checksum=2))
+09:48:30.189  INFO    -> speed 0
+09:48:30.195  INFO    <- OK

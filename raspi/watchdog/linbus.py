@@ -224,6 +224,46 @@ class Lin:
 
         return _finish(0, data)
 
+    def write_bad_checksum(self, address, data, instance=0x00):
+        # Same as write() but deliberately sends a wrong checksum byte
+        # (bitwise complement of the correct one -- guaranteed different).
+        # Exists only to test STM32/firmware/Core/Src/main.c's
+        # checksum_ok gate on the cntl*mot dispatch actually rejects a
+        # corrupted master write on real hardware -- every operational
+        # caller must use write() instead.
+        if address not in constants.pids:
+            logger.warning("pid not known")
+            return -1
+        index = constants.pids.index(address)
+        mbytes = constants.messagebytes[index]
+        if len(data) != mbytes:
+            logger.warning("number of bytes wrong")
+            return -2
+        if constants.sources[index] != "master":
+            logger.warning("you must be master to write")
+            return -3
+
+        wire_pid = address | instance
+        bad_checksum = self.checksum(data) ^ 0xFF
+
+        data_str = [hexbyte(b) for b in data]
+        logger.debug(f"{_log_source()}  -> write {_log_pid_name(address):<10}"
+                      f" data={data_str} (DELIBERATELY BAD CHECKSUM)")
+
+        if not self.write_byte(constants.sync):
+            return -4
+        if not self.write_byte(self.addparity(wire_pid)):
+            return -4
+
+        for b in data:
+            if not self.write_byte(b):
+                return -4
+
+        if not self.write_byte(bad_checksum):
+            return -4
+
+        return 0
+
     def close(self):
         self.ser.close()
         self._gpio.cleanup()
@@ -276,6 +316,10 @@ class DryRunLin:
         print()
         return 0, data
 
+    def write_bad_checksum(self, address, data, instance=0x00):
+        # Mirrors write() -- see Lin.write_bad_checksum()'s docstring.
+        return self.write(address, data, instance=instance)
+
     def close(self):
         pass
 
@@ -322,17 +366,24 @@ def get_temp(lin):
     return ret, data[0] + 256 * data[1]
 
 
-def get_timeout_count(lin):
-    # 4-byte reply: STM32/firmware/Core/Src/main.c's bodyTimeoutCount
-    # (uint32_t) -- how many times the HAL_GetTick() bus-hang timeout has
-    # fired since boot (see STM32/CLAUDE.md's Open Points). Little-endian,
-    # plain unsigned -- unlike get_error_history()'s codes, this is a
-    # counter, not two's-complement error codes.
+def get_motor_counters(lin):
+    # 4-byte reply, split 2026-08-14 into two uint16_t counters (was one
+    # uint32_t bodyTimeoutCount) -- STM32/firmware/Core/Src/main.c's
+    # fillbody() st3mot case: data[0:2] = bodyTimeoutCount (how many
+    # times the HAL_GetTick() bus-hang timeout has fired, see
+    # STM32/CLAUDE.md's Status section), data[2:4] = checksumErrorCount
+    # (how many times a cntl*mot write addressed to this motor instance
+    # failed its checksum check -- scoped to writes actually addressed to
+    # this device, not every checksum mismatch snooped on the shared
+    # bus). Both little-endian, plain unsigned -- unlike
+    # get_error_history()'s codes, these are counters, not
+    # two's-complement error codes.
     ret, data = lin.read(constants.st3mot, instance=MOTOR_INSTANCE_ID)
     if ret < 0:
-        return ret, None
-    count = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24)
-    return ret, count
+        return ret, None, None
+    timeout_count = data[0] | (data[1] << 8)
+    checksum_error_count = data[2] | (data[3] << 8)
+    return ret, timeout_count, checksum_error_count
 
 
 # currentsensor/firmware/main.cpp's storeerror() ring buffer (see
@@ -386,7 +437,7 @@ def provoke_bus_hang_timeout(lin):
     # real st0cur read so the sabotage actually fires -- the currentsensor
     # aborts after 1 byte, so this read is expected to time out (ret=-5)
     # on the master's own ~2s pyserial timeout too, same as it would for
-    # any other short/missing reply. Caller reads get_timeout_count()/
+    # any other short/missing reply. Caller reads get_motor_counters()/
     # get_error_history() before and after to confirm the STM32 and the
     # currentsensor both actually caught it. Takes ~2s to return (the
     # master's own read timeout on the sabotaged reply) -- expected, not
@@ -394,6 +445,23 @@ def provoke_bus_hang_timeout(lin):
     ret_arm = lin.write(constants.cntl0cur, [0xfa, 0x17], instance=CURRENT_INSTANCE_ID)
     ret_trigger, _val1, _val2 = get_current(lin)
     return ret_arm, ret_trigger
+
+
+def provoke_checksum_error(lin):
+    # Deliberately sends a cntl3mot (speed/setpoint) write with a wrong
+    # checksum, to exercise STM32/firmware/Core/Src/main.c's checksum_ok
+    # gate (added 2026-08-14) on real hardware. Value is fixed at 0 (not
+    # some other distinct value) specifically so this stays safe to call
+    # without Motor Execution Consent even if the gate turns out to be
+    # broken -- a corrupted "speed 0" landing anyway is harmless, unlike
+    # a corrupted nonzero value would be. This only proves the STM32
+    # *detected* the bad checksum (via checksumErrorCount, see
+    # get_motor_counters()) -- it does not by itself prove the motor's
+    # setpoint truly didn't change; that needs a direct rpm-based
+    # before/after check with a real (nonzero) target speed, which does
+    # need Motor Execution Consent and isn't built here yet.
+    data = struct.pack('>h', 0)
+    return lin.write_bad_checksum(constants.cntl3mot, data, instance=MOTOR_INSTANCE_ID)
 
 
 def get_current(lin):

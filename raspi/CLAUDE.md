@@ -87,11 +87,30 @@ other. Same caution applies to any future same-named files across
      arms a `cntl0cur [0xfa,0x17]` sabotage flag on the currentsensor
      that forces its next `st0cur`/`st1cur` reply to abort after 1 byte,
      triggers a real `st0cur` read to fire it (this read times out,
-     `ret=-5`, expected), then reads `st3mot` (`linbus.get_timeout_count()`
-     — the STM32's `HAL_GetTick()` bus-hang-timeout counter) and `st1cur`
-     before/after to confirm both incremented/logged the event.
+     `ret=-5`, expected), then reads `st3mot` (`linbus.get_motor_counters()`
+     — the STM32's `HAL_GetTick()` bus-hang-timeout counter,
+     `bodyTimeoutCount`) and `st1cur` before/after to confirm both
+     incremented/logged the event.
      Confirmed against real hardware repeatedly, motor both idle and
      running — see the CLAUDE.md sections above.
+  3. (Added 2026-08-14) Deliberately provokes the STM32's `checksum_ok`
+     gate (`main.c`'s main-loop dispatch on `cntl0mot`/`cntl1mot`/
+     `cntl2mot`/`cntl3mot` — see `STM32/CLAUDE.md`): sends a `cntl3mot`
+     (speed) write with a deliberately wrong checksum via
+     `linbus.provoke_checksum_error()`, value fixed at 0 so it's safe to
+     call without Motor Execution Consent even if the gate were broken.
+     Reads `st3mot`'s `checksumErrorCount` before/after to confirm it
+     went up by exactly 1. Detection-only — doesn't itself prove the
+     motor's setpoint stayed unchanged; a direct `rpm`-based before/after
+     check with a real nonzero speed would need its own, separately
+     consent-gated command, not yet built. **Confirmed against real
+     hardware (2026-08-14):** run twice, motor idle and running at 500 —
+     `checksumErrorCount` went up by exactly 1 both times, independent
+     of the `bushang_test` part's own `bodyTimeoutCount` counter (which
+     kept climbing on its own, `checksum` stayed flat during that part).
+     See `STM32/CLAUDE.md`'s Status section for the full readout,
+     including an incidental `rpm`-trace confirmation that the rejected
+     write had no effect on the actual setpoint.
 
   `current` reads the current sensor board's two
   ACS712xLCTR-20A chips (one per motor — see `currentsensor/CLAUDE.md`'s
