@@ -178,6 +178,44 @@ plausible. The separate currentsensor-side error counter once planned
 for this (to correlate against the STM32's counter) turned out
 unnecessary — `errorstorage`/`st1cur` already gave that signal.
 
+**`cntl0cur` checksum-gate bug found and fixed (2026-08-15) — same bug
+class as the STM32's own checksum fix the day before (see
+`STM32/CLAUDE.md`'s Status section).** The checksum byte was read and
+compared *after* `cntl0cur`'s three actions (LED on/off, errorstorage
+inject, errorstorage reset, sabotage-arm) had already run, not before —
+a write with a coincidentally-matching data-byte pattern but a corrupted
+checksum would still execute its action, `error(LIN_CHK_ERR)` only got
+logged afterward, too late to prevent anything. Fixed by moving the
+checksum read+compare to immediately after the two data bytes, `continue`ing
+past all three action `if`s on mismatch instead of falling through to
+them (`main.cpp`, `cntl0cur` handler).
+
+**Confirmed against real hardware (2026-08-15), same day as built.**
+`raspi/control/motorcontrol.py`'s `selftest` gained a new part
+(`linbus.provoke_currentsensor_checksum_error()`): sends the *inject*
+bytes (`[0x01,0xab]`) with a deliberately wrong checksum via
+`Lin.write_bad_checksum()`. Deliberately uses the inject bytes rather
+than the reset bytes — reset's effect (zero everything) would be
+indistinguishable from "already zero" and wouldn't actually prove the
+gate did anything, whereas the inject command's fixed non-zero pattern
+either lands in `errorstorage` or it doesn't, making the fix's effect
+directly observable. Run twice against real hardware
+(`runs/2026-08-15_cs_checksum_test/`): both times `errorstorage[0]`
+showed the expected fresh `CHK` entry (`error()` logs a mismatch
+unconditionally — this alone would be true with or without the fix) but
+critically `errorstorage[1]` stayed `0`, not `0x11` — direct proof the
+inject action itself was actually skipped, not just that a mismatch was
+noted. Also confirmed via the STM32's `st3mot` counters
+(`bodyTimeoutCount`/`checksumErrorCount`, both read before/after) that
+the STM32 correctly attributes zero effect to this message — it's
+addressed to the currentsensor (`cntl0cur`), not the motor, and even
+though the STM32 still tracks the frame going by on the shared bus, its
+`is_our_write` scoping correctly excludes it from its own
+`checksumErrorCount`. All three of `selftest`'s provocations
+(this one, the bus-hang test, and the STM32's own checksum test) moved
+only their own counter each time, both runs — confirmed mutually
+isolated, not just individually correct.
+
 ## Open Points (currentsensor-specific)
 
 - No hardware instance-strap-pin reading yet (unlike the motor's

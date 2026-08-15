@@ -191,6 +191,22 @@ class Watchdog:
             names_after_reset = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_after_reset]
                                    if codes_after_reset is not None else None)
 
+            # Part 1.5: deliberately provoke currentsensor's cntl0cur
+            # checksum gate (see linbus.provoke_currentsensor_checksum_
+            # error()'s docstring) and confirm both that the error was
+            # logged AND that the inject action was actually skipped --
+            # errorstorage should show a fresh CHK entry but NOT the
+            # inject pattern's 0x11 byte. Also confirms via the STM32's
+            # own counters that it correctly attributes this to nobody
+            # (message wasn't addressed to it), even though it still
+            # sees the frame go by on the shared bus.
+            ret_motor_counters_before0, timeout_before0, checksum_before0 = linbus.get_motor_counters(self.lin)
+            ret_bad_cs_write = linbus.provoke_currentsensor_checksum_error(self.lin)
+            ret_errors_after0, codes_after_cs_provoke = linbus.get_error_history(self.lin)
+            names_after_cs_provoke = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_after_cs_provoke]
+                                        if codes_after_cs_provoke is not None else None)
+            ret_motor_counters_after0, timeout_after0, checksum_after0 = linbus.get_motor_counters(self.lin)
+
             # Part 2: deliberately provoke the STM32 bus-hang timeout
             # (see linbus.provoke_bus_hang_timeout()'s docstring) and
             # confirm both sides actually caught it -- STM32's
@@ -220,6 +236,11 @@ class Watchdog:
                     f"injected(ret={ret_injected} codes={codes_injected} names={names_injected}) "
                     f"reset_ret={ret_reset} "
                     f"after_reset(ret={ret_after_reset} codes={codes_after_reset} names={names_after_reset}) "
+                    f"currentsensor_checksum_test("
+                    f"motor_before(ret={ret_motor_counters_before0} timeout={timeout_before0} checksum={checksum_before0}) "
+                    f"bad_write_ret={ret_bad_cs_write} "
+                    f"currentsensor_after(ret={ret_errors_after0} codes={codes_after_cs_provoke} names={names_after_cs_provoke}) "
+                    f"motor_after(ret={ret_motor_counters_after0} timeout={timeout_after0} checksum={checksum_after0})) "
                     f"bushang_test(before(ret={ret_counters_before} timeout={timeout_before} checksum={checksum_before}) "
                     f"arm_ret={ret_arm} trigger_ret={ret_trigger} "
                     f"after(ret={ret_counters_after} timeout={timeout_after} checksum={checksum_after}) "

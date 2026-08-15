@@ -491,6 +491,13 @@ int main() {
       uint8_t data[2];
       data[0] = receivebyte();
       data[1] = receivebyte();
+
+      int check = receivebyte();
+      if (check != checksum(data,2)) {
+	error(LIN_CHK_ERR);
+	continue;
+      }
+      
       if(data[0] == 0x01 && data[1] == 0xab){
         portb(YELLOW_LED_PIN, 1);
         portd(RED_LED_PIN, 1);
@@ -521,11 +528,6 @@ int main() {
       if(data[0] == 0xfa && data[1] == 0x17){
         // Arms sabotageNextReply -- see its declaration above.
         sabotageNextReply = true;
-      }
-
-      int check = receivebyte();
-      if (check != checksum(data,2)) {
-	error(LIN_CHK_ERR);
       }
       continue;
     } else {

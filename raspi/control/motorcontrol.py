@@ -36,9 +36,11 @@ HELP_TEXT = """Commands:
   temp            read temperature
   current         read current sensor (amps, val1/val2 = ACS712 #1/#2)
   errors          read currentsensor's last 8 error codes (most recent first)
-  selftest        currentsensor errorstorage roundtrip + deliberately provoke a
-                  currentsensor/STM32 bus-hang timeout + deliberately send a
-                  bad-checksum speed-0 write and confirm all were caught
+  selftest        currentsensor errorstorage roundtrip + deliberately send a
+                  bad-checksum cntl0cur write and confirm currentsensor logged it
+                  but skipped the action + deliberately provoke a currentsensor/
+                  STM32 bus-hang timeout + deliberately send a bad-checksum
+                  speed-0 write and confirm all were caught
                   (real hardware, ~2s, deliberately disrupts the bus for a moment)
   help            show this again
   exit            quit (Ctrl+C also works)

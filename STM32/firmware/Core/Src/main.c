@@ -78,11 +78,6 @@ uint8_t addparity(uint8_t);
 int8_t getindex(uint8_t);
 
 void allOff();                 // Schaltet alle MOSFET-Ausgaenge aus (Motor stromlos)
-int readHall();                // Liest Hall-Sensoren und liefert passenden Schrittindex
-int findIndex(uint8_t hallWert); // Sucht im zustaende[]-Array den Index fÃ¼r ein Hall-Muster
-void nextStep(int side);       // Berechnet und faehrt den nÃ¤chsten Kommutierungsschritt aus
-void step(int index);          // Ruft die passende step1 bis step6 Funktion je nach Index auf
-void doStep(int highPin, int lowPin);
 void driveMOSFET(int, GPIO_PinState);
 void driveState(uint16_t speed, int);
 uint8_t driveStep(int16_t);
@@ -120,9 +115,6 @@ const uint8_t H1_PIN = 11;
 const uint8_t H2_PIN = 12;
 const uint8_t H3_PIN = 13;
 
-const int POT_PIN = 0;
-
-
 // Jede Phase A/B/C hat ein High-Side MOSFET (H)und ein Low Side MOSFET (L)
 const uint8_t AH = 0;
 const uint8_t AL = 1;
@@ -132,12 +124,6 @@ const uint8_t CH = 4;
 const uint8_t CL = 5;
 
 
-const int STEP_DELAY = 20;
-
-int lastHallIndex = 0;
-int side = 1;
-
-const uint8_t states[] = {0b101, 0b100, 0b110, 0b010, 0b011, 0b001};
 const uint32_t GLOBALRATE = 1275; // in mikrosekunden
 //const int16_t MINCONTROLVARIABLE = 200; //
 const uint32_t RAMPSTEP = 1;
@@ -151,14 +137,6 @@ const uint16_t RPMFACTOR = 25;
 const uint16_t SAMPLERATE = 100; // in ms
 const float DT = GLOBALRATE / 1000000.0f;  // in seconds
 
-
-unsigned int pwmRate = 1000;
-unsigned int pulseWidth = 125;
-
-unsigned int statusK = 0;
-GPIO_PinState lastButtonStateStart = GPIO_PIN_RESET;
-GPIO_PinState lastButtonStateStop  = GPIO_PIN_SET;
-
 int16_t controlvariable = 0;
 int16_t controlvariableinput = 0;
 
@@ -166,12 +144,6 @@ int16_t controlvariableinput = 0;
 //Istwert = actual value (oder process value)
 //Führungsgröße = reference variable (oder command variable)
 
-
-
-//uint8_t oldstep = 0;
-//uint8_t newstep = 0;
-//int speedcount = 0;
-unsigned int dirmeasured = 0;
 int16_t rpm = 0;
 float integral = 0.0f;
 uint8_t hwbits = 0x0;
@@ -254,28 +226,6 @@ int main(void)
   // high, arduino digital 13
 
   //__HAL_TIM_SET_COUNTER(&htim5,0);
-#ifdef BLUBBER
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
-  delay_us(100000);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
-  delay_us(100000);
-
-  for (;;) {
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_RESET);
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
-	  //for (unsigned int i = 0; i < 256;i++) {
-	  delay_ms(1000);
-	  //}
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_7, GPIO_PIN_SET);
-	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
-	  //for (unsigned int i = 0; i < 256;i++) {
-	  delay_ms(1000);
-	  //}
-  }
-#endif
-
   if(HAL_GPIO_ReadPin (GPIOB, GPIO_PIN_14) ==  GPIO_PIN_SET) {
     hwbits |= 0x01;
   } 
@@ -283,7 +233,6 @@ int main(void)
     hwbits |= 0x02;
   }
   
-  //oldstep =
   driveStep(0);
   previousState = getState();
 
@@ -346,30 +295,6 @@ int main(void)
 		  //picontrol(controlvariable, rpm);
 		  //driveStep(controlvariable);
 		  driveStep(picontrol(controlvariable, rpm));
-		  // One round is 24 steps
-#ifdef BLUBBER
-		  if (newstep != oldstep) {
-			  int num = directionMatrix[oldstep][newstep];
-			 //int num = (newstep - oldstep + 6)%6;
-			 if (num == 1) {
-				 ++speedcount;
-				 //HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
-			 } else if (num == 2) { // ascending
-				 ++speedcount;
-				 ++speedcount;
-				 //HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
-			 } else if (num == -1) {
-				 --speedcount;
-				 //HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
-			 } else if (num == -2) { // descending
-				 --speedcount;
-				 --speedcount;
-				 //HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_14);
-			 }
-		  }
-#endif
-		  //oldstep = newstep;
-
 
 	    if (__HAL_TIM_GET_COUNTER(&htim4) > SAMPLERATE) {
 	    	HAL_TIM_Base_Stop(&htim4); // Stop the timer
@@ -1062,176 +987,6 @@ void allOff(){            // alles aus, um Kurzschluss zu vermeiden
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_13, GPIO_PIN_RESET); // CH
 
 }
-
-void setup() {
-
-  allOff();
-
-}
-
-
-
-
-
-// Motorfunktion, die eine begrenzte Anzahl Steps ausfaehrt und waehrenddessen stop-knopf prueft
-void runMotor()
-{
-  for (int i = 0; i < 6 * 4; i++)
-  {
-    nextStep(side);
-    //Serial.println("Motor dreht sich");
-
-  }
-}
-
-
-
-int readHall() { //rÃ¼ckgabewert ist der index vom zustand array
-  static uint8_t lastA = 255, lastB = 255, lastC = 255; // static = behalten den wert Ã¼ber mehrere funktionsaufrufe hinweg
-  // 255 ist garantiert != 0 oder 1, wodurch beim ersten Funktionsaufruf immer der Druck ausgefÃ¼hrt wird
-
-  // HallSensoren einlesen, kriegst 3-Bit-Muster
-  uint8_t A = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_0) == GPIO_PIN_SET ? 255 : 0; // high, see arduino above
-  uint8_t B = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_1) == GPIO_PIN_SET ? 255 : 0; // middle, see arduino above
-  uint8_t C = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_2) == GPIO_PIN_SET ? 255 : 0; // low, see arduino above
-
-
-  // test, ob sich eins der 3 werte geÃ¤ndert haben, wenn ja, dann ausgabe
-  if (A != lastA || B != lastB || C != lastC) {
-    // lastA = wert von h1 vom letzten Mal
-    // wenn vorher 1 und jetzt 0, dann hat motor sich weitergedreht
-    // es reicht, wenn einer der drei hall sensoren sich Ã¤ndert, damit der rotor in die nÃ¤chste position weiterspringt
-    // hall sensoren Ã¤ndern sich typischerweise nacheinander, nicht alle gleichzeitig
-
-    // alten Werte werden aktualisiert
-    lastA = A;
-    lastB = B;
-    lastC = C;
-  }
-
-  uint8_t hallWert = (A << 2) | (B << 1) | C; //baut A,B,C zu einem einzigen Byte zusammen
-  // ergebnis sit ein wert zwischen 0 und 7 (von 3 bit zahl zu dez)
-  return findIndex(hallWert); // geht das Array durch, sucht nach dem Hallwert, gibt position zurÃ¼ck
-}
-
-
-int findIndex(uint8_t wert){
-  for (int i = 0; i < 6; i++) {
-    if (states[i] == wert) return i;
-  }
-  return -1;
-}
-
-void nextStep(int side)
-{
-  int hallIndex = readHall();
-  if (hallIndex < 0) return;
-
-  if (side == 0) {
-    // CW = normal
-    step(hallIndex);
-    lastHallIndex = hallIndex;
-  }
-  else {
-    int nextIndex;
-
-    switch (hallIndex) {
-      case 0: nextIndex = 3; break;
-      case 5: nextIndex = 2; break;
-      case 4: nextIndex = 1; break;
-      case 3: nextIndex = 0; break;
-      case 2: nextIndex = 5; break;
-      case 1: nextIndex = 4; break;
-      default: return;
-    }
-
-    step(nextIndex);
-    lastHallIndex = nextIndex;
-  }
-}
-
-
-
-
-void step(int i) {
-
-// #ifdef = falls mydebug definiert ist, dann kompiliere folgenden code
-// wenn mydebug nicht existiert, dann verwirft compiler den block
-// == prÃ¤prozessor-kontrukt
-// nur wenn aktiv, sollen die serials ausgegeben werden
-
-  switch (i) {
-    case 0:
-    doStep(BH, AL);
-
-    case 1:
-    doStep(BH, CL);
-    break;
-
-    case 2:
-    doStep(AH, CL);
-    break;
-
-    case 3:
-    doStep(AH, BL);
-    break;
-
-    case 4:
-    doStep(CH, BL);
-    break;
-
-    case 5:
-    doStep(CH, AL);
-    break;
-  }
-}
-
-// delay ist 100 mal lÃ¤nger als delaymicroseconds
-
-
-
-
-void doStep(int highPin, int lowPin) { //ansteuerung der mosfets fr genau eine wicklung
-  allOff(); //verhindert cross conduction
-
-  //delay_us(10);
-
-  driveMOSFET(lowPin, GPIO_PIN_SET);
-
-
-  int c = 0;//analogRead(POT_PIN);
-  pulseWidth = (int)(c * 0.25);
-  if (pulseWidth > 250) {
-    pulseWidth = 250;
-    }
-
-  //delayMicroseconds(pwmRate-pulseWidth); //wird stÃ¤ndig geschickt = PWM
-  driveMOSFET(highPin, GPIO_PIN_SET);
-
-  //delayMicroseconds(pulseWidth);
-  allOff();
-}
-
-
-/* doStep arbeitet bis jetzt mit statischen Pulsbreiten mit delayMicroseconds()
- Warum das nicht ideal ist: echter BLDC muss kontinuierlich Strom durch die
-Wicklungen schicken, wÃ¤hrend der Rotor sich bewegt, aber wir haben hier quasi eine Einzel-Puls-Ansteuerung.
-Mit echten PWM-Pins bestimmt man die Drehzahl und die Leistung.
-
-FÃ¼r PWM:
-1. High-Side auf PWM-Pins legen (3,5,6,9,10,11)
-2. doStep() umÃ¤ndern:
-
-  void doStep(int highPin, int lowPin) {
-  allOff();
-  digitalWrite(lowPin, HIGH);     // Lowside always on
-  analogWrite(highPin, pwmValue); // Highside PWM
-}
-
-3. Delays sind nicht mehr notwendig, da die Ansteuerung automatisch durch die Hardware lÃ¤uft
-
-*/
-
 
 void driveMOSFET(int pin, GPIO_PinState st)
 {

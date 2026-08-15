@@ -1,0 +1,17 @@
+12:46:20.795  INFO    connected to watchdog
+12:46:23.762  INFO    -> current
+12:46:23.770  INFO    <- OK ret=0 val1=0.05 val2=0.00
+12:46:26.227  INFO    -> hal
+12:46:26.232  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+12:46:29.923  INFO    -> hal
+12:46:29.929  INFO    <- OK ret=0 data=['0x01', '0x00', '0x01']
+12:46:35.236  INFO    -> selftest
+12:46:37.322  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) currentsensor_checksum_test(motor_before(ret=0 timeout=1 checksum=1) bad_write_ret=0 currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) motor_after(ret=0 timeout=1 checksum=1)) bushang_test(before(ret=0 timeout=1 checksum=1) arm_ret=0 trigger_ret=-5 after(ret=0 timeout=2 checksum=1) currentsensor_after(ret=0 codes=[-5, -5, 0, 0, 0, 0, 0, 0] names=['CHK', 'CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])) checksum_test(before(ret=0 timeout=2 checksum=1) bad_write_ret=0 after(ret=0 timeout=2 checksum=2))
+12:46:47.782  INFO    -> speed 0
+12:46:47.787  INFO    <- OK
+12:46:58.455  INFO    -> selftest
+12:47:00.537  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) currentsensor_checksum_test(motor_before(ret=0 timeout=2 checksum=2) bad_write_ret=0 currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) motor_after(ret=0 timeout=2 checksum=2)) bushang_test(before(ret=0 timeout=2 checksum=2) arm_ret=0 trigger_ret=-5 after(ret=0 timeout=3 checksum=2) currentsensor_after(ret=0 codes=[-5, -5, 0, 0, 0, 0, 0, 0] names=['CHK', 'CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])) checksum_test(before(ret=0 timeout=3 checksum=2) bad_write_ret=0 after(ret=0 timeout=3 checksum=3))
+12:47:13.545  INFO    -> speed 500
+12:47:13.550  INFO    <- OK
+12:47:16.425  INFO    -> speed 0
+12:47:16.431  INFO    <- OK

@@ -134,12 +134,13 @@ def test_execute_errors_defaults_to_no_errors_when_not_injected():
                       "names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']")
 
 
-def test_execute_selftest_writes_inject_reset_sabotage_then_bad_checksum_in_order():
+def test_execute_selftest_writes_inject_reset_csbadwrite_sabotage_then_bad_checksum_in_order():
     wd = Watchdog(DryRunLin())
     wd.execute("selftest")
     assert wd.lin.writes == [
         (CNTL0CUR_WIRE, [0x01, 0xab]),
         (CNTL0CUR_WIRE, [0xcd, 0x0c]),
+        (CNTL0CUR_WIRE, [0x01, 0xab]),  # provoke_currentsensor_checksum_error()'s bad-checksum inject
         (CNTL0CUR_WIRE, [0xfa, 0x17]),
         (CNTL3MOT_WIRE, [0x00, 0x00]),  # provoke_checksum_error()'s speed-0 write
     ]
@@ -163,6 +164,12 @@ def test_execute_selftest_reads_and_decodes_st1cur_after_each_write():
         "reset_ret=0 "
         "after_reset(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] "
         "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) "
+        "currentsensor_checksum_test("
+        "motor_before(ret=0 timeout=5 checksum=0) "
+        "bad_write_ret=0 "
+        "currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] "
+        "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) "
+        "motor_after(ret=0 timeout=5 checksum=0)) "
         "bushang_test(before(ret=0 timeout=5 checksum=0) "
         "arm_ret=0 trigger_ret=0 "
         "after(ret=0 timeout=5 checksum=0) "
@@ -188,6 +195,14 @@ def test_provoke_checksum_error_writes_safe_speed_zero_via_bad_checksum():
     ret = provoke_checksum_error(lin)
     assert ret == 0
     assert lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
+
+
+def test_provoke_currentsensor_checksum_error_writes_inject_bytes_via_bad_checksum():
+    from linbus import provoke_currentsensor_checksum_error
+    lin = DryRunLin()
+    ret = provoke_currentsensor_checksum_error(lin)
+    assert ret == 0
+    assert lin.writes == [(CNTL0CUR_WIRE, [0x01, 0xab])]
 
 
 def test_provoke_bus_hang_timeout_arms_sabotage_and_triggers_current_read():

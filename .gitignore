@@ -19,6 +19,9 @@ desktop.ini
 # Editor-Backup-/Swap-Dateien
 *~
 
+# Manuelle Backup-Kopien vor riskanten Änderungen (z.B. main.cbak)
+*.cbak
+
 # Saleae Rohdaten (können groß werden - je nach Bedarf anpassen)
 saleae/exports/*.sal
 

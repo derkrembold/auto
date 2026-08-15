@@ -1,0 +1,25 @@
+13:11:40.303  INFO    connected to watchdog
+13:11:44.426  INFO    -> hal
+13:11:44.432  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+13:11:48.059  INFO    -> hal
+13:11:48.065  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+13:11:50.731  INFO    -> hal
+13:11:50.737  INFO    <- OK ret=0 data=['0x01', '0x00', '0x01']
+13:11:55.404  INFO    -> current
+13:11:55.410  INFO    <- OK ret=0 val1=0.05 val2=0.05
+13:11:59.420  INFO    -> rpm
+13:11:59.426  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+13:12:07.213  INFO    -> speed 0
+13:12:07.219  INFO    <- OK
+13:12:15.022  INFO    -> speed 500
+13:12:15.028  INFO    <- OK
+13:12:17.791  INFO    -> speed 0
+13:12:17.796  INFO    <- OK
+13:12:24.319  INFO    -> selftest
+13:12:26.404  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) currentsensor_checksum_test(motor_before(ret=0 timeout=0 checksum=0) bad_write_ret=0 currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) motor_after(ret=0 timeout=0 checksum=0)) bushang_test(before(ret=0 timeout=0 checksum=0) arm_ret=0 trigger_ret=-5 after(ret=0 timeout=1 checksum=0) currentsensor_after(ret=0 codes=[-5, -5, 0, 0, 0, 0, 0, 0] names=['CHK', 'CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])) checksum_test(before(ret=0 timeout=1 checksum=0) bad_write_ret=0 after(ret=0 timeout=1 checksum=1))
+13:12:29.456  INFO    -> speed 0
+13:12:29.461  INFO    <- OK
+13:12:32.289  INFO    -> speed 500
+13:12:32.294  INFO    <- OK
+13:12:35.009  INFO    -> speed 0
+13:12:35.014  INFO    <- OK

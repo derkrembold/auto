@@ -69,8 +69,8 @@ other. Same caution applies to any future same-named files across
   preference for explicit over implicit bus activity (e.g.
   `poll_current()`'s observe-only stall signature, below).
 
-  `selftest` (added 2026-08-13, extended same day) does two things in
-  one call, ~2s total:
+  `selftest` (added 2026-08-13, extended 2026-08-13/14/15) does the
+  following in one call, ~2s total:
   1. Exercises the currentsensor's `cntl0cur` test hook end to end via
      `linbus.currentsensor_selftest()`: injects a known non-zero pattern
      into `errorstorage` (`0x01`/`0xab`), reads it back via `st1cur`,
@@ -80,6 +80,28 @@ other. Same caution applies to any future same-named files across
      project's own `motorcontrol.py`, so the coupling (LED test and
      errorstorage inject/reset always happening together) has no real
      cost.
+  1.5. (Added 2026-08-15) Deliberately provokes currentsensor's
+     `cntl0cur` checksum gate (`main.cpp` — see `currentsensor/CLAUDE.md`'s
+     Status section for the bug this fixed): sends the *inject* bytes
+     (`[0x01,0xab]`) with a deliberately wrong checksum via
+     `linbus.provoke_currentsensor_checksum_error()` /
+     `Lin.write_bad_checksum()`. Reads `st1cur` before/after — expects
+     `errorstorage[0]==-5` (CHK, logged unconditionally either way) but
+     critically `errorstorage[1]==0`, not `0x11` (proves the inject
+     action was actually *skipped*, not just that a mismatch was noted —
+     stronger than detection-only). Also reads `st3mot`
+     (`linbus.get_motor_counters()`) before/after to confirm the STM32's
+     own counters stay completely unchanged — this message is addressed
+     to the currentsensor, not the motor, so the STM32's `is_our_write`
+     scoping should exclude it even though it still tracks the frame on
+     the shared bus. Uses the inject bytes specifically, not the reset
+     bytes — reset's effect (zero everything) would be indistinguishable
+     from "already zero" and wouldn't actually prove anything.
+     **Confirmed against real hardware (2026-08-15):** run twice
+     (`runs/2026-08-15_cs_checksum_test/`), both times `errorstorage[1]`
+     stayed `0` and both STM32 counters stayed flat, while the other two
+     parts below moved only their own respective counter — all three
+     provocations confirmed mutually isolated.
   2. Deliberately reproduces, on demand, the 2026-08-11 STM32 bus-hang
      scenario and confirms both sides actually caught it
      (`linbus.provoke_bus_hang_timeout()`, see `STM32/CLAUDE.md`'s and

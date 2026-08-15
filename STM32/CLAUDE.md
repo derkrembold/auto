@@ -398,6 +398,18 @@ re-arming the header receive.
   still open — needs its own consent-gated command, discussed but not
   built yet (this session's confirmation was incidental, from a value
   chosen to be safe-by-default, not designed as the definitive test).
+
+  **`is_our_write` scoping cross-confirmed (2026-08-15).** The
+  currentsensor gained its own, analogous `cntl0cur` checksum-gate fix
+  that day (see `currentsensor/CLAUDE.md`'s Status section) with its own
+  `selftest` provocation — which incidentally also proved this device's
+  `is_our_write` check correctly stays silent for a checksum failure
+  addressed to a *different* device: `checksumErrorCount` stayed flat
+  across both real-hardware runs even though the STM32 still tracks that
+  `cntl0cur` frame going by on the shared bus (same ISR branch as its
+  own `cntl*mot` writes). Confirms the scoping isn't just theoretically
+  correct from reading the code, but actually discriminates by pid on
+  real hardware.
 - **Known accepted minor race, left as-is:** the timeout check
   (`main.c:303`) reads `headerrecvd`/`HAL_GetTick()` non-atomically. If
   `HAL_UART_RxCpltCallback` fires in that handful-of-CPU-cycles window
@@ -436,6 +448,56 @@ re-arming the header receive.
     the existing `errorstorage`/`st1cur` already gave that signal, and
     the correlation (STM32 counter and currentsensor `CHK` entry moving
     together, every time) was directly observed via this test.
+
+**Dead-code cleanup (2026-08-15) — `main.c` only, confirmed against real
+hardware same day.** `main.c` had accumulated a substantial amount of
+genuinely unreachable code, found by grepping every candidate symbol
+across the whole firmware tree (`Core/Src/*.c`, `Core/Inc/*.h`), not
+just reading main.c in isolation:
+- Both `#ifdef BLUBBER` blocks — `BLUBBER` is never `#define`d anywhere
+  (checked source and `.mk` build flags), so both were provably
+  unreachable.
+- An entire second, never-invoked commutation implementation:
+  `setup()`, `runMotor()`, `readHall()`, `findIndex()`, `nextStep()`,
+  `step()`, `doStep()` — an apparent early Arduino-style bring-up
+  iteration, superseded by the actual live path
+  (`driveStep()`/`driveState()`/`getState()`, called from `main()`'s
+  loop via `picontrol()`) but never deleted. Confirmed dead by tracing
+  the call chain: `main()` never calls `setup()` or `runMotor()`, and
+  every other function in the chain is only ever called from within it.
+  `step()`'s `switch` even had a real bug (missing `break` on `case 0`,
+  falls through into `case 1`) — harmless only because the whole chain
+  was unreachable, exactly the kind of landmine dead code leaves behind.
+  Plus the globals only that chain used: `POT_PIN`, `STEP_DELAY`,
+  `lastHallIndex`, `side`, `states[]`, `pwmRate`, `pulseWidth`,
+  `statusK`, `lastButtonStateStart`, `lastButtonStateStop`,
+  `dirmeasured`, and the vestigial `oldstep`/`newstep`/`speedcount`
+  comments tied to the first `BLUBBER` block.
+- **Explicitly kept, checked first:** `allOff()`/`driveMOSFET()` (also
+  called from the live `driveState()`, so not dead) and
+  `directionMatrix`/`previousState`/`hallCounter` (declared `volatile`
+  in `main.c`, `extern`'d via `main.h`, and actually incremented/read in
+  `stm32h7xx_it.c`'s real Hall EXTI interrupt handler — only their
+  in-`main.c` reference was inside the dead `BLUBBER` block, the
+  declarations themselves are live). Confirmed via grep across the
+  other source files before deleting anything, without editing them —
+  user's instruction this pass was `main.c` only.
+- 245 lines removed, nothing else changed. `/build-stm32`: clean, no
+  warnings, and — notably — **binary size identical bit-for-bit**
+  (`text=48264/data=16/bss=2032`, same as the pre-cleanup build) to the
+  build just before this cleanup. Expected: the linker already runs
+  with `--gc-sections`, so this code was already being stripped from
+  the flashed `.elf` regardless of whether it existed in source — this
+  cleanup removed source clutter, not flash bytes.
+- **Flashed and confirmed on real hardware (2026-08-15).** `speed 0` →
+  `speed 500` → `speed 0` worked normally both before and after running
+  `selftest` (`runs/2026-08-15_post_cleanup/`) — direct confirmation
+  that the live commutation path (`driveStep`/`driveState`/`getState`,
+  deliberately left untouched) still works correctly. `selftest` itself
+  also came back clean: errorstorage roundtrip, the currentsensor
+  checksum-gate test, the bus-hang test, and the STM32 checksum test all
+  produced the same correct, mutually-isolated counter behavior as every
+  previous run this week — no regression from the cleanup.
 
 
 ## Motor Information

@@ -429,6 +429,33 @@ def currentsensor_selftest(lin):
     return ret_inject, ret_injected, codes_injected, ret_reset, ret_after_reset, codes_after_reset
 
 
+def provoke_currentsensor_checksum_error(lin):
+    # Deliberately sends currentsensor's cntl0cur "inject test pattern"
+    # command ([0x01, 0xab], see currentsensor_selftest() above) with a
+    # wrong checksum, to exercise currentsensor/firmware/main.cpp's
+    # checksum-gate fix (added 2026-08-15): the checksum is now verified
+    # BEFORE any of cntl0cur's three actions run, not after, so this
+    # write should be rejected outright.
+    #
+    # Deliberately uses the *inject* bytes, not e.g. the reset bytes --
+    # the reset command's effect (zero everything) is indistinguishable
+    # from "errorstorage was already zero", so it wouldn't actually prove
+    # the gate did anything. The inject command's fixed non-zero pattern
+    # either lands in errorstorage or it doesn't -- caller reads
+    # get_error_history() before/after and should see codes[0] == -5
+    # (LIN_CHK_ERR, logged unconditionally by error() -- this alone does
+    # NOT prove the gate worked, since error() runs on every mismatch
+    # regardless) but codes[1] == 0, not 0x11 (proves the inject action
+    # itself was actually skipped, not just that a mismatch was noted).
+    # Caller should also confirm via get_motor_counters() that the
+    # STM32's own checksumErrorCount/bodyTimeoutCount stay unchanged --
+    # this message is addressed to the currentsensor (cntl0cur), not the
+    # motor, so the STM32's is_our_write scoping should exclude it even
+    # though it still tracks the frame on the shared bus.
+    data = [0x01, 0xab]
+    return lin.write_bad_checksum(constants.cntl0cur, data, instance=CURRENT_INSTANCE_ID)
+
+
 def provoke_bus_hang_timeout(lin):
     # Deliberately reproduces, on demand, the short-reply condition that
     # the STM32's HAL_GetTick() bus-hang timeout (main.c) exists to catch
