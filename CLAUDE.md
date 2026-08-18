@@ -304,9 +304,17 @@ Living tracker — remove items once resolved.
   after every step) ran clean end to end: `rpm` tracked `speed` to
   within roughly ±6% at every step (e.g. 400→450, 800→825, 1200→1175,
   -1200→-1200, back to 0→0), both directions, ramp up and back down.
-  Good enough to treat `speed`≈`rpm` as validated for now. **Not yet
-  done, still worth doing:** a Saleae Hall-edge capture in parallel for
-  true ground truth (this run only cross-checked LIN `speed` against LIN
-  `rpm`, both reported by the same firmware — not an independent
-  measurement), and explicitly controlling for battery-voltage drift
-  (see Battery section above) across a longer run/discharge cycle.
+  Good enough to treat `speed`≈`rpm` as validated for now.
+  **Independent ground truth done (2026-08-17/18):** a real Saleae
+  Hall-edge capture during a live `capture_step_response.py` run,
+  converted to rpm via `analysis/hall_rpm.py`, tracks LIN `rpm` closely
+  across ramp-up/steady-state/coast-down — see `analysis/CLAUDE.md`'s
+  Hall-Edge RPM Conversion section. This *is* the independent
+  measurement the validate_speed.py run above couldn't provide on its
+  own. Along the way, found and explained a genuine small systematic
+  bias in LIN `rpm` itself (~3.4%, from `TIM4`'s prescaler giving a
+  ~1.024ms tick instead of exactly 1ms — see `STM32/CLAUDE.md`'s RPM
+  Measurement Resolution section) — since fixed in firmware
+  (`Prescaler=63999`). **Still not done:** explicitly controlling for
+  battery-voltage drift (see Battery section above) across a longer
+  run/discharge cycle.

@@ -140,19 +140,71 @@ The "how" — evolves as the firmware and tooling get built out.
   motor, and low again on stop — this is the hardware trigger for the
   Saleae capture start (see root `CLAUDE.md` Data Flow, and
   `saleae/CLAUDE.md`).
+- **Trigger pin chosen and confirmed working end-to-end (2026-08-17):**
+  `GPIO_PIN_12`/`GPIOB`, accessible off connector `J1`, repurposed from
+  an old debug/heartbeat toggle (`HAL_GPIO_TogglePin`, once per
+  RPM-sampling window — removed). Set HIGH on the `cntl3mot` dispatch
+  transition to nonzero `controlvariableinput`, LOW back to `0`
+  (`main.c:352-358`) — mirrors `raspi/watchdog/watchdog.py`'s
+  `speed_became_nonzero_at` semantics, so "test running" means the same
+  thing on both ends.
+  - **Bug found and fixed the same day:** a leftover SW1-button test
+    block (`main.c:262-279`, added earlier in the session to verify the
+    Saleae channel mapping) also wrote `GPIO_PIN_12` — unconditionally,
+    on *every* pass through the tight `while (bodyrecvd == false)`
+    polling loop (thousands of times/sec), not just on a button edge.
+    Since SW1 isn't pressed during a real motor run, this continuously
+    forced the pin back to `GPIO_PIN_RESET` immediately after the real
+    `cntl3mot` handler set it HIGH — the two writes were fighting every
+    loop iteration. Symptom matched exactly: Saleae showed only a
+    ~14µs blip instead of a sustained HIGH, and a multimeter read a
+    steady 0V throughout an entire real motor run (while confirming a
+    clean 3.3V from the same pin via the SW1 button test alone, static/
+    motor-stopped — proving the pin and wiring were fine, only the
+    *logic* was wrong). Root-caused by reading `main.c` directly rather
+    than further hardware probing, once the LIN write log had already
+    ruled out an extra/unexpected command as the cause. Fix: removed
+    the two `GPIO_PIN_12` lines from the SW1 block, leaving its
+    `GPIO_PIN_8` LED behavior untouched.
+  - **Confirmed against real hardware (2026-08-17)**, after
+    build+flash: a 20s real Saleae capture (`saleae/exports/
+    step_response_trigger_test4/`, real `LOGIC_PRO_16` device, not
+    simulation) during a live `capture_step_response.py` run shows
+    channel 3 HIGH continuously from t=4.035s to t=11.846s (7.811s, no
+    flicker) — matches the expected ~7.8s step-response window exactly,
+    LOW before and after. The trigger pin is now usable as a real
+    Saleae hardware capture trigger.
 
 ## Buttons / Switches
 
 Physical designators are from the KiCad schematic/PCB, a project that's
 **also** (confusingly) named `demoboard` — but a different, separate
 `demoboard` from the STM32CubeIDE firmware project this folder is
-sourced from (see Build & Flash above): the PCB one lives at
-`C:\Users\rembo\Documents\KiCad\designs\demoboard\demoboard`, external
-to this repo, read-only, not to be confused with the firmware source at
-`C:\Users\rembo\STM32CubeIDE\workspace_1.19.0\demoboard`. Traced via the
-PCB netlist (`Net-(U1-<pin>)` pad nets), not just the `.ioc`/`main.c`
-naming, since the STM32CubeIDE project carries no SW-designator labels
-of its own.
+sourced from (see Build & Flash above). **Correction (2026-08-17): the
+current, correct KiCad project is `demoboardV2`, not the plain
+`demoboard` this section used to reference throughout** — there are two
+separate KiCad projects on disk,
+`C:\Users\rembo\Documents\KiCad\designs\demoboard\demoboard` (older,
+schematic last touched 2025-09-21) and
+`C:\Users\rembo\Documents\KiCad\designs\demoboardV2\demoboardV2`
+(current, schematic last touched 2026-03-25) — both external to this
+repo, read-only. Not to be confused with the firmware source at
+`C:\Users\rembo\STM32CubeIDE\workspace_1.19.0\demoboard` (a third,
+unrelated thing sharing the same base name). Traced via the PCB netlist
+(`Net-(U1-<pin>)` pad nets), not just the `.ioc`/`main.c` naming, since
+the STM32CubeIDE project carries no SW-designator labels of its own.
+
+**Open question this correction raises, not yet resolved:** the
+pin-mapping facts below (SW1-4, and the `PB14`/`PB15`↔`J1` mapping in
+the next section) were documented as "confirmed via the KiCad
+schematic," but the path written down at the time was the plain
+`demoboard` one — meaning it's not certain whether the *verification
+itself* actually used `demoboardV2` (in which case these facts are
+still fine, just mis-labeled) or genuinely used the older, superseded
+schematic (in which case they'd need re-checking against `demoboardV2`
+before being trusted further, e.g. before wiring anything new off `J1`
+or `J2`). Re-verify against `demoboardV2` specifically before relying on
+these for new hardware work.
 
 - **SW1** → PE5. **SW3** → PC5. Both currently just toggle an onboard
   LED while held (bring-up/test code, `main.c:207-218` for SW1/PE5→PB7,
@@ -199,7 +251,16 @@ instead of baked into the firmware source).
 ## Hardware
 
 - **MCU:** STM32H743VGT6.
-- **Hall sensor GPIOs:** PC0, PC1, PC2.
+- **Hall sensor GPIOs:** PC0, PC1, PC2. **Confirmed against `demoboardV2`'s
+  PCB netlist (2026-08-17)**, not just inferred from `main.c`: `U1`
+  (the `LQFP-100` MCU footprint) pad 15 = `PC0` = net **"H1"**, pad 16 =
+  `PC1` = net **"H2"**, pad 17 = `PC2_C` (KiCad's symbol-library name for
+  `PC2` on this STM32H7 part — it has a dual-ADC-input `_C` alternate)
+  = net **"H3"**. So the board's `H1`/`H2`/`H3` silkscreen/net labels
+  (routed out to connector `J2`, see `saleae/CLAUDE.md`) map 1:1 to
+  `PC0`/`PC1`/`PC2` in that order — confirms these are the same signals
+  the Saleae can safely tap non-invasively off `J2` for speed
+  measurement, per root `CLAUDE.md`'s Data Flow section.
 - **MOSFET GPIOs:** PE8–PE13 (6 pins = 3 half-bridges, standard 3-phase
   BLDC bridge topology).
 - Datasheets for the MCU and the MOSFET half-bridge driver (IR2101) are
@@ -258,6 +319,30 @@ hardware; re-check this section against `main.c` if the firmware is
 ever rebuilt from a different/updated source. Relevant for the future
 optimization loop's cost function: don't mistake this quantization step
 for measurement noise when scoring control quality.
+
+**Found and fixed a separate, genuine systematic bias in the same
+measurement (2026-08-18): `TIM4`'s prescaler didn't produce an exact
+1ms tick.** `htim4` clocks from the H7's 64MHz internal HSI (no PLL,
+`SYSCLKSource=HSI`, `APB1CLKDivider=DIV2` → 32MHz PCLK1 → 64MHz TIM4
+kernel clock via the standard APB timer-clock-doubling rule) with
+`Prescaler=65534` (divide-by-65535) — giving a real tick period of
+64MHz/65535 ≈ 1.024ms, not the 1ms the code implicitly assumes (both
+here, via `SAMPLERATE=100` ticks meant to be "100ms", and in the
+`delay(ms)` helper at `main.c:862`, which compares the raw counter
+directly against a millisecond count). Since the RPM window actually
+closes at ~101 ticks × 1.024ms ≈ 103.4ms of real time but `RPMFACTOR`
+still divides by an assumed 0.1s, every `rpm` reading was inflated by
+~3.4%. Confirmed against real data: a Saleae Hall-edge capture (true
+ground truth, see `analysis/CLAUDE.md`'s Hall-Edge RPM Conversion
+section) measured a steady-state mean of 963.6 vs. LIN `rpm`'s 998.2
+for the same run — a 3.59% gap, matching the 3.42% predicted from the
+tick-period math within measurement noise. **Fix:** `Prescaler=63999`
+(divide-by-64000, 64MHz/64000 = exactly 1000Hz) — applied and flashed
+2026-08-18. Not yet re-validated against a fresh Hall-edge capture with
+the fix in place (the 2026-08-18 trigger-mode confirmation runs used
+this fixed firmware, but weren't specifically designed to isolate this
+~3% effect) — worth a dedicated before/after comparison if the
+quantifiable size of the fix matters later, not just its direction.
 
 ## Known Hardware Issue
 
@@ -529,7 +614,6 @@ Leerlauf Stromverbrauch: bei 5V: ca.: 0,5A,  bei 48V ca.: 1,4A
 - `STM32/notes.md`'s file-tree section needs re-verification against the
   corrected `demoboard` source — written before the import, may not
   match exactly.
-- Exact trigger-pin GPIO assignment.
 - Implement Hall-based stall detection (see Stall Detection section
   above) — deprioritized, was sequenced after the standalone-build-
   environment goal; both build and flash are now headless, so this can

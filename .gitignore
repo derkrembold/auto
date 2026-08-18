@@ -24,6 +24,7 @@ desktop.ini
 
 # Saleae Rohdaten (können groß werden - je nach Bedarf anpassen)
 saleae/exports/*.sal
+saleae/exports/*/
 
 # Datenblätter - groß, öffentlich verfügbar, leicht neu herunterladbar
 STM32/datasheets/*.pdf

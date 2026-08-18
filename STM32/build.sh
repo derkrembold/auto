@@ -10,10 +10,10 @@
 # enough here that always doing a full rebuild costs little and removes
 # that whole failure class. Output: STM32/firmware/Debug/demoboard.elf
 #
-# Compile messages (warnings/errors) are also saved to STM32/build.log,
-# not just printed to the terminal — no need to remember a `tee`-style
-# incantation to keep them around (and `tee` isn't available in this
-# shell anyway). build.log is gitignored, regenerated every run.
+# Compile messages (warnings/errors) are streamed live to the terminal
+# AND saved to STM32/build.log (a line-by-line read loop, since `tee`
+# isn't available in this shell). build.log is gitignored, regenerated
+# every run.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,15 +29,18 @@ export PATH="$GCC_BIN:$PATH"
 
 cd "$BUILD_DIR"
 
+: > "$LOG_FILE"
+
 set +e
 {
   "$MAKE_EXE" clean
   "$MAKE_EXE" -j4 all
-} > "$LOG_FILE" 2>&1
-BUILD_STATUS=$?
+} 2>&1 | while IFS= read -r line; do
+  echo "$line"
+  echo "$line" >> "$LOG_FILE"
+done
+BUILD_STATUS=${PIPESTATUS[0]}
 set -e
-
-cat "$LOG_FILE"
 
 if [ "$BUILD_STATUS" -ne 0 ]; then
   echo

@@ -263,6 +263,7 @@ int main(void)
 		  {
 			  // Set The LED ON!
 			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+			  //HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_13, GPIO_PIN_SET);
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_SET);
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_SET);
@@ -271,6 +272,7 @@ int main(void)
 		  {
 			  // Else .. Turn LED OFF!
 			  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+			  //HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_13, GPIO_PIN_RESET);
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET);
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_RESET);
@@ -294,6 +296,7 @@ int main(void)
 		  updateramp();
 		  //picontrol(controlvariable, rpm);
 		  //driveStep(controlvariable);
+
 		  driveStep(picontrol(controlvariable, rpm));
 
 	    if (__HAL_TIM_GET_COUNTER(&htim4) > SAMPLERATE) {
@@ -301,7 +304,6 @@ int main(void)
 	    	done = 1;
 	    	rpm = RPMFACTOR*hallCounter;
 	    	hallCounter = 0;
-	    	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_12);
 	    }
 	  }
 	  // some LIN message was received.
@@ -349,6 +351,11 @@ int main(void)
 	  }
 	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl3mot | hwbits)) {
 		  controlvariableinput = (int16_t)((rx_body[0] << 8) | rx_body[1]);
+		  if (controlvariableinput == 0) {
+		    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
+		  } else {
+		    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+		  }
 	  }
   }
 
@@ -533,7 +540,7 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 65534; //
+  htim4.Init.Prescaler = 63999; // 65534
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim4.Init.Period = 65535;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -628,7 +635,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4|GPIO_PIN_6|GPIO_PIN_7|GPIO_PIN_8
-                          |GPIO_PIN_9, GPIO_PIN_RESET);
+                          |GPIO_PIN_9|GPIO_PIN_12, GPIO_PIN_RESET);
 
 
   /*Configure GPIO pin : PE5 */

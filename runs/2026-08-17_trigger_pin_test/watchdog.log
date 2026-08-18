@@ -1,0 +1,1849 @@
+16:01:26.157  INFO    === watchdog.py — LIVE bus ===
+16:01:26.165  INFO    listening on /tmp/motorwatchdog.sock
+16:01:27.166  DEBUG   [poll]    -> read  st2mot    
+16:01:27.170  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:27.170  DEBUG   [poll]    -> read  st0cur    
+16:01:27.174  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:01:28.176  DEBUG   [poll]    -> read  st2mot    
+16:01:28.179  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:28.180  DEBUG   [poll]    -> read  st0cur    
+16:01:28.184  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:29.185  DEBUG   [poll]    -> read  st2mot    
+16:01:29.189  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:29.189  DEBUG   [poll]    -> read  st0cur    
+16:01:29.193  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:30.195  DEBUG   [poll]    -> read  st2mot    
+16:01:30.198  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:30.199  DEBUG   [poll]    -> read  st0cur    
+16:01:30.203  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:31.204  DEBUG   [poll]    -> read  st2mot    
+16:01:31.208  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:31.211  DEBUG   [poll]    -> read  st0cur    
+16:01:31.216  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:32.217  DEBUG   [poll]    -> read  st2mot    
+16:01:32.220  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:32.221  DEBUG   [poll]    -> read  st0cur    
+16:01:32.225  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:33.227  DEBUG   [poll]    -> read  st2mot    
+16:01:33.230  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:33.230  DEBUG   [poll]    -> read  st0cur    
+16:01:33.235  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:34.236  DEBUG   [poll]    -> read  st2mot    
+16:01:34.239  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:34.240  DEBUG   [poll]    -> read  st0cur    
+16:01:34.244  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:35.246  DEBUG   [poll]    -> read  st2mot    
+16:01:35.249  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:35.249  DEBUG   [poll]    -> read  st0cur    
+16:01:35.254  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:36.255  DEBUG   [poll]    -> read  st2mot    
+16:01:36.259  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:36.259  DEBUG   [poll]    -> read  st0cur    
+16:01:36.264  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:37.265  DEBUG   [poll]    -> read  st2mot    
+16:01:37.268  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:37.269  DEBUG   [poll]    -> read  st0cur    
+16:01:37.273  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:38.274  DEBUG   [poll]    -> read  st2mot    
+16:01:38.278  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:38.278  DEBUG   [poll]    -> read  st0cur    
+16:01:38.282  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:39.284  DEBUG   [poll]    -> read  st2mot    
+16:01:39.287  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:39.288  DEBUG   [poll]    -> read  st0cur    
+16:01:39.292  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:40.293  DEBUG   [poll]    -> read  st2mot    
+16:01:40.297  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:40.297  DEBUG   [poll]    -> read  st0cur    
+16:01:40.301  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:41.303  DEBUG   [poll]    -> read  st2mot    
+16:01:41.309  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:41.310  DEBUG   [poll]    -> read  st0cur    
+16:01:41.314  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:42.315  DEBUG   [poll]    -> read  st2mot    
+16:01:42.319  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:42.319  DEBUG   [poll]    -> read  st0cur    
+16:01:42.323  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:43.325  DEBUG   [poll]    -> read  st2mot    
+16:01:43.328  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:43.328  DEBUG   [poll]    -> read  st0cur    
+16:01:43.333  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:44.334  DEBUG   [poll]    -> read  st2mot    
+16:01:44.338  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:44.338  DEBUG   [poll]    -> read  st0cur    
+16:01:44.342  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:45.344  DEBUG   [poll]    -> read  st2mot    
+16:01:45.347  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:45.347  DEBUG   [poll]    -> read  st0cur    
+16:01:45.352  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:46.353  DEBUG   [poll]    -> read  st2mot    
+16:01:46.356  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:46.357  DEBUG   [poll]    -> read  st0cur    
+16:01:46.361  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:47.363  DEBUG   [poll]    -> read  st2mot    
+16:01:47.366  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:47.366  DEBUG   [poll]    -> read  st0cur    
+16:01:47.371  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:48.372  DEBUG   [poll]    -> read  st2mot    
+16:01:48.376  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:48.376  DEBUG   [poll]    -> read  st0cur    
+16:01:48.380  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:49.382  DEBUG   [poll]    -> read  st2mot    
+16:01:49.385  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:49.386  DEBUG   [poll]    -> read  st0cur    
+16:01:49.390  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:50.391  DEBUG   [poll]    -> read  st2mot    
+16:01:50.395  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:50.395  DEBUG   [poll]    -> read  st0cur    
+16:01:50.399  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:01:51.401  DEBUG   [poll]    -> read  st2mot    
+16:01:51.404  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:51.405  DEBUG   [poll]    -> read  st0cur    
+16:01:51.409  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:52.411  DEBUG   [poll]    -> read  st2mot    
+16:01:52.414  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:52.414  DEBUG   [poll]    -> read  st0cur    
+16:01:52.418  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:53.420  DEBUG   [poll]    -> read  st2mot    
+16:01:53.423  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:53.424  DEBUG   [poll]    -> read  st0cur    
+16:01:53.428  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:54.429  DEBUG   [poll]    -> read  st2mot    
+16:01:54.433  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:54.433  DEBUG   [poll]    -> read  st0cur    
+16:01:54.437  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:55.439  DEBUG   [poll]    -> read  st2mot    
+16:01:55.442  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:55.442  DEBUG   [poll]    -> read  st0cur    
+16:01:55.447  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:01:56.448  DEBUG   [poll]    -> read  st2mot    
+16:01:56.452  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:56.452  DEBUG   [poll]    -> read  st0cur    
+16:01:56.457  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:57.458  DEBUG   [poll]    -> read  st2mot    
+16:01:57.462  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:57.462  DEBUG   [poll]    -> read  st0cur    
+16:01:57.467  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:58.468  DEBUG   [poll]    -> read  st2mot    
+16:01:58.472  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:58.472  DEBUG   [poll]    -> read  st0cur    
+16:01:58.476  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:01:59.478  DEBUG   [poll]    -> read  st2mot    
+16:01:59.481  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:01:59.482  DEBUG   [poll]    -> read  st0cur    
+16:01:59.486  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:00.487  DEBUG   [poll]    -> read  st2mot    
+16:02:00.491  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:00.491  DEBUG   [poll]    -> read  st0cur    
+16:02:00.496  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:01.497  DEBUG   [poll]    -> read  st2mot    
+16:02:01.501  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:01.501  DEBUG   [poll]    -> read  st0cur    
+16:02:01.505  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:02.507  DEBUG   [poll]    -> read  st2mot    
+16:02:02.510  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:02.511  DEBUG   [poll]    -> read  st0cur    
+16:02:02.515  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:03.516  DEBUG   [poll]    -> read  st2mot    
+16:02:03.520  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:03.520  DEBUG   [poll]    -> read  st0cur    
+16:02:03.524  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:04.526  DEBUG   [poll]    -> read  st2mot    
+16:02:04.529  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:04.530  DEBUG   [poll]    -> read  st0cur    
+16:02:04.534  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:05.535  DEBUG   [poll]    -> read  st2mot    
+16:02:05.539  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:05.539  DEBUG   [poll]    -> read  st0cur    
+16:02:05.543  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:06.545  DEBUG   [poll]    -> read  st2mot    
+16:02:06.548  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:06.549  DEBUG   [poll]    -> read  st0cur    
+16:02:06.553  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:07.554  DEBUG   [poll]    -> read  st2mot    
+16:02:07.558  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:07.558  DEBUG   [poll]    -> read  st0cur    
+16:02:07.562  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:08.564  DEBUG   [poll]    -> read  st2mot    
+16:02:08.567  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:08.567  DEBUG   [poll]    -> read  st0cur    
+16:02:08.572  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:09.572  DEBUG   [poll]    -> read  st2mot    
+16:02:09.576  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:09.576  DEBUG   [poll]    -> read  st0cur    
+16:02:09.580  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:10.582  DEBUG   [poll]    -> read  st2mot    
+16:02:10.585  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:10.586  DEBUG   [poll]    -> read  st0cur    
+16:02:10.590  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:11.591  DEBUG   [poll]    -> read  st2mot    
+16:02:11.595  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:11.595  DEBUG   [poll]    -> read  st0cur    
+16:02:11.600  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:12.601  DEBUG   [poll]    -> read  st2mot    
+16:02:12.605  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:12.605  DEBUG   [poll]    -> read  st0cur    
+16:02:12.609  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:13.610  DEBUG   [poll]    -> read  st2mot    
+16:02:13.613  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:13.614  DEBUG   [poll]    -> read  st0cur    
+16:02:13.618  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:14.619  DEBUG   [poll]    -> read  st2mot    
+16:02:14.623  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:14.623  DEBUG   [poll]    -> read  st0cur    
+16:02:14.627  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:15.629  DEBUG   [poll]    -> read  st2mot    
+16:02:15.632  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:15.633  DEBUG   [poll]    -> read  st0cur    
+16:02:15.637  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:16.638  DEBUG   [poll]    -> read  st2mot    
+16:02:16.642  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:16.642  DEBUG   [poll]    -> read  st0cur    
+16:02:16.647  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:17.648  DEBUG   [poll]    -> read  st2mot    
+16:02:17.651  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:17.652  DEBUG   [poll]    -> read  st0cur    
+16:02:17.656  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:18.658  DEBUG   [poll]    -> read  st2mot    
+16:02:18.661  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:18.661  DEBUG   [poll]    -> read  st0cur    
+16:02:18.666  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:19.667  DEBUG   [poll]    -> read  st2mot    
+16:02:19.670  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:19.671  DEBUG   [poll]    -> read  st0cur    
+16:02:19.675  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:20.676  DEBUG   [poll]    -> read  st2mot    
+16:02:20.680  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:20.680  DEBUG   [poll]    -> read  st0cur    
+16:02:20.684  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:21.686  DEBUG   [poll]    -> read  st2mot    
+16:02:21.689  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:21.690  DEBUG   [poll]    -> read  st0cur    
+16:02:21.694  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:22.696  DEBUG   [poll]    -> read  st2mot    
+16:02:22.699  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:22.700  DEBUG   [poll]    -> read  st0cur    
+16:02:22.704  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:23.705  DEBUG   [poll]    -> read  st2mot    
+16:02:23.709  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:23.709  DEBUG   [poll]    -> read  st0cur    
+16:02:23.713  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:24.715  DEBUG   [poll]    -> read  st2mot    
+16:02:24.718  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:24.718  DEBUG   [poll]    -> read  st0cur    
+16:02:24.723  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:25.724  DEBUG   [poll]    -> read  st2mot    
+16:02:25.728  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:25.728  DEBUG   [poll]    -> read  st0cur    
+16:02:25.732  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:26.734  DEBUG   [poll]    -> read  st2mot    
+16:02:26.737  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:26.738  DEBUG   [poll]    -> read  st0cur    
+16:02:26.742  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:27.743  DEBUG   [poll]    -> read  st2mot    
+16:02:27.747  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:27.747  DEBUG   [poll]    -> read  st0cur    
+16:02:27.751  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:28.753  DEBUG   [poll]    -> read  st2mot    
+16:02:28.756  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:28.757  DEBUG   [poll]    -> read  st0cur    
+16:02:28.761  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:29.762  DEBUG   [poll]    -> read  st2mot    
+16:02:29.766  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:29.766  DEBUG   [poll]    -> read  st0cur    
+16:02:29.770  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:30.772  DEBUG   [poll]    -> read  st2mot    
+16:02:30.775  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:30.776  DEBUG   [poll]    -> read  st0cur    
+16:02:30.780  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:31.781  DEBUG   [poll]    -> read  st2mot    
+16:02:31.785  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:31.785  DEBUG   [poll]    -> read  st0cur    
+16:02:31.789  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:32.791  DEBUG   [poll]    -> read  st2mot    
+16:02:32.794  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:32.795  DEBUG   [poll]    -> read  st0cur    
+16:02:32.799  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:33.800  DEBUG   [poll]    -> read  st2mot    
+16:02:33.804  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:33.804  DEBUG   [poll]    -> read  st0cur    
+16:02:33.808  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:34.810  DEBUG   [poll]    -> read  st2mot    
+16:02:34.813  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:34.813  DEBUG   [poll]    -> read  st0cur    
+16:02:34.818  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:35.819  DEBUG   [poll]    -> read  st2mot    
+16:02:35.822  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:35.823  DEBUG   [poll]    -> read  st0cur    
+16:02:35.827  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:36.828  DEBUG   [poll]    -> read  st2mot    
+16:02:36.832  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:36.832  DEBUG   [poll]    -> read  st0cur    
+16:02:36.837  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:37.838  DEBUG   [poll]    -> read  st2mot    
+16:02:37.841  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:37.842  DEBUG   [poll]    -> read  st0cur    
+16:02:37.846  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:38.847  DEBUG   [poll]    -> read  st2mot    
+16:02:38.851  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:38.851  DEBUG   [poll]    -> read  st0cur    
+16:02:38.855  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:39.857  DEBUG   [poll]    -> read  st2mot    
+16:02:39.860  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:39.861  DEBUG   [poll]    -> read  st0cur    
+16:02:39.865  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:40.866  DEBUG   [poll]    -> read  st2mot    
+16:02:40.870  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:40.870  DEBUG   [poll]    -> read  st0cur    
+16:02:40.874  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:41.876  DEBUG   [poll]    -> read  st2mot    
+16:02:41.879  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:41.880  DEBUG   [poll]    -> read  st0cur    
+16:02:41.884  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:42.886  DEBUG   [poll]    -> read  st2mot    
+16:02:42.889  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:42.889  DEBUG   [poll]    -> read  st0cur    
+16:02:42.894  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:43.895  DEBUG   [poll]    -> read  st2mot    
+16:02:43.899  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:43.899  DEBUG   [poll]    -> read  st0cur    
+16:02:43.903  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:44.905  DEBUG   [poll]    -> read  st2mot    
+16:02:44.908  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:44.908  DEBUG   [poll]    -> read  st0cur    
+16:02:44.913  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:45.914  DEBUG   [poll]    -> read  st2mot    
+16:02:45.917  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:45.918  DEBUG   [poll]    -> read  st0cur    
+16:02:45.922  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:46.923  DEBUG   [poll]    -> read  st2mot    
+16:02:46.927  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:46.927  DEBUG   [poll]    -> read  st0cur    
+16:02:46.931  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:47.933  DEBUG   [poll]    -> read  st2mot    
+16:02:47.936  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:47.937  DEBUG   [poll]    -> read  st0cur    
+16:02:47.941  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:48.942  DEBUG   [poll]    -> read  st2mot    
+16:02:48.946  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:48.946  DEBUG   [poll]    -> read  st0cur    
+16:02:48.950  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:49.952  DEBUG   [poll]    -> read  st2mot    
+16:02:49.955  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:49.956  DEBUG   [poll]    -> read  st0cur    
+16:02:49.960  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:50.961  DEBUG   [poll]    -> read  st2mot    
+16:02:50.965  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:50.965  DEBUG   [poll]    -> read  st0cur    
+16:02:50.969  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:51.971  DEBUG   [poll]    -> read  st2mot    
+16:02:51.974  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:51.975  DEBUG   [poll]    -> read  st0cur    
+16:02:51.979  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:52.981  DEBUG   [poll]    -> read  st2mot    
+16:02:52.984  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:52.984  DEBUG   [poll]    -> read  st0cur    
+16:02:52.988  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:53.990  DEBUG   [poll]    -> read  st2mot    
+16:02:53.993  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:53.994  DEBUG   [poll]    -> read  st0cur    
+16:02:53.998  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:54.999  DEBUG   [poll]    -> read  st2mot    
+16:02:55.003  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:55.003  DEBUG   [poll]    -> read  st0cur    
+16:02:55.007  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:56.009  DEBUG   [poll]    -> read  st2mot    
+16:02:56.012  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:56.013  DEBUG   [poll]    -> read  st0cur    
+16:02:56.017  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:57.018  DEBUG   [poll]    -> read  st2mot    
+16:02:57.022  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:57.023  DEBUG   [poll]    -> read  st0cur    
+16:02:57.027  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:02:58.029  DEBUG   [poll]    -> read  st2mot    
+16:02:58.032  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:58.033  DEBUG   [poll]    -> read  st0cur    
+16:02:58.037  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:02:59.038  DEBUG   [poll]    -> read  st2mot    
+16:02:59.042  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:02:59.042  DEBUG   [poll]    -> read  st0cur    
+16:02:59.046  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:00.048  DEBUG   [poll]    -> read  st2mot    
+16:03:00.052  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:00.052  DEBUG   [poll]    -> read  st0cur    
+16:03:00.056  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:01.058  DEBUG   [poll]    -> read  st2mot    
+16:03:01.061  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:01.062  DEBUG   [poll]    -> read  st0cur    
+16:03:01.066  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:02.067  DEBUG   [poll]    -> read  st2mot    
+16:03:02.071  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:02.071  DEBUG   [poll]    -> read  st0cur    
+16:03:02.076  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:03.077  DEBUG   [poll]    -> read  st2mot    
+16:03:03.081  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:03.081  DEBUG   [poll]    -> read  st0cur    
+16:03:03.085  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:04.087  DEBUG   [poll]    -> read  st2mot    
+16:03:04.090  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:04.090  DEBUG   [poll]    -> read  st0cur    
+16:03:04.095  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:05.096  DEBUG   [poll]    -> read  st2mot    
+16:03:05.100  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:05.100  DEBUG   [poll]    -> read  st0cur    
+16:03:05.104  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:06.106  DEBUG   [poll]    -> read  st2mot    
+16:03:06.109  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:06.109  DEBUG   [poll]    -> read  st0cur    
+16:03:06.114  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:07.115  DEBUG   [poll]    -> read  st2mot    
+16:03:07.119  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:07.119  DEBUG   [poll]    -> read  st0cur    
+16:03:07.123  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:08.125  DEBUG   [poll]    -> read  st2mot    
+16:03:08.128  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:08.129  DEBUG   [poll]    -> read  st0cur    
+16:03:08.133  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:09.134  DEBUG   [poll]    -> read  st2mot    
+16:03:09.138  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:09.138  DEBUG   [poll]    -> read  st0cur    
+16:03:09.142  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:10.144  DEBUG   [poll]    -> read  st2mot    
+16:03:10.147  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:10.148  DEBUG   [poll]    -> read  st0cur    
+16:03:10.152  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:11.153  DEBUG   [poll]    -> read  st2mot    
+16:03:11.157  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:11.157  DEBUG   [poll]    -> read  st0cur    
+16:03:11.161  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:12.163  DEBUG   [poll]    -> read  st2mot    
+16:03:12.166  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:12.167  DEBUG   [poll]    -> read  st0cur    
+16:03:12.171  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:13.173  DEBUG   [poll]    -> read  st2mot    
+16:03:13.176  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:13.176  DEBUG   [poll]    -> read  st0cur    
+16:03:13.180  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:14.182  DEBUG   [poll]    -> read  st2mot    
+16:03:14.185  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:14.186  DEBUG   [poll]    -> read  st0cur    
+16:03:14.190  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:15.191  DEBUG   [poll]    -> read  st2mot    
+16:03:15.195  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:15.195  DEBUG   [poll]    -> read  st0cur    
+16:03:15.199  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:16.201  DEBUG   [poll]    -> read  st2mot    
+16:03:16.204  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:16.205  DEBUG   [poll]    -> read  st0cur    
+16:03:16.209  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:17.210  DEBUG   [poll]    -> read  st2mot    
+16:03:17.214  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:17.214  DEBUG   [poll]    -> read  st0cur    
+16:03:17.219  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:18.220  DEBUG   [poll]    -> read  st2mot    
+16:03:18.223  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:18.224  DEBUG   [poll]    -> read  st0cur    
+16:03:18.228  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:19.230  DEBUG   [poll]    -> read  st2mot    
+16:03:19.233  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:19.233  DEBUG   [poll]    -> read  st0cur    
+16:03:19.238  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:20.239  DEBUG   [poll]    -> read  st2mot    
+16:03:20.242  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:20.243  DEBUG   [poll]    -> read  st0cur    
+16:03:20.247  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:21.249  DEBUG   [poll]    -> read  st2mot    
+16:03:21.252  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:21.252  DEBUG   [poll]    -> read  st0cur    
+16:03:21.257  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:22.258  DEBUG   [poll]    -> read  st2mot    
+16:03:22.262  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:22.262  DEBUG   [poll]    -> read  st0cur    
+16:03:22.266  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:23.268  DEBUG   [poll]    -> read  st2mot    
+16:03:23.271  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:23.272  DEBUG   [poll]    -> read  st0cur    
+16:03:23.276  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:24.278  DEBUG   [poll]    -> read  st2mot    
+16:03:24.281  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:24.281  DEBUG   [poll]    -> read  st0cur    
+16:03:24.286  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:25.287  DEBUG   [poll]    -> read  st2mot    
+16:03:25.290  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:25.291  DEBUG   [poll]    -> read  st0cur    
+16:03:25.295  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:26.296  DEBUG   [poll]    -> read  st2mot    
+16:03:26.300  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:26.300  DEBUG   [poll]    -> read  st0cur    
+16:03:26.304  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:27.306  DEBUG   [poll]    -> read  st2mot    
+16:03:27.309  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:27.310  DEBUG   [poll]    -> read  st0cur    
+16:03:27.314  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:28.316  DEBUG   [poll]    -> read  st2mot    
+16:03:28.319  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:28.319  DEBUG   [poll]    -> read  st0cur    
+16:03:28.324  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:29.325  DEBUG   [poll]    -> read  st2mot    
+16:03:29.328  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:29.329  DEBUG   [poll]    -> read  st0cur    
+16:03:29.333  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:30.335  DEBUG   [poll]    -> read  st2mot    
+16:03:30.338  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:30.338  DEBUG   [poll]    -> read  st0cur    
+16:03:30.343  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:31.344  DEBUG   [poll]    -> read  st2mot    
+16:03:31.348  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:31.348  DEBUG   [poll]    -> read  st0cur    
+16:03:31.352  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:32.354  DEBUG   [poll]    -> read  st2mot    
+16:03:32.357  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:32.358  DEBUG   [poll]    -> read  st0cur    
+16:03:32.362  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:33.364  DEBUG   [poll]    -> read  st2mot    
+16:03:33.367  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:33.367  DEBUG   [poll]    -> read  st0cur    
+16:03:33.372  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:34.373  DEBUG   [poll]    -> read  st2mot    
+16:03:34.377  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:34.377  DEBUG   [poll]    -> read  st0cur    
+16:03:34.381  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:35.382  DEBUG   [poll]    -> read  st2mot    
+16:03:35.386  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:35.386  DEBUG   [poll]    -> read  st0cur    
+16:03:35.390  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:36.392  DEBUG   [poll]    -> read  st2mot    
+16:03:36.396  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:36.396  DEBUG   [poll]    -> read  st0cur    
+16:03:36.400  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:37.402  DEBUG   [poll]    -> read  st2mot    
+16:03:37.405  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:37.406  DEBUG   [poll]    -> read  st0cur    
+16:03:37.410  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:38.411  DEBUG   [poll]    -> read  st2mot    
+16:03:38.415  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:38.415  DEBUG   [poll]    -> read  st0cur    
+16:03:38.419  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:39.421  DEBUG   [poll]    -> read  st2mot    
+16:03:39.424  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:39.425  DEBUG   [poll]    -> read  st0cur    
+16:03:39.429  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:40.430  DEBUG   [poll]    -> read  st2mot    
+16:03:40.433  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:40.434  DEBUG   [poll]    -> read  st0cur    
+16:03:40.437  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:40.482  INFO    client connected
+16:03:40.482  DEBUG   [client]  -> write cntl3mot   data=['0x00', '0x00']
+16:03:40.486  DEBUG   [client]  -> write cntl3mot   data=['0x03', '0xe8']
+16:03:40.489  DEBUG   [client]  -> read  st2mot    
+16:03:40.492  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:40.493  DEBUG   [client]  -> read  st0cur    
+16:03:40.497  DEBUG   [client]  <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:40.690  DEBUG   [client]  -> read  st2mot    
+16:03:40.693  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:40.890  DEBUG   [client]  -> read  st2mot    
+16:03:40.893  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:41.090  DEBUG   [client]  -> read  st2mot    
+16:03:41.093  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:41.290  DEBUG   [client]  -> read  st2mot    
+16:03:41.294  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:41.439  DEBUG   [poll]    -> read  st2mot    
+16:03:41.442  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x90', '0x01']
+16:03:41.443  DEBUG   [poll]    -> read  st0cur    
+16:03:41.447  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:41.490  DEBUG   [client]  -> read  st2mot    
+16:03:41.493  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x90', '0x01']
+16:03:41.495  DEBUG   [client]  -> read  st0cur    
+16:03:41.499  DEBUG   [client]  <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:41.690  DEBUG   [client]  -> read  st2mot    
+16:03:41.694  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x20', '0x03']
+16:03:41.890  DEBUG   [client]  -> read  st2mot    
+16:03:41.894  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x39', '0x03']
+16:03:42.090  DEBUG   [client]  -> read  st2mot    
+16:03:42.094  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:42.290  DEBUG   [client]  -> read  st2mot    
+16:03:42.294  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x9d', '0x03']
+16:03:42.448  DEBUG   [poll]    -> read  st2mot    
+16:03:42.452  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:03:42.454  DEBUG   [poll]    -> read  st0cur    
+16:03:42.458  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf5', '0x01', '0xf6', '0x01']
+16:03:42.490  DEBUG   [client]  -> read  st2mot    
+16:03:42.493  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:03:42.495  DEBUG   [client]  -> read  st0cur    
+16:03:42.499  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf5', '0x01', '0xf6', '0x01']
+16:03:42.690  DEBUG   [client]  -> read  st2mot    
+16:03:42.694  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:03:42.890  DEBUG   [client]  -> read  st2mot    
+16:03:42.894  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:03:43.090  DEBUG   [client]  -> read  st2mot    
+16:03:43.094  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:03:43.290  DEBUG   [client]  -> read  st2mot    
+16:03:43.294  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:43.460  DEBUG   [poll]    -> read  st2mot    
+16:03:43.463  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:43.464  DEBUG   [poll]    -> read  st0cur    
+16:03:43.468  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:03:43.490  DEBUG   [client]  -> read  st2mot    
+16:03:43.494  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:43.495  DEBUG   [client]  -> read  st0cur    
+16:03:43.500  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:03:43.690  DEBUG   [client]  -> read  st2mot    
+16:03:43.694  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:43.890  DEBUG   [client]  -> read  st2mot    
+16:03:43.894  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:03:44.090  DEBUG   [client]  -> read  st2mot    
+16:03:44.093  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:03:44.290  DEBUG   [client]  -> read  st2mot    
+16:03:44.294  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:03:44.469  DEBUG   [poll]    -> read  st2mot    
+16:03:44.473  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xb6', '0x03']
+16:03:44.473  DEBUG   [poll]    -> read  st0cur    
+16:03:44.477  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:03:44.490  DEBUG   [client]  -> read  st2mot    
+16:03:44.493  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xb6', '0x03']
+16:03:44.495  DEBUG   [client]  -> read  st0cur    
+16:03:44.499  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:03:44.690  DEBUG   [client]  -> read  st2mot    
+16:03:44.694  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x1a', '0x04']
+16:03:44.890  DEBUG   [client]  -> read  st2mot    
+16:03:44.894  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:03:45.090  DEBUG   [client]  -> read  st2mot    
+16:03:45.094  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:03:45.290  DEBUG   [client]  -> read  st2mot    
+16:03:45.294  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:45.479  DEBUG   [poll]    -> read  st2mot    
+16:03:45.482  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:45.483  DEBUG   [poll]    -> read  st0cur    
+16:03:45.487  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:03:45.490  DEBUG   [client]  -> read  st2mot    
+16:03:45.494  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:45.495  DEBUG   [client]  -> read  st0cur    
+16:03:45.500  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:03:45.690  DEBUG   [client]  -> read  st2mot    
+16:03:45.694  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:45.890  DEBUG   [client]  -> read  st2mot    
+16:03:45.894  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:03:46.090  DEBUG   [client]  -> read  st2mot    
+16:03:46.094  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:46.290  DEBUG   [client]  -> read  st2mot    
+16:03:46.294  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:46.488  DEBUG   [poll]    -> read  st2mot    
+16:03:46.492  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:03:46.492  DEBUG   [poll]    -> read  st0cur    
+16:03:46.497  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf8', '0x01', '0xf6', '0x01']
+16:03:46.497  DEBUG   [client]  -> read  st2mot    
+16:03:46.500  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:03:46.502  DEBUG   [client]  -> read  st0cur    
+16:03:46.507  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf8', '0x01', '0xf6', '0x01']
+16:03:46.690  DEBUG   [client]  -> read  st2mot    
+16:03:46.694  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:46.890  DEBUG   [client]  -> read  st2mot    
+16:03:46.894  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:47.090  DEBUG   [client]  -> read  st2mot    
+16:03:47.094  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:47.290  DEBUG   [client]  -> read  st2mot    
+16:03:47.294  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:47.494  DEBUG   [client]  -> read  st2mot    
+16:03:47.498  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:47.498  DEBUG   [poll]    -> read  st2mot    
+16:03:47.502  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:47.502  DEBUG   [poll]    -> read  st0cur    
+16:03:47.507  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:03:47.507  DEBUG   [client]  -> read  st0cur    
+16:03:47.511  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:03:47.690  DEBUG   [client]  -> read  st2mot    
+16:03:47.694  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:03:47.890  DEBUG   [client]  -> read  st2mot    
+16:03:47.894  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:03:48.090  DEBUG   [client]  -> read  st2mot    
+16:03:48.094  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:03:48.290  DEBUG   [client]  -> read  st2mot    
+16:03:48.294  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x1a', '0x04']
+16:03:48.296  DEBUG   [client]  -> write cntl3mot   data=['0x00', '0x00']
+16:03:48.300  WARNING client disconnected — stopping motor
+16:03:48.301  DEBUG   [client]  -> write cntl3mot   data=['0x00', '0x00']
+16:03:48.305  INFO    client disconnected
+16:03:48.508  DEBUG   [poll]    -> read  st2mot    
+16:03:48.512  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x84', '0x03']
+16:03:48.512  DEBUG   [poll]    -> read  st0cur    
+16:03:48.516  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf7', '0x01', '0xf5', '0x01']
+16:03:49.518  DEBUG   [poll]    -> read  st2mot    
+16:03:49.521  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xe1', '0x00']
+16:03:49.522  DEBUG   [poll]    -> read  st0cur    
+16:03:49.526  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf7', '0x01', '0xf9', '0x01']
+16:03:50.527  DEBUG   [poll]    -> read  st2mot    
+16:03:50.531  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:50.531  DEBUG   [poll]    -> read  st0cur    
+16:03:50.535  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xff', '0x01', '0xfc', '0x01']
+16:03:51.537  DEBUG   [poll]    -> read  st2mot    
+16:03:51.540  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:51.541  DEBUG   [poll]    -> read  st0cur    
+16:03:51.545  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:52.547  DEBUG   [poll]    -> read  st2mot    
+16:03:52.550  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:52.551  DEBUG   [poll]    -> read  st0cur    
+16:03:52.555  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:53.557  DEBUG   [poll]    -> read  st2mot    
+16:03:53.560  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:53.560  DEBUG   [poll]    -> read  st0cur    
+16:03:53.565  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:54.566  DEBUG   [poll]    -> read  st2mot    
+16:03:54.570  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:54.570  DEBUG   [poll]    -> read  st0cur    
+16:03:54.574  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:55.576  DEBUG   [poll]    -> read  st2mot    
+16:03:55.579  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:55.579  DEBUG   [poll]    -> read  st0cur    
+16:03:55.584  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:56.585  DEBUG   [poll]    -> read  st2mot    
+16:03:56.588  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:56.589  DEBUG   [poll]    -> read  st0cur    
+16:03:56.593  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:57.594  DEBUG   [poll]    -> read  st2mot    
+16:03:57.598  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:57.599  DEBUG   [poll]    -> read  st0cur    
+16:03:57.603  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:03:58.604  DEBUG   [poll]    -> read  st2mot    
+16:03:58.608  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:58.608  DEBUG   [poll]    -> read  st0cur    
+16:03:58.612  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:03:59.614  DEBUG   [poll]    -> read  st2mot    
+16:03:59.617  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:03:59.618  DEBUG   [poll]    -> read  st0cur    
+16:03:59.622  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:00.624  DEBUG   [poll]    -> read  st2mot    
+16:04:00.627  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:00.628  DEBUG   [poll]    -> read  st0cur    
+16:04:00.632  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:01.633  DEBUG   [poll]    -> read  st2mot    
+16:04:01.637  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:01.637  DEBUG   [poll]    -> read  st0cur    
+16:04:01.642  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:02.643  DEBUG   [poll]    -> read  st2mot    
+16:04:02.647  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:02.647  DEBUG   [poll]    -> read  st0cur    
+16:04:02.651  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:03.653  DEBUG   [poll]    -> read  st2mot    
+16:04:03.656  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:03.656  DEBUG   [poll]    -> read  st0cur    
+16:04:03.661  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:04.662  DEBUG   [poll]    -> read  st2mot    
+16:04:04.666  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:04.666  DEBUG   [poll]    -> read  st0cur    
+16:04:04.670  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:05.672  DEBUG   [poll]    -> read  st2mot    
+16:04:05.675  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:05.675  DEBUG   [poll]    -> read  st0cur    
+16:04:05.680  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:06.681  DEBUG   [poll]    -> read  st2mot    
+16:04:06.685  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:06.685  DEBUG   [poll]    -> read  st0cur    
+16:04:06.689  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:07.691  DEBUG   [poll]    -> read  st2mot    
+16:04:07.694  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:07.695  DEBUG   [poll]    -> read  st0cur    
+16:04:07.699  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:08.700  DEBUG   [poll]    -> read  st2mot    
+16:04:08.704  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:08.704  DEBUG   [poll]    -> read  st0cur    
+16:04:08.708  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:09.710  DEBUG   [poll]    -> read  st2mot    
+16:04:09.713  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:09.714  DEBUG   [poll]    -> read  st0cur    
+16:04:09.718  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:10.719  DEBUG   [poll]    -> read  st2mot    
+16:04:10.723  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:10.723  DEBUG   [poll]    -> read  st0cur    
+16:04:10.727  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:11.729  DEBUG   [poll]    -> read  st2mot    
+16:04:11.732  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:11.733  DEBUG   [poll]    -> read  st0cur    
+16:04:11.737  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:12.738  DEBUG   [poll]    -> read  st2mot    
+16:04:12.742  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:12.742  DEBUG   [poll]    -> read  st0cur    
+16:04:12.746  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:13.748  DEBUG   [poll]    -> read  st2mot    
+16:04:13.751  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:13.752  DEBUG   [poll]    -> read  st0cur    
+16:04:13.756  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:14.757  DEBUG   [poll]    -> read  st2mot    
+16:04:14.761  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:14.761  DEBUG   [poll]    -> read  st0cur    
+16:04:14.765  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:15.767  DEBUG   [poll]    -> read  st2mot    
+16:04:15.770  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:15.770  DEBUG   [poll]    -> read  st0cur    
+16:04:15.775  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:16.776  DEBUG   [poll]    -> read  st2mot    
+16:04:16.780  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:16.780  DEBUG   [poll]    -> read  st0cur    
+16:04:16.784  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:17.786  DEBUG   [poll]    -> read  st2mot    
+16:04:17.789  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:17.790  DEBUG   [poll]    -> read  st0cur    
+16:04:17.794  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:18.340  INFO    client connected
+16:04:18.796  DEBUG   [poll]    -> read  st2mot    
+16:04:18.799  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:18.799  DEBUG   [poll]    -> read  st0cur    
+16:04:18.803  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:19.804  DEBUG   [poll]    -> read  st2mot    
+16:04:19.808  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:19.808  DEBUG   [poll]    -> read  st0cur    
+16:04:19.812  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:20.814  DEBUG   [poll]    -> read  st2mot    
+16:04:20.817  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:20.818  DEBUG   [poll]    -> read  st0cur    
+16:04:20.822  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:21.823  DEBUG   [poll]    -> read  st2mot    
+16:04:21.827  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:21.827  DEBUG   [poll]    -> read  st0cur    
+16:04:21.831  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:22.402  WARNING client disconnected — stopping motor
+16:04:22.403  DEBUG   [client]  -> write cntl3mot   data=['0x00', '0x00']
+16:04:22.407  INFO    client disconnected
+16:04:22.833  DEBUG   [poll]    -> read  st2mot    
+16:04:22.836  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:22.837  DEBUG   [poll]    -> read  st0cur    
+16:04:22.842  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:23.843  DEBUG   [poll]    -> read  st2mot    
+16:04:23.847  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:23.847  DEBUG   [poll]    -> read  st0cur    
+16:04:23.851  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:24.853  DEBUG   [poll]    -> read  st2mot    
+16:04:24.856  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:24.857  DEBUG   [poll]    -> read  st0cur    
+16:04:24.861  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:25.862  DEBUG   [poll]    -> read  st2mot    
+16:04:25.866  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:25.866  DEBUG   [poll]    -> read  st0cur    
+16:04:25.870  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:26.872  DEBUG   [poll]    -> read  st2mot    
+16:04:26.875  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:26.876  DEBUG   [poll]    -> read  st0cur    
+16:04:26.880  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:27.881  DEBUG   [poll]    -> read  st2mot    
+16:04:27.885  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:27.885  DEBUG   [poll]    -> read  st0cur    
+16:04:27.890  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:28.891  DEBUG   [poll]    -> read  st2mot    
+16:04:28.895  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:28.895  DEBUG   [poll]    -> read  st0cur    
+16:04:28.899  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:29.901  DEBUG   [poll]    -> read  st2mot    
+16:04:29.904  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:29.904  DEBUG   [poll]    -> read  st0cur    
+16:04:29.909  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:30.910  DEBUG   [poll]    -> read  st2mot    
+16:04:30.913  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:30.914  DEBUG   [poll]    -> read  st0cur    
+16:04:30.918  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:31.919  DEBUG   [poll]    -> read  st2mot    
+16:04:31.923  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:31.923  DEBUG   [poll]    -> read  st0cur    
+16:04:31.927  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:32.929  DEBUG   [poll]    -> read  st2mot    
+16:04:32.932  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:32.933  DEBUG   [poll]    -> read  st0cur    
+16:04:32.937  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:33.939  DEBUG   [poll]    -> read  st2mot    
+16:04:33.942  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:33.942  DEBUG   [poll]    -> read  st0cur    
+16:04:33.947  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:34.948  DEBUG   [poll]    -> read  st2mot    
+16:04:34.951  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:34.952  DEBUG   [poll]    -> read  st0cur    
+16:04:34.956  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:35.957  DEBUG   [poll]    -> read  st2mot    
+16:04:35.961  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:35.961  DEBUG   [poll]    -> read  st0cur    
+16:04:35.965  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:36.967  DEBUG   [poll]    -> read  st2mot    
+16:04:36.970  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:36.971  DEBUG   [poll]    -> read  st0cur    
+16:04:36.975  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:37.976  DEBUG   [poll]    -> read  st2mot    
+16:04:37.980  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:37.980  DEBUG   [poll]    -> read  st0cur    
+16:04:37.984  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:38.986  DEBUG   [poll]    -> read  st2mot    
+16:04:38.989  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:38.990  DEBUG   [poll]    -> read  st0cur    
+16:04:38.994  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:39.995  DEBUG   [poll]    -> read  st2mot    
+16:04:39.999  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:39.999  DEBUG   [poll]    -> read  st0cur    
+16:04:40.003  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:41.005  DEBUG   [poll]    -> read  st2mot    
+16:04:41.008  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:41.009  DEBUG   [poll]    -> read  st0cur    
+16:04:41.013  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:42.014  DEBUG   [poll]    -> read  st2mot    
+16:04:42.018  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:42.018  DEBUG   [poll]    -> read  st0cur    
+16:04:42.022  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:43.024  DEBUG   [poll]    -> read  st2mot    
+16:04:43.027  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:43.028  DEBUG   [poll]    -> read  st0cur    
+16:04:43.032  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:44.034  DEBUG   [poll]    -> read  st2mot    
+16:04:44.037  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:44.037  DEBUG   [poll]    -> read  st0cur    
+16:04:44.041  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:45.043  DEBUG   [poll]    -> read  st2mot    
+16:04:45.046  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:45.047  DEBUG   [poll]    -> read  st0cur    
+16:04:45.051  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:46.052  DEBUG   [poll]    -> read  st2mot    
+16:04:46.056  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:46.056  DEBUG   [poll]    -> read  st0cur    
+16:04:46.060  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:47.062  DEBUG   [poll]    -> read  st2mot    
+16:04:47.065  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:47.065  DEBUG   [poll]    -> read  st0cur    
+16:04:47.069  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:48.071  DEBUG   [poll]    -> read  st2mot    
+16:04:48.075  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:48.075  DEBUG   [poll]    -> read  st0cur    
+16:04:48.079  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:49.081  DEBUG   [poll]    -> read  st2mot    
+16:04:49.084  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:49.085  DEBUG   [poll]    -> read  st0cur    
+16:04:49.089  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:50.091  DEBUG   [poll]    -> read  st2mot    
+16:04:50.094  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:50.095  DEBUG   [poll]    -> read  st0cur    
+16:04:50.099  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:51.100  DEBUG   [poll]    -> read  st2mot    
+16:04:51.103  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:51.104  DEBUG   [poll]    -> read  st0cur    
+16:04:51.108  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:52.109  DEBUG   [poll]    -> read  st2mot    
+16:04:52.113  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:52.113  DEBUG   [poll]    -> read  st0cur    
+16:04:52.117  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:53.119  DEBUG   [poll]    -> read  st2mot    
+16:04:53.122  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:53.123  DEBUG   [poll]    -> read  st0cur    
+16:04:53.127  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:54.129  DEBUG   [poll]    -> read  st2mot    
+16:04:54.132  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:54.132  DEBUG   [poll]    -> read  st0cur    
+16:04:54.137  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:55.138  DEBUG   [poll]    -> read  st2mot    
+16:04:55.142  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:55.142  DEBUG   [poll]    -> read  st0cur    
+16:04:55.146  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:56.148  DEBUG   [poll]    -> read  st2mot    
+16:04:56.151  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:56.151  DEBUG   [poll]    -> read  st0cur    
+16:04:56.156  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:04:57.157  DEBUG   [poll]    -> read  st2mot    
+16:04:57.161  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:57.161  DEBUG   [poll]    -> read  st0cur    
+16:04:57.165  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:58.166  DEBUG   [poll]    -> read  st2mot    
+16:04:58.170  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:58.171  DEBUG   [poll]    -> read  st0cur    
+16:04:58.175  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:04:59.177  DEBUG   [poll]    -> read  st2mot    
+16:04:59.180  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:04:59.180  DEBUG   [poll]    -> read  st0cur    
+16:04:59.185  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:00.186  DEBUG   [poll]    -> read  st2mot    
+16:05:00.190  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:00.190  DEBUG   [poll]    -> read  st0cur    
+16:05:00.194  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:01.196  DEBUG   [poll]    -> read  st2mot    
+16:05:01.199  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:01.200  DEBUG   [poll]    -> read  st0cur    
+16:05:01.204  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:02.205  DEBUG   [poll]    -> read  st2mot    
+16:05:02.209  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:02.209  DEBUG   [poll]    -> read  st0cur    
+16:05:02.213  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:03.215  DEBUG   [poll]    -> read  st2mot    
+16:05:03.218  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:03.219  DEBUG   [poll]    -> read  st0cur    
+16:05:03.223  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:04.225  DEBUG   [poll]    -> read  st2mot    
+16:05:04.228  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:04.228  DEBUG   [poll]    -> read  st0cur    
+16:05:04.233  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:05.234  DEBUG   [poll]    -> read  st2mot    
+16:05:05.237  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:05.238  DEBUG   [poll]    -> read  st0cur    
+16:05:05.242  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:06.243  DEBUG   [poll]    -> read  st2mot    
+16:05:06.247  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:06.247  DEBUG   [poll]    -> read  st0cur    
+16:05:06.251  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:07.253  DEBUG   [poll]    -> read  st2mot    
+16:05:07.256  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:07.256  DEBUG   [poll]    -> read  st0cur    
+16:05:07.261  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:08.262  DEBUG   [poll]    -> read  st2mot    
+16:05:08.266  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:08.266  DEBUG   [poll]    -> read  st0cur    
+16:05:08.270  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:09.272  DEBUG   [poll]    -> read  st2mot    
+16:05:09.275  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:09.275  DEBUG   [poll]    -> read  st0cur    
+16:05:09.280  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:10.281  DEBUG   [poll]    -> read  st2mot    
+16:05:10.285  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:10.285  DEBUG   [poll]    -> read  st0cur    
+16:05:10.289  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:11.291  DEBUG   [poll]    -> read  st2mot    
+16:05:11.294  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:11.295  DEBUG   [poll]    -> read  st0cur    
+16:05:11.299  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:12.300  DEBUG   [poll]    -> read  st2mot    
+16:05:12.303  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:12.304  DEBUG   [poll]    -> read  st0cur    
+16:05:12.308  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:13.310  DEBUG   [poll]    -> read  st2mot    
+16:05:13.313  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:13.314  DEBUG   [poll]    -> read  st0cur    
+16:05:13.318  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:14.319  DEBUG   [poll]    -> read  st2mot    
+16:05:14.323  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:14.323  DEBUG   [poll]    -> read  st0cur    
+16:05:14.327  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:15.329  DEBUG   [poll]    -> read  st2mot    
+16:05:15.332  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:15.333  DEBUG   [poll]    -> read  st0cur    
+16:05:15.337  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:16.338  DEBUG   [poll]    -> read  st2mot    
+16:05:16.342  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:16.342  DEBUG   [poll]    -> read  st0cur    
+16:05:16.346  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:17.348  DEBUG   [poll]    -> read  st2mot    
+16:05:17.351  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:17.352  DEBUG   [poll]    -> read  st0cur    
+16:05:17.356  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:18.357  DEBUG   [poll]    -> read  st2mot    
+16:05:18.361  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:18.361  DEBUG   [poll]    -> read  st0cur    
+16:05:18.366  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:19.367  DEBUG   [poll]    -> read  st2mot    
+16:05:19.371  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:19.371  DEBUG   [poll]    -> read  st0cur    
+16:05:19.375  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:20.377  DEBUG   [poll]    -> read  st2mot    
+16:05:20.380  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:20.381  DEBUG   [poll]    -> read  st0cur    
+16:05:20.385  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:21.386  DEBUG   [poll]    -> read  st2mot    
+16:05:21.390  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:21.390  DEBUG   [poll]    -> read  st0cur    
+16:05:21.394  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:22.396  DEBUG   [poll]    -> read  st2mot    
+16:05:22.399  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:22.399  DEBUG   [poll]    -> read  st0cur    
+16:05:22.404  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:23.405  DEBUG   [poll]    -> read  st2mot    
+16:05:23.408  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:23.409  DEBUG   [poll]    -> read  st0cur    
+16:05:23.413  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:24.415  DEBUG   [poll]    -> read  st2mot    
+16:05:24.418  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:24.418  DEBUG   [poll]    -> read  st0cur    
+16:05:24.423  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:25.424  DEBUG   [poll]    -> read  st2mot    
+16:05:25.428  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:25.428  DEBUG   [poll]    -> read  st0cur    
+16:05:25.432  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:26.434  DEBUG   [poll]    -> read  st2mot    
+16:05:26.437  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:26.438  DEBUG   [poll]    -> read  st0cur    
+16:05:26.442  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:27.443  DEBUG   [poll]    -> read  st2mot    
+16:05:27.447  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:27.447  DEBUG   [poll]    -> read  st0cur    
+16:05:27.451  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:28.453  DEBUG   [poll]    -> read  st2mot    
+16:05:28.456  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:28.457  DEBUG   [poll]    -> read  st0cur    
+16:05:28.461  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:29.463  DEBUG   [poll]    -> read  st2mot    
+16:05:29.466  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:29.467  DEBUG   [poll]    -> read  st0cur    
+16:05:29.471  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:30.472  DEBUG   [poll]    -> read  st2mot    
+16:05:30.476  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:30.476  DEBUG   [poll]    -> read  st0cur    
+16:05:30.480  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:31.482  DEBUG   [poll]    -> read  st2mot    
+16:05:31.485  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:31.486  DEBUG   [poll]    -> read  st0cur    
+16:05:31.490  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:32.491  DEBUG   [poll]    -> read  st2mot    
+16:05:32.495  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:32.495  DEBUG   [poll]    -> read  st0cur    
+16:05:32.499  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:33.501  DEBUG   [poll]    -> read  st2mot    
+16:05:33.504  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:33.505  DEBUG   [poll]    -> read  st0cur    
+16:05:33.509  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:34.510  DEBUG   [poll]    -> read  st2mot    
+16:05:34.514  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:34.514  DEBUG   [poll]    -> read  st0cur    
+16:05:34.518  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:35.520  DEBUG   [poll]    -> read  st2mot    
+16:05:35.523  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:35.524  DEBUG   [poll]    -> read  st0cur    
+16:05:35.528  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:36.529  DEBUG   [poll]    -> read  st2mot    
+16:05:36.533  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:36.533  DEBUG   [poll]    -> read  st0cur    
+16:05:36.537  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:37.539  DEBUG   [poll]    -> read  st2mot    
+16:05:37.542  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:37.542  DEBUG   [poll]    -> read  st0cur    
+16:05:37.547  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:38.548  DEBUG   [poll]    -> read  st2mot    
+16:05:38.552  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:38.552  DEBUG   [poll]    -> read  st0cur    
+16:05:38.556  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:39.558  DEBUG   [poll]    -> read  st2mot    
+16:05:39.561  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:39.562  DEBUG   [poll]    -> read  st0cur    
+16:05:39.566  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:40.568  DEBUG   [poll]    -> read  st2mot    
+16:05:40.571  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:40.571  DEBUG   [poll]    -> read  st0cur    
+16:05:40.576  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:41.577  DEBUG   [poll]    -> read  st2mot    
+16:05:41.580  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:41.581  DEBUG   [poll]    -> read  st0cur    
+16:05:41.585  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:42.587  DEBUG   [poll]    -> read  st2mot    
+16:05:42.590  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:42.590  DEBUG   [poll]    -> read  st0cur    
+16:05:42.594  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:43.596  DEBUG   [poll]    -> read  st2mot    
+16:05:43.599  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:43.600  DEBUG   [poll]    -> read  st0cur    
+16:05:43.604  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:44.606  DEBUG   [poll]    -> read  st2mot    
+16:05:44.609  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:44.610  DEBUG   [poll]    -> read  st0cur    
+16:05:44.614  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:45.615  DEBUG   [poll]    -> read  st2mot    
+16:05:45.619  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:45.619  DEBUG   [poll]    -> read  st0cur    
+16:05:45.623  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:46.625  DEBUG   [poll]    -> read  st2mot    
+16:05:46.628  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:46.628  DEBUG   [poll]    -> read  st0cur    
+16:05:46.632  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:47.634  DEBUG   [poll]    -> read  st2mot    
+16:05:47.637  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:47.638  DEBUG   [poll]    -> read  st0cur    
+16:05:47.642  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:48.643  DEBUG   [poll]    -> read  st2mot    
+16:05:48.647  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:48.647  DEBUG   [poll]    -> read  st0cur    
+16:05:48.652  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:49.653  DEBUG   [poll]    -> read  st2mot    
+16:05:49.656  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:49.657  DEBUG   [poll]    -> read  st0cur    
+16:05:49.661  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:50.662  DEBUG   [poll]    -> read  st2mot    
+16:05:50.666  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:50.666  DEBUG   [poll]    -> read  st0cur    
+16:05:50.671  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:51.672  DEBUG   [poll]    -> read  st2mot    
+16:05:51.676  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:51.676  DEBUG   [poll]    -> read  st0cur    
+16:05:51.680  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:52.682  DEBUG   [poll]    -> read  st2mot    
+16:05:52.685  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:52.686  DEBUG   [poll]    -> read  st0cur    
+16:05:52.690  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:53.691  DEBUG   [poll]    -> read  st2mot    
+16:05:53.695  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:53.695  DEBUG   [poll]    -> read  st0cur    
+16:05:53.699  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:54.701  DEBUG   [poll]    -> read  st2mot    
+16:05:54.704  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:54.705  DEBUG   [poll]    -> read  st0cur    
+16:05:54.709  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:55.711  DEBUG   [poll]    -> read  st2mot    
+16:05:55.714  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:55.714  DEBUG   [poll]    -> read  st0cur    
+16:05:55.718  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:56.720  DEBUG   [poll]    -> read  st2mot    
+16:05:56.723  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:56.724  DEBUG   [poll]    -> read  st0cur    
+16:05:56.728  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:05:57.729  DEBUG   [poll]    -> read  st2mot    
+16:05:57.733  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:57.733  DEBUG   [poll]    -> read  st0cur    
+16:05:57.737  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:58.739  DEBUG   [poll]    -> read  st2mot    
+16:05:58.742  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:58.743  DEBUG   [poll]    -> read  st0cur    
+16:05:58.747  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:05:59.749  DEBUG   [poll]    -> read  st2mot    
+16:05:59.752  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:05:59.753  DEBUG   [poll]    -> read  st0cur    
+16:05:59.757  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:00.758  DEBUG   [poll]    -> read  st2mot    
+16:06:00.762  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:00.762  DEBUG   [poll]    -> read  st0cur    
+16:06:00.766  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:01.768  DEBUG   [poll]    -> read  st2mot    
+16:06:01.771  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:01.772  DEBUG   [poll]    -> read  st0cur    
+16:06:01.776  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:02.777  DEBUG   [poll]    -> read  st2mot    
+16:06:02.781  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:02.781  DEBUG   [poll]    -> read  st0cur    
+16:06:02.785  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:03.787  DEBUG   [poll]    -> read  st2mot    
+16:06:03.790  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:03.791  DEBUG   [poll]    -> read  st0cur    
+16:06:03.795  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:04.797  DEBUG   [poll]    -> read  st2mot    
+16:06:04.800  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:04.800  DEBUG   [poll]    -> read  st0cur    
+16:06:04.805  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:05.806  DEBUG   [poll]    -> read  st2mot    
+16:06:05.809  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:05.810  DEBUG   [poll]    -> read  st0cur    
+16:06:05.814  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:06.816  DEBUG   [poll]    -> read  st2mot    
+16:06:06.819  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:06.819  DEBUG   [poll]    -> read  st0cur    
+16:06:06.823  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:07.825  DEBUG   [poll]    -> read  st2mot    
+16:06:07.828  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:07.829  DEBUG   [poll]    -> read  st0cur    
+16:06:07.833  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:08.834  DEBUG   [poll]    -> read  st2mot    
+16:06:08.838  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:08.838  DEBUG   [poll]    -> read  st0cur    
+16:06:08.843  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:09.844  DEBUG   [poll]    -> read  st2mot    
+16:06:09.848  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:09.848  DEBUG   [poll]    -> read  st0cur    
+16:06:09.852  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:10.854  DEBUG   [poll]    -> read  st2mot    
+16:06:10.857  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:10.857  DEBUG   [poll]    -> read  st0cur    
+16:06:10.862  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:11.863  DEBUG   [poll]    -> read  st2mot    
+16:06:11.866  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:11.867  DEBUG   [poll]    -> read  st0cur    
+16:06:11.871  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:12.872  DEBUG   [poll]    -> read  st2mot    
+16:06:12.876  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:12.876  DEBUG   [poll]    -> read  st0cur    
+16:06:12.880  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:13.882  DEBUG   [poll]    -> read  st2mot    
+16:06:13.885  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:13.886  DEBUG   [poll]    -> read  st0cur    
+16:06:13.890  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:14.892  DEBUG   [poll]    -> read  st2mot    
+16:06:14.895  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:14.895  DEBUG   [poll]    -> read  st0cur    
+16:06:14.899  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:15.901  DEBUG   [poll]    -> read  st2mot    
+16:06:15.904  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:15.905  DEBUG   [poll]    -> read  st0cur    
+16:06:15.909  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:16.910  DEBUG   [poll]    -> read  st2mot    
+16:06:16.914  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:16.914  DEBUG   [poll]    -> read  st0cur    
+16:06:16.918  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:17.920  DEBUG   [poll]    -> read  st2mot    
+16:06:17.923  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:17.923  DEBUG   [poll]    -> read  st0cur    
+16:06:17.928  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:18.929  DEBUG   [poll]    -> read  st2mot    
+16:06:18.933  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:18.933  DEBUG   [poll]    -> read  st0cur    
+16:06:18.937  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:19.939  DEBUG   [poll]    -> read  st2mot    
+16:06:19.942  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:19.943  DEBUG   [poll]    -> read  st0cur    
+16:06:19.947  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:20.948  DEBUG   [poll]    -> read  st2mot    
+16:06:20.952  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:20.952  DEBUG   [poll]    -> read  st0cur    
+16:06:20.956  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:21.958  DEBUG   [poll]    -> read  st2mot    
+16:06:21.961  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:21.962  DEBUG   [poll]    -> read  st0cur    
+16:06:21.966  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:22.968  DEBUG   [poll]    -> read  st2mot    
+16:06:22.971  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:22.972  DEBUG   [poll]    -> read  st0cur    
+16:06:22.976  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:23.977  DEBUG   [poll]    -> read  st2mot    
+16:06:23.981  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:23.981  DEBUG   [poll]    -> read  st0cur    
+16:06:23.986  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:24.987  DEBUG   [poll]    -> read  st2mot    
+16:06:24.991  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:24.991  DEBUG   [poll]    -> read  st0cur    
+16:06:24.995  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:25.997  DEBUG   [poll]    -> read  st2mot    
+16:06:26.000  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:26.000  DEBUG   [poll]    -> read  st0cur    
+16:06:26.005  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:26.389  INFO    client connected
+16:06:26.389  DEBUG   [client]  -> write cntl3mot   data=['0x00', '0x00']
+16:06:26.393  DEBUG   [client]  -> write cntl3mot   data=['0x03', '0xe8']
+16:06:26.396  DEBUG   [client]  -> read  st2mot    
+16:06:26.399  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:26.400  DEBUG   [client]  -> read  st0cur    
+16:06:26.404  DEBUG   [client]  <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:26.597  DEBUG   [client]  -> read  st2mot    
+16:06:26.600  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:26.797  DEBUG   [client]  -> read  st2mot    
+16:06:26.800  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:26.997  DEBUG   [client]  -> read  st2mot    
+16:06:27.000  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:27.006  DEBUG   [poll]    -> read  st2mot    
+16:06:27.009  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:27.010  DEBUG   [poll]    -> read  st0cur    
+16:06:27.014  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:27.197  DEBUG   [client]  -> read  st2mot    
+16:06:27.200  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:27.397  DEBUG   [client]  -> read  st2mot    
+16:06:27.400  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x26', '0x02']
+16:06:27.402  DEBUG   [client]  -> read  st0cur    
+16:06:27.406  DEBUG   [client]  <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:27.597  DEBUG   [client]  -> read  st2mot    
+16:06:27.600  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xa3', '0x02']
+16:06:27.797  DEBUG   [client]  -> read  st2mot    
+16:06:27.800  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x9d', '0x03']
+16:06:27.997  DEBUG   [client]  -> read  st2mot    
+16:06:28.001  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x9d', '0x03']
+16:06:28.016  DEBUG   [poll]    -> read  st2mot    
+16:06:28.019  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x9d', '0x03']
+16:06:28.020  DEBUG   [poll]    -> read  st0cur    
+16:06:28.024  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xfb', '0x01', '0xfb', '0x01']
+16:06:28.197  DEBUG   [client]  -> read  st2mot    
+16:06:28.201  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x9d', '0x03']
+16:06:28.397  DEBUG   [client]  -> read  st2mot    
+16:06:28.401  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:06:28.402  DEBUG   [client]  -> read  st0cur    
+16:06:28.407  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xfb', '0x01', '0xfb', '0x01']
+16:06:28.597  DEBUG   [client]  -> read  st2mot    
+16:06:28.601  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xb6', '0x03']
+16:06:28.797  DEBUG   [client]  -> read  st2mot    
+16:06:28.801  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:28.997  DEBUG   [client]  -> read  st2mot    
+16:06:29.004  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:29.026  DEBUG   [poll]    -> read  st2mot    
+16:06:29.030  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:29.030  DEBUG   [poll]    -> read  st0cur    
+16:06:29.034  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf5', '0x01', '0xf4', '0x01']
+16:06:29.197  DEBUG   [client]  -> read  st2mot    
+16:06:29.201  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:06:29.397  DEBUG   [client]  -> read  st2mot    
+16:06:29.401  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xb6', '0x03']
+16:06:29.402  DEBUG   [client]  -> read  st0cur    
+16:06:29.407  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf5', '0x01', '0xf4', '0x01']
+16:06:29.597  DEBUG   [client]  -> read  st2mot    
+16:06:29.601  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:29.797  DEBUG   [client]  -> read  st2mot    
+16:06:29.801  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:29.997  DEBUG   [client]  -> read  st2mot    
+16:06:30.001  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:30.036  DEBUG   [poll]    -> read  st2mot    
+16:06:30.039  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:30.040  DEBUG   [poll]    -> read  st0cur    
+16:06:30.044  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:06:30.197  DEBUG   [client]  -> read  st2mot    
+16:06:30.201  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:30.397  DEBUG   [client]  -> read  st2mot    
+16:06:30.401  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:06:30.402  DEBUG   [client]  -> read  st0cur    
+16:06:30.407  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf6', '0x01']
+16:06:30.597  DEBUG   [client]  -> read  st2mot    
+16:06:30.601  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:30.797  DEBUG   [client]  -> read  st2mot    
+16:06:30.801  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:06:30.997  DEBUG   [client]  -> read  st2mot    
+16:06:31.000  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:31.046  DEBUG   [poll]    -> read  st2mot    
+16:06:31.049  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:31.050  DEBUG   [poll]    -> read  st0cur    
+16:06:31.054  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf4', '0x01']
+16:06:31.197  DEBUG   [client]  -> read  st2mot    
+16:06:31.200  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:06:31.397  DEBUG   [client]  -> read  st2mot    
+16:06:31.400  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:31.402  DEBUG   [client]  -> read  st0cur    
+16:06:31.406  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf4', '0x01']
+16:06:31.597  DEBUG   [client]  -> read  st2mot    
+16:06:31.600  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:31.797  DEBUG   [client]  -> read  st2mot    
+16:06:31.801  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:31.997  DEBUG   [client]  -> read  st2mot    
+16:06:32.001  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:32.056  DEBUG   [poll]    -> read  st2mot    
+16:06:32.059  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:32.059  DEBUG   [poll]    -> read  st0cur    
+16:06:32.063  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf4', '0x01', '0xf4', '0x01']
+16:06:32.197  DEBUG   [client]  -> read  st2mot    
+16:06:32.201  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:32.397  DEBUG   [client]  -> read  st2mot    
+16:06:32.401  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:06:32.402  DEBUG   [client]  -> read  st0cur    
+16:06:32.407  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf4', '0x01', '0xf4', '0x01']
+16:06:32.597  DEBUG   [client]  -> read  st2mot    
+16:06:32.600  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:32.797  DEBUG   [client]  -> read  st2mot    
+16:06:32.801  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:32.997  DEBUG   [client]  -> read  st2mot    
+16:06:33.000  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:33.065  DEBUG   [poll]    -> read  st2mot    
+16:06:33.068  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:06:33.069  DEBUG   [poll]    -> read  st0cur    
+16:06:33.073  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf5', '0x01', '0xf5', '0x01']
+16:06:33.197  DEBUG   [client]  -> read  st2mot    
+16:06:33.200  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:33.397  DEBUG   [client]  -> read  st2mot    
+16:06:33.401  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:33.402  DEBUG   [client]  -> read  st0cur    
+16:06:33.407  DEBUG   [client]  <- read  st0cur     ret=0  data=['0xf5', '0x01', '0xf5', '0x01']
+16:06:33.597  DEBUG   [client]  -> read  st2mot    
+16:06:33.601  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xe8', '0x03']
+16:06:33.797  DEBUG   [client]  -> read  st2mot    
+16:06:33.801  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:33.997  DEBUG   [client]  -> read  st2mot    
+16:06:34.003  DEBUG   [client]  <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:06:34.074  DEBUG   [poll]    -> read  st2mot    
+16:06:34.078  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x01', '0x04']
+16:06:34.078  DEBUG   [poll]    -> read  st0cur    
+16:06:34.082  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf6', '0x01', '0xf3', '0x01']
+16:06:34.197  DEBUG   [client]  -> read  st2mot    
+16:06:34.200  DEBUG   [client]  <- read  st2mot     ret=0  data=['0xcf', '0x03']
+16:06:34.202  DEBUG   [client]  -> write cntl3mot   data=['0x00', '0x00']
+16:06:34.207  WARNING client disconnected — stopping motor
+16:06:34.207  DEBUG   [client]  -> write cntl3mot   data=['0x00', '0x00']
+16:06:34.212  INFO    client disconnected
+16:06:35.084  DEBUG   [poll]    -> read  st2mot    
+16:06:35.088  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0xc2', '0x01']
+16:06:35.088  DEBUG   [poll]    -> read  st0cur    
+16:06:35.092  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xf7', '0x01', '0xf6', '0x01']
+16:06:36.094  DEBUG   [poll]    -> read  st2mot    
+16:06:36.097  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:36.097  DEBUG   [poll]    -> read  st0cur    
+16:06:36.102  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0xfc', '0x01', '0xfb', '0x01']
+16:06:36.102  WARNING *** OBSERVED STALL SIGNATURE (not acted on yet) — current=-0.20A while rpm=0 ***
+16:06:37.104  DEBUG   [poll]    -> read  st2mot    
+16:06:37.108  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:37.108  DEBUG   [poll]    -> read  st0cur    
+16:06:37.112  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:38.114  DEBUG   [poll]    -> read  st2mot    
+16:06:38.117  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:38.118  DEBUG   [poll]    -> read  st0cur    
+16:06:38.122  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:39.123  DEBUG   [poll]    -> read  st2mot    
+16:06:39.130  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:39.131  DEBUG   [poll]    -> read  st0cur    
+16:06:39.135  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:40.136  DEBUG   [poll]    -> read  st2mot    
+16:06:40.140  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:40.140  DEBUG   [poll]    -> read  st0cur    
+16:06:40.144  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:41.146  DEBUG   [poll]    -> read  st2mot    
+16:06:41.149  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:41.149  DEBUG   [poll]    -> read  st0cur    
+16:06:41.154  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:42.155  DEBUG   [poll]    -> read  st2mot    
+16:06:42.158  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:42.159  DEBUG   [poll]    -> read  st0cur    
+16:06:42.163  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:43.165  DEBUG   [poll]    -> read  st2mot    
+16:06:43.168  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:43.168  DEBUG   [poll]    -> read  st0cur    
+16:06:43.173  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:44.174  DEBUG   [poll]    -> read  st2mot    
+16:06:44.181  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:44.181  DEBUG   [poll]    -> read  st0cur    
+16:06:44.185  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:45.187  DEBUG   [poll]    -> read  st2mot    
+16:06:45.190  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:45.191  DEBUG   [poll]    -> read  st0cur    
+16:06:45.195  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:46.196  DEBUG   [poll]    -> read  st2mot    
+16:06:46.200  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:46.200  DEBUG   [poll]    -> read  st0cur    
+16:06:46.204  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:47.206  DEBUG   [poll]    -> read  st2mot    
+16:06:47.209  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:47.209  DEBUG   [poll]    -> read  st0cur    
+16:06:47.214  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:48.215  DEBUG   [poll]    -> read  st2mot    
+16:06:48.218  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:48.219  DEBUG   [poll]    -> read  st0cur    
+16:06:48.223  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:49.225  DEBUG   [poll]    -> read  st2mot    
+16:06:49.231  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:49.232  DEBUG   [poll]    -> read  st0cur    
+16:06:49.236  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:50.237  DEBUG   [poll]    -> read  st2mot    
+16:06:50.241  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:50.241  DEBUG   [poll]    -> read  st0cur    
+16:06:50.245  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:51.247  DEBUG   [poll]    -> read  st2mot    
+16:06:51.250  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:51.250  DEBUG   [poll]    -> read  st0cur    
+16:06:51.255  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:52.256  DEBUG   [poll]    -> read  st2mot    
+16:06:52.260  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:52.260  DEBUG   [poll]    -> read  st0cur    
+16:06:52.264  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:53.266  DEBUG   [poll]    -> read  st2mot    
+16:06:53.269  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:53.269  DEBUG   [poll]    -> read  st0cur    
+16:06:53.274  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:54.275  DEBUG   [poll]    -> read  st2mot    
+16:06:54.282  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:54.282  DEBUG   [poll]    -> read  st0cur    
+16:06:54.287  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:06:55.288  DEBUG   [poll]    -> read  st2mot    
+16:06:55.291  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:55.292  DEBUG   [poll]    -> read  st0cur    
+16:06:55.296  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:56.298  DEBUG   [poll]    -> read  st2mot    
+16:06:56.301  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:56.301  DEBUG   [poll]    -> read  st0cur    
+16:06:56.306  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:57.307  DEBUG   [poll]    -> read  st2mot    
+16:06:57.311  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:57.311  DEBUG   [poll]    -> read  st0cur    
+16:06:57.316  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:58.317  DEBUG   [poll]    -> read  st2mot    
+16:06:58.321  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:58.321  DEBUG   [poll]    -> read  st0cur    
+16:06:58.325  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:06:59.327  DEBUG   [poll]    -> read  st2mot    
+16:06:59.330  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:06:59.330  DEBUG   [poll]    -> read  st0cur    
+16:06:59.335  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:00.336  DEBUG   [poll]    -> read  st2mot    
+16:07:00.340  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:00.340  DEBUG   [poll]    -> read  st0cur    
+16:07:00.344  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:01.346  DEBUG   [poll]    -> read  st2mot    
+16:07:01.349  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:01.350  DEBUG   [poll]    -> read  st0cur    
+16:07:01.354  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:02.355  DEBUG   [poll]    -> read  st2mot    
+16:07:02.359  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:02.359  DEBUG   [poll]    -> read  st0cur    
+16:07:02.363  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:03.365  DEBUG   [poll]    -> read  st2mot    
+16:07:03.368  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:03.368  DEBUG   [poll]    -> read  st0cur    
+16:07:03.373  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:04.374  DEBUG   [poll]    -> read  st2mot    
+16:07:04.379  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:04.379  DEBUG   [poll]    -> read  st0cur    
+16:07:04.383  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:05.385  DEBUG   [poll]    -> read  st2mot    
+16:07:05.388  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:05.389  DEBUG   [poll]    -> read  st0cur    
+16:07:05.393  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:06.394  DEBUG   [poll]    -> read  st2mot    
+16:07:06.398  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:06.398  DEBUG   [poll]    -> read  st0cur    
+16:07:06.402  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:07.404  DEBUG   [poll]    -> read  st2mot    
+16:07:07.407  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:07.408  DEBUG   [poll]    -> read  st0cur    
+16:07:07.412  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:08.413  DEBUG   [poll]    -> read  st2mot    
+16:07:08.417  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:08.417  DEBUG   [poll]    -> read  st0cur    
+16:07:08.421  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:09.423  DEBUG   [poll]    -> read  st2mot    
+16:07:09.426  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:09.427  DEBUG   [poll]    -> read  st0cur    
+16:07:09.431  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:10.432  DEBUG   [poll]    -> read  st2mot    
+16:07:10.436  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:10.436  DEBUG   [poll]    -> read  st0cur    
+16:07:10.440  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:11.442  DEBUG   [poll]    -> read  st2mot    
+16:07:11.445  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:11.446  DEBUG   [poll]    -> read  st0cur    
+16:07:11.450  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:12.451  DEBUG   [poll]    -> read  st2mot    
+16:07:12.455  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:12.455  DEBUG   [poll]    -> read  st0cur    
+16:07:12.459  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:13.461  DEBUG   [poll]    -> read  st2mot    
+16:07:13.464  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:13.465  DEBUG   [poll]    -> read  st0cur    
+16:07:13.469  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:14.470  DEBUG   [poll]    -> read  st2mot    
+16:07:14.474  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:14.474  DEBUG   [poll]    -> read  st0cur    
+16:07:14.479  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:15.480  DEBUG   [poll]    -> read  st2mot    
+16:07:15.484  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:15.484  DEBUG   [poll]    -> read  st0cur    
+16:07:15.488  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:16.490  DEBUG   [poll]    -> read  st2mot    
+16:07:16.493  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:16.493  DEBUG   [poll]    -> read  st0cur    
+16:07:16.498  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:17.499  DEBUG   [poll]    -> read  st2mot    
+16:07:17.502  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:17.503  DEBUG   [poll]    -> read  st0cur    
+16:07:17.507  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:18.508  DEBUG   [poll]    -> read  st2mot    
+16:07:18.511  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:18.512  DEBUG   [poll]    -> read  st0cur    
+16:07:18.515  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:19.517  DEBUG   [poll]    -> read  st2mot    
+16:07:19.520  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:19.522  DEBUG   [poll]    -> read  st0cur    
+16:07:19.526  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:20.528  DEBUG   [poll]    -> read  st2mot    
+16:07:20.531  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:20.531  DEBUG   [poll]    -> read  st0cur    
+16:07:20.536  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:21.537  DEBUG   [poll]    -> read  st2mot    
+16:07:21.541  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:21.541  DEBUG   [poll]    -> read  st0cur    
+16:07:21.545  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:22.547  DEBUG   [poll]    -> read  st2mot    
+16:07:22.550  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:22.550  DEBUG   [poll]    -> read  st0cur    
+16:07:22.555  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:23.556  DEBUG   [poll]    -> read  st2mot    
+16:07:23.559  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:23.560  DEBUG   [poll]    -> read  st0cur    
+16:07:23.564  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:24.566  DEBUG   [poll]    -> read  st2mot    
+16:07:24.569  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:24.570  DEBUG   [poll]    -> read  st0cur    
+16:07:24.574  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:25.575  DEBUG   [poll]    -> read  st2mot    
+16:07:25.579  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:25.579  DEBUG   [poll]    -> read  st0cur    
+16:07:25.583  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:26.585  DEBUG   [poll]    -> read  st2mot    
+16:07:26.588  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:26.589  DEBUG   [poll]    -> read  st0cur    
+16:07:26.593  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:27.594  DEBUG   [poll]    -> read  st2mot    
+16:07:27.598  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:27.598  DEBUG   [poll]    -> read  st0cur    
+16:07:27.602  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:28.604  DEBUG   [poll]    -> read  st2mot    
+16:07:28.607  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:28.608  DEBUG   [poll]    -> read  st0cur    
+16:07:28.612  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:29.614  DEBUG   [poll]    -> read  st2mot    
+16:07:29.617  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:29.618  DEBUG   [poll]    -> read  st0cur    
+16:07:29.622  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:30.624  DEBUG   [poll]    -> read  st2mot    
+16:07:30.627  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:30.627  DEBUG   [poll]    -> read  st0cur    
+16:07:30.632  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:31.633  DEBUG   [poll]    -> read  st2mot    
+16:07:31.636  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:31.637  DEBUG   [poll]    -> read  st0cur    
+16:07:31.641  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:32.642  DEBUG   [poll]    -> read  st2mot    
+16:07:32.646  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:32.646  DEBUG   [poll]    -> read  st0cur    
+16:07:32.650  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:33.652  DEBUG   [poll]    -> read  st2mot    
+16:07:33.655  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:33.656  DEBUG   [poll]    -> read  st0cur    
+16:07:33.660  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:34.661  DEBUG   [poll]    -> read  st2mot    
+16:07:34.665  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:34.666  DEBUG   [poll]    -> read  st0cur    
+16:07:34.670  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:35.672  DEBUG   [poll]    -> read  st2mot    
+16:07:35.675  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:35.675  DEBUG   [poll]    -> read  st0cur    
+16:07:35.680  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:36.681  DEBUG   [poll]    -> read  st2mot    
+16:07:36.684  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:36.685  DEBUG   [poll]    -> read  st0cur    
+16:07:36.689  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:37.691  DEBUG   [poll]    -> read  st2mot    
+16:07:37.694  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:37.694  DEBUG   [poll]    -> read  st0cur    
+16:07:37.699  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:38.700  DEBUG   [poll]    -> read  st2mot    
+16:07:38.703  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:38.704  DEBUG   [poll]    -> read  st0cur    
+16:07:38.708  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:39.709  DEBUG   [poll]    -> read  st2mot    
+16:07:39.713  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:39.713  DEBUG   [poll]    -> read  st0cur    
+16:07:39.718  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:40.719  DEBUG   [poll]    -> read  st2mot    
+16:07:40.723  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:40.723  DEBUG   [poll]    -> read  st0cur    
+16:07:40.727  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:41.729  DEBUG   [poll]    -> read  st2mot    
+16:07:41.732  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:41.733  DEBUG   [poll]    -> read  st0cur    
+16:07:41.737  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:42.738  DEBUG   [poll]    -> read  st2mot    
+16:07:42.742  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:42.742  DEBUG   [poll]    -> read  st0cur    
+16:07:42.746  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:43.748  DEBUG   [poll]    -> read  st2mot    
+16:07:43.751  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:43.752  DEBUG   [poll]    -> read  st0cur    
+16:07:43.756  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:44.757  DEBUG   [poll]    -> read  st2mot    
+16:07:44.761  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:44.761  DEBUG   [poll]    -> read  st0cur    
+16:07:44.766  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:45.767  DEBUG   [poll]    -> read  st2mot    
+16:07:45.770  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:45.771  DEBUG   [poll]    -> read  st0cur    
+16:07:45.775  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:46.776  DEBUG   [poll]    -> read  st2mot    
+16:07:46.780  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:46.780  DEBUG   [poll]    -> read  st0cur    
+16:07:46.784  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:47.786  DEBUG   [poll]    -> read  st2mot    
+16:07:47.789  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:47.790  DEBUG   [poll]    -> read  st0cur    
+16:07:47.794  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:48.795  DEBUG   [poll]    -> read  st2mot    
+16:07:48.799  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:48.799  DEBUG   [poll]    -> read  st0cur    
+16:07:48.803  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:49.805  DEBUG   [poll]    -> read  st2mot    
+16:07:49.808  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:49.809  DEBUG   [poll]    -> read  st0cur    
+16:07:49.813  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:50.814  DEBUG   [poll]    -> read  st2mot    
+16:07:50.818  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:50.818  DEBUG   [poll]    -> read  st0cur    
+16:07:50.822  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:51.824  DEBUG   [poll]    -> read  st2mot    
+16:07:51.827  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:51.828  DEBUG   [poll]    -> read  st0cur    
+16:07:51.832  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:52.833  DEBUG   [poll]    -> read  st2mot    
+16:07:52.837  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:52.837  DEBUG   [poll]    -> read  st0cur    
+16:07:52.841  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:53.842  DEBUG   [poll]    -> read  st2mot    
+16:07:53.846  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:53.846  DEBUG   [poll]    -> read  st0cur    
+16:07:53.850  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:54.852  DEBUG   [poll]    -> read  st2mot    
+16:07:54.855  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:54.856  DEBUG   [poll]    -> read  st0cur    
+16:07:54.860  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:55.861  DEBUG   [poll]    -> read  st2mot    
+16:07:55.865  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:55.865  DEBUG   [poll]    -> read  st0cur    
+16:07:55.869  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:56.871  DEBUG   [poll]    -> read  st2mot    
+16:07:56.874  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:56.875  DEBUG   [poll]    -> read  st0cur    
+16:07:56.879  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:57.880  DEBUG   [poll]    -> read  st2mot    
+16:07:57.884  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:57.884  DEBUG   [poll]    -> read  st0cur    
+16:07:57.888  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:07:58.890  DEBUG   [poll]    -> read  st2mot    
+16:07:58.893  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:58.894  DEBUG   [poll]    -> read  st0cur    
+16:07:58.898  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:07:59.899  DEBUG   [poll]    -> read  st2mot    
+16:07:59.903  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:07:59.904  DEBUG   [poll]    -> read  st0cur    
+16:07:59.908  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:00.910  DEBUG   [poll]    -> read  st2mot    
+16:08:00.913  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:00.913  DEBUG   [poll]    -> read  st0cur    
+16:08:00.918  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:08:01.919  DEBUG   [poll]    -> read  st2mot    
+16:08:01.923  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:01.923  DEBUG   [poll]    -> read  st0cur    
+16:08:01.927  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:02.929  DEBUG   [poll]    -> read  st2mot    
+16:08:02.932  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:02.933  DEBUG   [poll]    -> read  st0cur    
+16:08:02.937  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:08:03.937  DEBUG   [poll]    -> read  st2mot    
+16:08:03.941  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:03.941  DEBUG   [poll]    -> read  st0cur    
+16:08:03.945  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:04.947  DEBUG   [poll]    -> read  st2mot    
+16:08:04.950  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:04.951  DEBUG   [poll]    -> read  st0cur    
+16:08:04.955  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:08:05.957  DEBUG   [poll]    -> read  st2mot    
+16:08:05.960  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:05.960  DEBUG   [poll]    -> read  st0cur    
+16:08:05.965  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:06.966  DEBUG   [poll]    -> read  st2mot    
+16:08:06.969  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:06.970  DEBUG   [poll]    -> read  st0cur    
+16:08:06.974  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:07.975  DEBUG   [poll]    -> read  st2mot    
+16:08:07.979  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:07.979  DEBUG   [poll]    -> read  st0cur    
+16:08:07.983  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:08.985  DEBUG   [poll]    -> read  st2mot    
+16:08:08.988  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:08.989  DEBUG   [poll]    -> read  st0cur    
+16:08:08.993  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:09.994  DEBUG   [poll]    -> read  st2mot    
+16:08:09.998  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:09.998  DEBUG   [poll]    -> read  st0cur    
+16:08:10.003  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:11.004  DEBUG   [poll]    -> read  st2mot    
+16:08:11.008  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:11.008  DEBUG   [poll]    -> read  st0cur    
+16:08:11.012  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:12.014  DEBUG   [poll]    -> read  st2mot    
+16:08:12.017  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:12.017  DEBUG   [poll]    -> read  st0cur    
+16:08:12.022  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:08:13.023  DEBUG   [poll]    -> read  st2mot    
+16:08:13.027  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:13.027  DEBUG   [poll]    -> read  st0cur    
+16:08:13.031  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:14.033  DEBUG   [poll]    -> read  st2mot    
+16:08:14.036  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:14.036  DEBUG   [poll]    -> read  st0cur    
+16:08:14.041  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:08:15.042  DEBUG   [poll]    -> read  st2mot    
+16:08:15.046  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:15.046  DEBUG   [poll]    -> read  st0cur    
+16:08:15.050  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:08:16.052  DEBUG   [poll]    -> read  st2mot    
+16:08:16.055  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:16.056  DEBUG   [poll]    -> read  st0cur    
+16:08:16.060  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:08:17.061  DEBUG   [poll]    -> read  st2mot    
+16:08:17.065  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:17.065  DEBUG   [poll]    -> read  st0cur    
+16:08:17.069  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
+16:08:18.071  DEBUG   [poll]    -> read  st2mot    
+16:08:18.074  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:18.075  DEBUG   [poll]    -> read  st0cur    
+16:08:18.079  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x00', '0x02']
+16:08:19.080  DEBUG   [poll]    -> read  st2mot    
+16:08:19.084  DEBUG   [poll]    <- read  st2mot     ret=0  data=['0x00', '0x00']
+16:08:19.084  DEBUG   [poll]    -> read  st0cur    
+16:08:19.088  DEBUG   [poll]    <- read  st0cur     ret=0  data=['0x01', '0x02', '0x01', '0x02']
