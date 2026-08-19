@@ -284,6 +284,47 @@ instead of baked into the firmware source).
 - A PI controller (`picontrol()`, setpoint/processvalue → control
   variable, with anti-windup) sits on top of this for closed-loop speed
   control.
+- **`KP`/`KI` settable live over LIN (2026-08-18), replacing the old
+  on/off status-LED toggle on the same `cntl0mot` PID.** `main.c`
+  declares `const float KPDEFAULT = 0.15f;`/`KIDEFAULT = 0.4f;` and
+  mutable `float KP = KPDEFAULT;`/`KI = KIDEFAULT;`; the `cntl0mot`
+  dispatch does `KP = KPDEFAULT + (int8_t)rx_body[0]/100.0;` and the
+  same for `KI`/`rx_body[1]` (both under the existing `checksum_ok`
+  gate). **Deliberately absolute-from-default, not cumulative** — each
+  message recomputes from `KPDEFAULT`/`KIDEFAULT` fresh, it does not
+  add to whatever `KP`/`KI` currently is. This was a real live
+  correction during design: an initial `KP += ...`/`KI += ...`
+  implementation drifted with repeated calls (needing external state
+  tracking to reach a target value); switched to `KP =
+  KPDEFAULT + delta` specifically so the firmware side stays stateless
+  and a Python-side grid/gradient search never needs to track prior
+  applied values, just `delta = target - default` per point. See root
+  `CLAUDE.md`'s Goal and `raspi/CLAUDE.md`'s `pi` command entry (the
+  Raspi-side interface — floats in real `KP`/`KI` units, not raw wire
+  bytes) for the intended optimization-loop use. A signed-byte wire
+  encoding at ×100 scale means each gain's delta range is `-1.28`..
+  `1.27` (chosen over a ×1000 scale specifically for range over
+  precision — ×1000 would only reach `default ± 0.128`, too narrow
+  for a real grid search given `KP`/`KI`'s current small magnitude).
+  **Not yet done:** a firmware-side sanity clamp on
+  the resulting `KP`/`KI` (nothing currently stops an automated search
+  loop from driving either gain into an unstable region), and no
+  status readback of the currently-applied values exists yet.
+
+  **Confirmed on real hardware (2026-08-19),** flashed and deployed the
+  same day: a `runs/2026-08-19_logs/` capture (fetched via
+  `/analyze-logs`, no anomalies) shows the user manually boundary-
+  testing all four ±0.01 single-gain deltas, each followed by a short
+  `speed 500`→`speed 0` pulse — `cntl0mot [0x01,0x00]` (KP→0.16),
+  `[0xff,0x00]` (KP→0.14), `[0x00,0x01]` (KI→0.41), `[0x00,0xff]`
+  (KI→0.39). No checksum errors, no bus-hang, no unexpected `st3mot`
+  counter movement — the checksum-gated dispatch handled all four
+  cleanly. Only WARNINGs in that log were expected/benign: one idle-
+  timeout stop (a pause between test steps) and five observe-only
+  current-based stall signatures, plausibly just the ~3s speed pulses
+  being too short for the motor to finish spinning up, not a real
+  stall (see `raspi/watchdog/CLAUDE.md`'s Two-Layer Safety Check for
+  why that layer doesn't act on its own yet).
 - Full state tables (CW/CCW), the `driveState()`/`driveStep()`
   description, the PI controller source, measured RPM-vs-control-value
   and oscilloscope timing tables, and the STM32CubeIDE project's file

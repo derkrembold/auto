@@ -112,7 +112,7 @@ serial port directly per-invocation — that would conflict with the
 watchdog also needing bus access, and two uncoordinated processes
 touching one UART can corrupt LIN frames. `raspi/control/motorcontrol.py`
 is now a thin IPC client (no `RPi.GPIO`/`serial` dependency at all); the
-`Lin` class and command functions (`set_speed`, `led_on`, etc.) live in
+`Lin` class and command functions (`set_speed`, `set_pi`, etc.) live in
 `raspi/watchdog/linbus.py`.
 
 **IPC with `raspi/control/`:** `multiprocessing.connection`

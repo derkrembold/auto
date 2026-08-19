@@ -1,0 +1,47 @@
+15:37:49.262  INFO    connected to watchdog
+15:37:52.830  INFO    -> hal
+15:37:52.836  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+15:37:56.414  INFO    -> hal
+15:37:56.420  INFO    <- OK ret=0 data=['0x01', '0x00', '0x01']
+15:38:00.398  INFO    -> hal
+15:38:00.404  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+15:38:05.215  INFO    -> hal
+15:38:05.221  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+15:38:13.072  INFO    -> speed 0
+15:38:13.078  INFO    <- OK
+15:38:21.762  INFO    -> speed 500
+15:38:21.767  INFO    <- OK
+15:38:24.306  INFO    -> speed 0
+15:38:24.311  INFO    <- OK
+15:39:17.129  INFO    -> pi 0.01 0.0
+15:39:17.135  INFO    <- OK
+15:39:21.098  INFO    -> speed 0
+15:39:21.103  INFO    <- OK
+15:39:24.522  INFO    -> speed 500
+15:39:24.528  INFO    <- OK
+15:39:27.611  INFO    -> speed 0
+15:39:27.616  INFO    <- OK
+15:39:37.052  INFO    -> pi -0.01 0.0
+15:39:37.058  INFO    <- OK
+15:39:39.980  INFO    -> speed 0
+15:39:39.986  INFO    <- OK
+15:39:43.597  INFO    -> speed 500
+15:39:43.602  INFO    <- OK
+15:39:46.477  INFO    -> speed 0
+15:39:46.482  INFO    <- OK
+15:40:11.281  INFO    -> pi 0.0 0.01
+15:40:11.286  INFO    <- OK
+15:40:15.089  INFO    -> speed 0
+15:40:15.094  INFO    <- OK
+15:40:18.162  INFO    -> speed 500
+15:40:18.167  INFO    <- OK
+15:40:20.514  INFO    -> speed 0
+15:40:20.519  INFO    <- OK
+15:40:26.435  INFO    -> pi 0.0 -0.01
+15:40:26.440  INFO    <- OK
+15:40:29.107  INFO    -> speed 0
+15:40:29.112  INFO    <- OK
+15:40:31.875  INFO    -> speed 500
+15:40:31.881  INFO    <- OK
+15:40:34.372  INFO    -> speed 0
+15:40:34.377  INFO    <- OK

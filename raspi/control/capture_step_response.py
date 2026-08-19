@@ -18,9 +18,21 @@ timestamps) to capture_step_response.log (rotated, one generation kept,
 see logsetup.rotate_log()) — file only, not echoed to the terminal,
 since stdout is reserved for the CSV stream above. See
 raspi/watchdog/CLAUDE.md's log-format notes.
+
+Optional --p-delta/--i-delta (added 2026-08-19): if given, sends
+`pi <p_delta> <i_delta>` as the very first command, before `speed 0` —
+so an out-of-range value (rejected by the watchdog's own validate(),
+see watchdog.py's PI_DELTA_MIN/MAX) aborts before the motor moves at
+all, not partway through. Range is intentionally NOT re-checked here —
+the watchdog is the single source of truth for that, see
+run_experiment.py's own docstring for why duplicating it client-side
+was deliberately avoided. Omit both to leave KP/KI at their firmware
+defaults, same as never calling `pi` at all.
 """
+import argparse
 import logging
 import re
+import sys
 import time
 from multiprocessing.connection import Client
 
@@ -59,13 +71,18 @@ def _read_current(conn):
 
 def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
         sample_interval=SAMPLE_INTERVAL,
-        current_sample_interval=CURRENT_SAMPLE_INTERVAL, duration=DURATION):
+        current_sample_interval=CURRENT_SAMPLE_INTERVAL, duration=DURATION,
+        p_delta=None, i_delta=None):
     logsetup.configure("capture_step_response", LOG_PATH, terminal_level=None)
 
     # One persistent connection for the whole run — see
     # validate_speed.py's same choice for why (one-shot connections
     # trigger the watchdog's stop-on-disconnect after every command).
     with Client(address, family='AF_UNIX') as conn:
+        if p_delta is not None or i_delta is not None:
+            reply = _send(conn, f"pi {p_delta} {i_delta}")
+            if not reply.startswith("OK"):
+                sys.exit(f"pi command rejected, aborting before touching the motor: {reply}")
         _send(conn, "speed 0")
         _send(conn, f"speed {target_speed}")
         start = time.monotonic()
@@ -95,4 +112,10 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--p-delta", type=float, default=None)
+    parser.add_argument("--i-delta", type=float, default=None)
+    args = parser.parse_args()
+    if (args.p_delta is None) != (args.i_delta is None):
+        sys.exit("--p-delta and --i-delta must be given together, or not at all")
+    run(p_delta=args.p_delta, i_delta=args.i_delta)

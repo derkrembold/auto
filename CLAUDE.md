@@ -74,6 +74,7 @@ Auto/
 ├── addresses.json          Single source of truth for LIN PIDs (see LIN Protocol section)
 ├── generate_addresses.py   Generates addresses.md + writes directly to every consuming file
 ├── addresses.md            Generated "at a glance" occupied/free PID map
+├── run_experiment.py       Standalone P/I grid/gradient-search point runner (see raspi/CLAUDE.md)
 ├── STM32/          Firmware + build/flash automation (STM32 CLI)
 ├── raspi/
 │   ├── control/    LIN master code (speed command) — already implemented
@@ -83,6 +84,7 @@ Auto/
 ├── saleae/
 │   ├── capture_config/   Channel mapping, trigger setup, sample rate
 │   └── exports/          Raw capture exports per test run
+├── saleae_mcp/     MCP server wrapping the Saleae Automation API (see saleae/CLAUDE.md)
 ├── analysis/       Speed calculation from Hall edges, control metrics
 └── runs/           Per iteration: parameter set, raw data, metrics
 ```
@@ -111,6 +113,59 @@ from a related university course project) live in
 Light-sensor-specific details (planned LIN slave, firmware starting
 point from the same course project) live in `lightsensor/CLAUDE.md`,
 not here.
+
+## Experiment Runner (`run_experiment.py`)
+
+**Built 2026-08-19.** Standalone, no-Claude-needed script (repo root)
+that runs one full grid/gradient-search point end to end: physical
+pre-flight checklist → P/I delta input (as CLI args or interactive
+prompts) → motor-start consent → sets `KP`/`KI` via `raspi/control/
+capture_step_response.py --p-delta/--i-delta` (which itself sends the
+`pi` command first and aborts before touching the motor if the
+watchdog rejects the range) → arms the Saleae in `trigger` mode, runs
+the motor, retries up to 3x if the trigger false-fires on EMI noise →
+`raspi/analyze_logs.py` sanity check → Hall-vs-LIN-plus-current overlay
+plot. This is the intended single-point mechanism a future grid/
+gradient search loop (see the Goal above) would call repeatedly with
+different `--p-delta`/`--i-delta` values, not just a one-off
+convenience script.
+
+Deliberately does **not** re-check the P/I range itself — the
+watchdog's own `validate()` (`raspi/watchdog/watchdog.py`'s
+`PI_DELTA_MIN`/`MAX`) is the single source of truth for that, avoiding
+two independent range definitions drifting apart over time. See
+`raspi/CLAUDE.md`'s `capture_step_response.py`/`pi` entries,
+`saleae/CLAUDE.md`'s Trigger pin section (the false-trigger retry logic
+this reuses), and `analysis/CLAUDE.md` (`hall_rpm.py`,
+`has_sustained_high()`) for the pieces this wires together — this
+section only covers the orchestration, not each piece's own design
+history.
+
+**Confirmed end-to-end on real hardware the same day, including a real
+bug found and fixed live.** First run: the `watchdog.log`/
+`capture_step_response.log` fetch step didn't check `scp`'s return
+code, so one transient fetch failure was silently swallowed and
+`analyze_logs.py` crashed downstream with a confusing
+`FileNotFoundError` instead of a clear message — the actual experiment
+(checklist through the plot) had completed successfully regardless.
+Fixed: each log fetch retries up to 3x (matching the `/analyze-logs`
+skill's own documented `motorpi.local` mDNS-flakiness note), only
+successfully-fetched files are passed to `analyze_logs.py`, and a
+still-failing fetch after retries prints a clear warning instead of
+crashing anything downstream. Second run (`pi 0.01 0.01`, a real
+nonzero delta) confirmed fully clean: real trigger caught on the first
+attempt, both logs fetched, `analyze_logs.py` found only the two
+expected/benign WARNINGs (disconnect + one observe-only stall
+signature during coast-down), Hall/LIN rpm agreed closely throughout.
+
+**Second real bug, same day: the script didn't exit on its own —
+needed Ctrl-C even after a fully successful run.** Root cause and fix
+(`saleae_mcp/server.py`'s new `close_manager()`, called in a `finally`
+block around `main()`) are documented in `saleae/CLAUDE.md`'s MCP
+Server section, not duplicated here — in short, the Saleae
+`automation.Manager` connection was never explicitly closed, which
+kept the process alive after `main()` returned. Confirmed fixed live:
+a bare connect+`close_manager()` cycle now exits promptly on its own.
 
 ## LIN Protocol
 ### Header Operation

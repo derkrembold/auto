@@ -1,6 +1,6 @@
 import pytest
 
-from watchdog import validate, Watchdog, SPEED_MIN, SPEED_MAX, IDLE_TIMEOUT
+from watchdog import validate, Watchdog, SPEED_MIN, SPEED_MAX, IDLE_TIMEOUT, PI_DELTA_MIN, PI_DELTA_MAX
 from linbus import DryRunLin, MOTOR_INSTANCE_ID, CURRENT_INSTANCE_ID
 from linaddresses import constants
 
@@ -10,6 +10,8 @@ from linaddresses import constants
 # section for why.
 
 RANGE_ERROR = f"speed value out of range ({SPEED_MIN}..{SPEED_MAX})"
+PI_RANGE_ERROR_P = f"p_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
+PI_RANGE_ERROR_I = f"i_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
 
 # Expected on-wire pid for motor commands: base pid combined with the one
 # motor currently on the bus's strap-pin instance id — see linbus.py's
@@ -30,15 +32,22 @@ CNTL0CUR_WIRE = constants.cntl0cur | CURRENT_INSTANCE_ID
     ("speed abc", (False, "speed value must be an integer")),
     ("speed", (False, "usage: speed <value>")),
     ("speed 1 2", (False, "usage: speed <value>")),
-    ("on", (True, None)),
-    ("off", (True, None)),
+    ("pi 0.1 -0.05", (True, None)),
+    (f"pi {PI_DELTA_MAX} {PI_DELTA_MIN}", (True, None)),
+    ("pi 0 0", (True, None)),
+    (f"pi {PI_DELTA_MAX + 0.01} 0", (False, PI_RANGE_ERROR_P)),
+    (f"pi {PI_DELTA_MIN - 0.01} 0", (False, PI_RANGE_ERROR_P)),
+    (f"pi 0 {PI_DELTA_MAX + 0.01}", (False, PI_RANGE_ERROR_I)),
+    ("pi abc 0", (False, "p_delta/i_delta must be numbers")),
+    ("pi 0.1", (False, "usage: pi <p_delta> <i_delta>")),
+    ("pi 0.1 0.1 0.1", (False, "usage: pi <p_delta> <i_delta>")),
     ("hal", (True, None)),
     ("rpm", (True, None)),
     ("temp", (True, None)),
     ("current", (True, None)),
     ("errors", (True, None)),
     ("selftest", (True, None)),
-    ("on extra", (False, "usage: on")),
+    ("hal extra", (False, "usage: hal")),
     ("banana", (False, "unknown command: banana")),
     ("", (False, "empty command")),
 ])
@@ -61,14 +70,18 @@ def test_execute_speed_relays_to_dry_run_bus():
     assert data == [0x01, 0x2c]  # struct.pack('>h', 300)
 
 
-def test_execute_on_off_relay_to_dry_run_bus():
+def test_execute_pi_relays_to_dry_run_bus():
     wd = Watchdog(DryRunLin())
-    wd.execute("on")
-    wd.execute("off")
+    assert wd.execute("pi 0.1 -0.05") == "OK"
     assert wd.lin.writes == [
-        (CNTL0MOT_WIRE, [0x01, 0xdb]),
-        (CNTL0MOT_WIRE, [0xcd, 0x0c]),
+        (CNTL0MOT_WIRE, [10, 251]),  # p_byte=10 (0.1*100), i_byte=-5 as unsigned (0.05*100)
     ]
+
+
+def test_execute_pi_clamps_to_wire_extremes():
+    wd = Watchdog(DryRunLin())
+    assert wd.execute(f"pi {PI_DELTA_MAX} {PI_DELTA_MIN}") == "OK"
+    assert wd.lin.writes == [(CNTL0MOT_WIRE, [127, 128])]
 
 
 def test_execute_hal_uses_injected_read_response():

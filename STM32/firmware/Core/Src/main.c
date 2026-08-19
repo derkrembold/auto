@@ -128,8 +128,10 @@ const uint32_t GLOBALRATE = 1275; // in mikrosekunden
 //const int16_t MINCONTROLVARIABLE = 200; //
 const uint32_t RAMPSTEP = 1;
 const float CONTROLLIMIT = GLOBALRATE - 100;
-const float KP = 0.15f;
-const float KI = 0.4f;
+const float KPDEFAULT = 0.15f;
+const float KIDEFAULT = 0.4f;
+float KP = KPDEFAULT;
+float KI = KIDEFAULT;
 
 
 // RPMFACTOR: 60*speedcount/(24*0.1); 60sec/min; 24steps/Umdrehung; 0.1s==100ms;
@@ -323,11 +325,11 @@ int main(void)
 	    checksumErrorCount++;
 	  }
 	
-	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl0mot | hwbits) && rx_body[0] == 0x01 && rx_body[1] == 0xdb) {
-		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
-	  }
-	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl0mot | hwbits) && rx_body[0] == 0xcd && rx_body[1] == 0x0c) {
-		  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
+	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl0mot | hwbits)) {
+	    KP = KPDEFAULT + (int8_t)rx_body[0]/100.0;
+	    //HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);
+	    KI = KIDEFAULT + (int8_t)rx_body[1]/100.0;
+	    //HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET);
 	  }
 	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl1mot | hwbits)) {
 		  int16_t speedlocal = (int16_t)((rx_body[0] << 8) | rx_body[1]);

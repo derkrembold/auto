@@ -28,22 +28,23 @@ LOG_PATH = "motorcontrol.log"
 logger = logging.getLogger("motorcontrol")
 
 HELP_TEXT = """Commands:
-  speed <value>   set speed, 0 = stop
-  on              status LED on
-  off             status LED off
-  hal             read Hall sensor positions
-  rpm             read RPM over LIN
-  temp            read temperature
-  current         read current sensor (amps, val1/val2 = ACS712 #1/#2)
-  errors          read currentsensor's last 8 error codes (most recent first)
-  selftest        currentsensor errorstorage roundtrip + deliberately send a
-                  bad-checksum cntl0cur write and confirm currentsensor logged it
-                  but skipped the action + deliberately provoke a currentsensor/
-                  STM32 bus-hang timeout + deliberately send a bad-checksum
-                  speed-0 write and confirm all were caught
-                  (real hardware, ~2s, deliberately disrupts the bus for a moment)
-  help            show this again
-  exit            quit (Ctrl+C also works)
+  speed <value>            set speed, 0 = stop
+  pi <p_delta> <i_delta>   set KP/KI as (firmware default + delta), each
+                           in -1.28..1.27 -- not calling this leaves both
+                           at their firmware defaults
+  hal                      read Hall sensor positions
+  rpm                      read RPM over LIN
+  temp                     read temperature
+  current                  read current sensor (amps, val1/val2 = ACS712 #1/#2)
+  errors                   read currentsensor's last 8 error codes (most recent first)
+  selftest                 currentsensor errorstorage roundtrip + deliberately send a
+                           bad-checksum cntl0cur write and confirm currentsensor logged it
+                           but skipped the action + deliberately provoke a currentsensor/
+                           STM32 bus-hang timeout + deliberately send a bad-checksum
+                           speed-0 write and confirm all were caught
+                           (real hardware, ~2s, deliberately disrupts the bus for a moment)
+  help                     show this again
+  exit                     quit (Ctrl+C also works)
 """
 
 

@@ -47,6 +47,20 @@ def _get_manager() -> automation.Manager:
     return _manager
 
 
+def close_manager() -> None:
+    # automation.Manager.connect() opens a connection (gRPC under the
+    # hood) that keeps the Python process alive after main() returns if
+    # never closed -- a standalone script (run_experiment.py) that
+    # never calls this hangs on exit until Ctrl-C, hit live 2026-08-19.
+    # Plain function, not an @mcp.tool() -- Claude's own MCP session
+    # lifecycle is managed by the MCP protocol layer, not by calling
+    # this; it's for standalone-script callers only.
+    global _manager
+    if _manager is not None:
+        _manager.close()
+        _manager = None
+
+
 def _require_capture(capture_id: int) -> automation.Capture:
     if capture_id not in _captures:
         raise ValueError(

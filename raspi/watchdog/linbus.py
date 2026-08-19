@@ -336,13 +336,21 @@ def set_speed(lin, value):
     return lin.write(constants.cntl3mot, data, instance=MOTOR_INSTANCE_ID)
 
 
-def led_on(lin):
-    # Onboard status LED, not motor power.
-    return lin.write(constants.cntl0mot, [0x01, 0xdb], instance=MOTOR_INSTANCE_ID)
-
-
-def led_off(lin):
-    return lin.write(constants.cntl0mot, [0xcd, 0x0c], instance=MOTOR_INSTANCE_ID)
+def set_pi(lin, p_delta, i_delta):
+    # cntl0mot's body is two signed bytes (int8_t), each *100 -- the
+    # firmware always computes KP = KPDEFAULT + byte/100.0 (never
+    # cumulative against whatever KP currently is), so p_delta/i_delta
+    # here are absolute deltas from the firmware's hardcoded default,
+    # not increments from the last call. See STM32/CLAUDE.md's Motor
+    # Control section and raspi/CLAUDE.md's Structure section for the
+    # -1.28..1.27 range this maps to. Caller (watchdog.py's validate())
+    # is expected to have range-checked already; clamp again here as a
+    # defensive backstop against the wire encoding, not the primary
+    # check.
+    p_byte = max(-128, min(127, round(p_delta * 100)))
+    i_byte = max(-128, min(127, round(i_delta * 100)))
+    data = struct.pack('bb', p_byte, i_byte)
+    return lin.write(constants.cntl0mot, data, instance=MOTOR_INSTANCE_ID)
 
 
 def get_hal(lin):

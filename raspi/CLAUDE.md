@@ -51,8 +51,22 @@ other. Same caution applies to any future same-named files across
 ## Structure
 
 - `control/motorcontrol.py` — small interactive CLI (`speed <value>`
-  command, 0 = stop, plus `on`/`off`/`hal`/`rpm`/`temp`/`current`/
-  `errors`, `help`, `exit` to quit). `errors` (added 2026-08-12) reads
+  command, 0 = stop, plus `pi <p_delta> <i_delta>`/`hal`/`rpm`/`temp`/
+  `current`/`errors`, `help`, `exit` to quit). `pi` (replaced the
+  on/off status-LED toggle 2026-08-18, same `cntl0mot` PID and
+  checksum-gate, see `STM32/CLAUDE.md`'s Motor Control section and
+  `watchdog/CLAUDE.md`'s `linbus.set_pi()`) sets `KP`/`KI` for
+  `picontrol()`'s PI controller as `firmware_default + delta` — always
+  relative to the hardcoded default, never cumulative against whatever
+  is currently applied, so repeated calls (or a grid/gradient search
+  loop) never drift and don't need to track prior state. Each delta is
+  a signed byte ×100 on the wire (`PI_DELTA_MIN`/`MAX` in
+  `watchdog.py`, -1.28..1.27) — not calling `pi` at all leaves both
+  gains at their firmware defaults (`KPDEFAULT`/`KIDEFAULT` in
+  `main.c`). **Confirmed on real hardware (2026-08-19)** — see
+  `STM32/CLAUDE.md`'s Commutation & Control section for the specific
+  boundary-value test evidence from that day's log check. `errors`
+  (added 2026-08-12) reads
   the currentsensor's `st1cur` — its last 8 error codes (most recent
   first, `currentsensor/firmware/main.cpp`'s `errorstorage` ring
   buffer), decoded via `linbus.get_error_history()`/
@@ -221,6 +235,16 @@ other. Same caution applies to any future same-named files across
   skill — use that instead of re-deriving the steps each time. Once a
   capture CSV exists, `/plot-step-response` turns it into a dual-axis
   rpm+current PNG chart.
+
+  **Optional `--p-delta`/`--i-delta` (added 2026-08-19):** if given
+  (both or neither), sends `pi <p_delta> <i_delta>` as the very first
+  command, before `speed 0` — see the `pi` command entry above.
+  Deliberately no client-side range re-check here; a rejected `pi`
+  (the watchdog's own `validate()` is the single source of truth for
+  the -1.28..1.27 range) aborts via `sys.exit()` before the motor is
+  touched at all. This is what `run_experiment.py` (repo root) uses to
+  set a grid/gradient-search point before capturing its step response
+  — see that script's own docstring.
 - `analyze_logs.py` — read-only static analysis over the four `.log`
   files above (built 2026-08-12, together with the `/analyze-logs`
   skill): flags unmatched `->` calls (the 2026-08-11 bus-hang
@@ -247,7 +271,7 @@ with the bus. `Lin.write()` and `Lin.read()` in `watchdog/linbus.py`
 (moved there from `control/motorcontrol.py` during the sole-LIN-master
 restructuring — see `watchdog/CLAUDE.md`) both do this correctly (write
 one byte, read one byte, repeat) and are the only correct way to talk
-to the bus. All command functions (`set_speed`, `led_on`, `led_off`,
+to the bus. All command functions (`set_speed`, `set_pi`,
 `get_hal`, `get_rpm`, `get_temp`), also in `linbus.py`, go through
 these two methods — none of them should bypass `Lin.write()`/
 `Lin.read()` with raw bulk `ser.write()` calls.
@@ -262,8 +286,8 @@ verified against real hardware, and contradicted `Lin.read()`'s own
 confirmed working live via `watchdog.py --live` — `hal` (`Lin.read()`)
 read the Hall sensors, and `speed` (`Lin.write()`) actually turned the
 motor, with `rpm` (`Lin.read()`) reading plausible values while it
-spun. `on`/`off` (also `Lin.write()`, same code path as `speed`) not
-separately tested but share the exact same write logic. The echo/
+spun. `pi` (also `Lin.write()`, same code path as `speed`) not
+separately tested but shares the exact same write logic. The echo/
 parity/checksum handling in both `Lin.write()` and `Lin.read()` is now
 real-hardware-confirmed, not just "best current understanding."
 

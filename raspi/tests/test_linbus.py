@@ -15,11 +15,14 @@ from linbus import Lin, _log_pid_name, _log_source
 # that the LIN parity/checksum math is "correct" in the abstract.
 
 
-def test_checksum_led_on_payload():
+def test_checksum_payload_a():
+    # Frozen regression value -- not tied to any current command's
+    # meaning (these bytes were the removed on/off LED payload), just
+    # exercising checksum() over a fixed byte pair.
     assert Lin.checksum([0x01, 0xdb]) == 0x23
 
 
-def test_checksum_led_off_payload():
+def test_checksum_payload_b():
     assert Lin.checksum([0xcd, 0x0c]) == 0x26
 
 

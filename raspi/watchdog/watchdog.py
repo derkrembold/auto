@@ -18,7 +18,7 @@ LOG_PATH = "watchdog.log"
 
 logger = logging.getLogger("watchdog")
 
-KNOWN_COMMANDS = {"speed", "on", "off", "hal", "rpm", "temp", "current", "errors", "selftest"}
+KNOWN_COMMANDS = {"speed", "pi", "hal", "rpm", "temp", "current", "errors", "selftest"}
 
 # Business/safety speed limit — separate from the protocol-level int16
 # range linbus.set_speed() clamps to. Deliberately below the motor's
@@ -28,6 +28,15 @@ KNOWN_COMMANDS = {"speed", "on", "off", "hal", "rpm", "temp", "current", "errors
 # Open Points).
 SPEED_MIN = -3000
 SPEED_MAX = 3000
+
+# `pi <p_delta> <i_delta>` range — matches the STM32's cntl0mot wire
+# encoding exactly: each value is sent as a signed byte (int8_t) times
+# 100 (see STM32/CLAUDE.md's Motor Control section and main.c's
+# `KP = KPDEFAULT + (int8_t)rx_body[0]/100.0`), so -1.28..1.27 is the
+# actual reachable range, not an arbitrary business limit like
+# SPEED_MIN/MAX above.
+PI_DELTA_MIN = -1.28
+PI_DELTA_MAX = 1.27
 
 # `motorcontrol.py` holds one persistent connection for its whole
 # session — a closed connection is detected immediately (EOFError) and
@@ -75,6 +84,18 @@ def validate(command):
             return False, "speed value must be an integer"
         if not (SPEED_MIN <= value <= SPEED_MAX):
             return False, f"speed value out of range ({SPEED_MIN}..{SPEED_MAX})"
+    elif verb == "pi":
+        if len(parts) != 3:
+            return False, "usage: pi <p_delta> <i_delta>"
+        try:
+            p_delta = float(parts[1])
+            i_delta = float(parts[2])
+        except ValueError:
+            return False, "p_delta/i_delta must be numbers"
+        if not (PI_DELTA_MIN <= p_delta <= PI_DELTA_MAX):
+            return False, f"p_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
+        if not (PI_DELTA_MIN <= i_delta <= PI_DELTA_MAX):
+            return False, f"i_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
     elif len(parts) != 1:
         return False, f"usage: {verb}"
 
@@ -150,11 +171,10 @@ class Watchdog:
                 self.speed_became_nonzero_at = None
             self.last_commanded_speed = value
             return "OK"
-        if verb == "on":
-            linbus.led_on(self.lin)
-            return "OK"
-        if verb == "off":
-            linbus.led_off(self.lin)
+        if verb == "pi":
+            p_delta = float(parts[1])
+            i_delta = float(parts[2])
+            linbus.set_pi(self.lin, p_delta, i_delta)
             return "OK"
         if verb == "hal":
             ret, data = linbus.get_hal(self.lin)

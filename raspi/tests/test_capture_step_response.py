@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import MagicMock, patch
 
 from capture_step_response import run
@@ -19,7 +20,7 @@ class _FakeClock:
         self.now += seconds
 
 
-def _fake_conn(rpm_values, current_values=()):
+def _fake_conn(rpm_values, current_values=(), pi_reply="OK"):
     # Replies based on the command actually sent, not just call order --
     # needed since rpm and current are now interleaved on a different
     # schedule (see run()'s current_sample_interval handling).
@@ -39,6 +40,8 @@ def _fake_conn(rpm_values, current_values=()):
         if command == "current":
             val1, val2 = next(current_iter)
             return f"OK ret=0 val1={val1} val2={val2}"
+        if command.startswith("pi "):
+            return pi_reply
         return "OK"  # speed 0 / speed <target>
 
     conn.send.side_effect = fake_send
@@ -138,3 +141,36 @@ def test_current_columns_blank_when_not_sampled_this_row(capsys):
     assert lines[5] == "1000,5,1.20,0.60"    # 1s elapsed -- current sampled again
     assert lines[6] == "1200,6,,"
     assert lines[7] == "1400,7,,"
+
+
+# --- optional --p-delta/--i-delta (added 2026-08-19) ---
+
+def test_run_sends_pi_first_when_deltas_given():
+    conn = _fake_conn([100], [("0.00", "0.00")])
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.2, p_delta=0.1, i_delta=-0.05)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent[0] == "pi 0.1 -0.05"
+    assert sent[1] == "speed 0"
+    assert sent[2] == "speed 1000"
+
+
+def test_run_omits_pi_when_deltas_not_given():
+    conn = _fake_conn([100], [("0.00", "0.00")])
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.2)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent[0] == "speed 0"
+    assert not any(c.startswith("pi ") for c in sent)
+
+
+def test_run_aborts_before_speed_when_pi_rejected():
+    conn = _fake_conn([100], pi_reply="ERR p_delta out of range (-1.28..1.27)")
+    with pytest.raises(SystemExit, match="p_delta out of range"):
+        _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                              duration=0.2, p_delta=5.0, i_delta=0.0)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent == ["pi 5.0 0.0"]  # never reached speed 0 / speed <target>

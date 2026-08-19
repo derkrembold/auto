@@ -75,6 +75,19 @@ it exists to prevent), `stop_capture`, `export_capture` (raw CSV into
 (channel indices, sample rate, trigger settings all passed in per call)
 rather than hardcoded to this project's specific pin mapping.
 
+**`close_manager()` (plain function, not an `@mcp.tool()`, added
+2026-08-19)** — closes the underlying `automation.Manager.connect()`
+connection. Found live: `run_experiment.py` (root `CLAUDE.md`) never
+called this, and the connection (gRPC underneath) kept the Python
+process alive after `main()` returned — the script needed Ctrl-C to
+actually exit even after finishing successfully. Not an MCP tool
+because it's a standalone-script lifecycle concern, not something
+meaningful for Claude to call over its own MCP session (that
+connection's lifecycle is managed by the MCP protocol layer, not by
+calling a function inside this module). Any future standalone script
+using `server.py` directly should call this in a `finally` block
+around its `main()`, same pattern `run_experiment.py` now uses.
+
 **Confirmed working (2026-08-17)** against the Automation API's built-in
 `LOGIC_PRO_16` simulation device (`device_id='F4241'`, no real hardware
 needed for this level of test): full lifecycle in all three capture
