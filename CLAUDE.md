@@ -167,6 +167,291 @@ Server section, not duplicated here — in short, the Saleae
 kept the process alive after `main()` returned. Confirmed fixed live:
 a bare connect+`close_manager()` cycle now exits promptly on its own.
 
+## Grid Search (`run_grid.py`) — Design Settled 2026-08-21, Not Yet Built
+
+Discussed and agreed over several rounds 2026-08-21; deliberately not
+implemented yet (each round ended "nicht machen"). Named in the same
+style as `run_experiment.py`/`build.sh`/`flash.sh`. Captures the design
+decisions so building it next session doesn't need to re-derive them.
+
+**3×3 stencil centered on the firmware defaults, not an arbitrary
+range.** `KP`/`KI`'s current defaults (`KPDEFAULT`/`KIDEFAULT` in
+`main.c`) are the grid's center, i.e. delta `(0, 0)`. The user supplies
+one `p_delta` magnitude and one `i_delta` magnitude; the grid is the 9
+combinations of `{-p_delta, 0, +p_delta} × {-i_delta, 0, +i_delta}`. The
+center point (`0, 0`) is included automatically — that's the same
+`pi 0.0 0.0` default-gains reference run already captured in
+`runs/2026-08-20_134718_experiment/`, so it's directly comparable, not
+a fresh baseline. A useful side effect of exactly this 3×3 shape: it
+doubles as a central-difference finite-difference stencil, so it can
+directly seed the gradient search's initial direction afterward, not
+just serve as a coarse landscape scan.
+
+**Reuses `run_experiment.py`'s SSH-per-point pattern, minus Saleae.**
+Each of the 9 points calls `capture_step_response.py --p-delta/
+--i-delta` on the Pi over SSH, the same way `run_experiment.py`'s
+`_run_motor_capture()` already does — no Saleae trigger-arm/export/
+plot machinery, per `analysis/CLAUDE.md`'s Cost Function section's
+decision to keep the grid-search phase LIN-only. Range is (as with
+`run_experiment.py`) deliberately **not** re-checked client-side beyond
+"is this a number" — each of the 9 `pi <delta> <delta>` sends still
+goes through the watchdog's own `validate()`, so an out-of-range
+`p_delta`/`i_delta` gets rejected per-point automatically, no separate
+grid-level bounds logic needed.
+
+**Consent model: one confirmation covers the whole 3×3 sweep, not 9
+separate prompts — deliberately, resolving the "doesn't scale to many
+unattended runs" note from the grid-search TODO item.** Sequence, same
+shape as `run_experiment.py`'s checklist: watchdog `--live` check (SSH,
+automatic) → ask whether the motor power supply is on → ask for the
+`p_delta`/`i_delta` magnitudes → one motor-start confirmation → then all
+9 points run without further per-point prompts. This is safe specifically
+*because* the user is required to physically stay at the setup with a
+hand on the power supply for the whole sweep, ready to cut power
+directly — matching `raspi/watchdog/CLAUDE.md`'s own philosophy that
+real safety limits belong in hardware/process, not in a software
+prompt's discipline. The single upfront consent is standing in for "I
+will be physically present and able to intervene," not "I have reviewed
+and approved all 9 specific runs."
+
+**Ctrl-C abort, discussed but not yet implemented:**
+1. `KeyboardInterrupt` (SIGINT) hits the local `run_grid.py` process;
+   since the SSH call for the in-flight point runs via a blocking
+   `subprocess.run()`, the local `ssh` client normally receives the
+   same signal and the connection drops.
+2. That disconnects `capture_step_response.py`'s connection to the
+   watchdog's local socket, which triggers the watchdog's **already-
+   existing** `client disconnected — stopping motor` safety behavior
+   (no new code needed for this part — already observed live in
+   multiple prior logs).
+3. **Belt-and-suspenders addition on top of step 2:** `run_grid.py`'s
+   own `KeyboardInterrupt` handler should also actively send an
+   explicit `speed 0` itself (a quick separate SSH call), rather than
+   relying solely on step 2's disconnect-detection timing.
+4. Then log an unambiguous `ABORTED BY USER after point N/9 (P=.., I=..)`
+   in `run_grid.py`'s own output — deliberately not relying on
+   `watchdog.log` for this distinction, since that log's disconnect
+   line looks the same regardless of *why* the connection dropped (user
+   abort vs. SSH hiccup vs. a crash), so it can't tell those apart on
+   its own.
+   
+   **Caveat, not fully resolved:** step 1→2's signal propagation over a
+   plain `ssh host "cmd"` call (no pty) is the *likely*, not
+   *guaranteed*, behavior — so this Ctrl-C path is a fast, convenient
+   way to end the automated sweep, not the actual safety guarantee.
+   The physical hand-on-power-supply requirement above is what actually
+   guarantees a stop regardless of whether the software path behaves as
+   expected.
+
+**Output layout: one directory for the whole sweep, not one per
+point.** Unlike `run_experiment.py` (one `runs/<timestamp>_experiment/`
+per single point), `run_grid.py` writes everything from all 9 points
+into a single `runs/<timestamp>_grid/` — the 9 points aren't
+independent experiments, they're one sweep answering one question
+("what does the P/I landscape look like around the default point"), so
+one directory reflects that. Per-point files need distinguishing names
+within it instead of the fixed names `capture_step_response.py`'s CSV/
+log normally get, e.g. `point_p-0.10_i-0.10.csv`/`.log`,
+`point_p0.00_i0.00.csv`/`.log`, ... `point_p0.10_i0.10.csv`/`.log`.
+`watchdog.log` is fetched **once, after the last point**, not once per
+point — it's a single continuously-appended log on the Pi, never reset
+between `capture_step_response.py` invocations, so the final fetch
+already contains all 9 points' traffic; fetching it 9 times would just
+be 8 redundant, growing supersets of the same file.
+
+**Summary output: a 3×3 ISE matrix.** Each point's cost (see
+`analysis/CLAUDE.md`'s Cost Function section for the ISE formula) goes
+into `grid_results.csv` (columns: `p_delta,i_delta,ise`) in the same
+sweep directory — machine-readable input for the later gradient search
+(which needs the grid's best point as its seed), plus printed as a
+readable 3×3 table to the console at the end. A small heatmap PNG of
+the same matrix would fit this project's existing habit of producing a
+plot per experiment, but is a nice-to-have, not essential — the CSV is
+the output the gradient search actually depends on.
+
+**4-second pause between points (thermal caution + cleaner step
+starts).** Discussed 2026-08-21: motivated by a concern that the power
+supply could warm up over 9 back-to-back ~8s motor runs with no
+automatic current-based cutoff available (current sensing is still
+physically disabled, see STM32/CLAUDE.md's Known Hardware Issue) — a
+fixed time-based pause is currently the only lever available for this,
+same reasoning as every other time/speed-only safety limit in this
+project. `INTER_POINT_PAUSE_S = 4` (module-level constant, easy to
+raise later if a full sweep turns out to still run warm), inserted
+between each point's `speed 0` and the next point's start. Secondary
+benefit beyond thermal: it also lets the motor come to genuine
+mechanical rest (not just LIN-commanded zero) before the next point
+starts, so consecutive step responses don't carry over residual
+momentum from the previous point's coast-down into the next point's
+measurement.
+
+**`capture_step_response.py`'s `DURATION` shortened 8.0s → 7.0s
+(2026-08-21), for the same thermal-caution reasoning as the inter-point
+pause above.** This is a shared-script constant, not grid-search-only —
+it affects every caller (`run_grid.py`, `run_experiment.py`, direct
+interactive use). Considered and rejected 6.0s: the ~2-3s
+settling-to-steady-oscillation time observed so far comes only from the
+firmware **default** gains (`KPDEFAULT`/`KIDEFAULT`) — the whole point
+of the grid search is to test *untested* P/I combinations, and a
+badly-tuned corner of the grid (e.g. too much `I`) could settle slower
+or oscillate worse than the default ever has. 7.0s keeps a real margin
+over what's actually been observed so far; 6.0s risked cutting off
+exactly the slow-settling/growing-oscillation behavior the grid search
+is supposed to catch and penalize via the ISE score. Re-shortening
+further should wait until a real grid sweep's own data shows every
+point (including the corners) settling well before the current 7.0s
+window, not be assumed from the default-gains behavior alone.
+**No change needed on the Saleae/`run_experiment.py` side:**
+`_arm_trigger_capture()`'s `after_trigger_seconds=10` was already
+longer than the old 8.0s `DURATION` with margin to spare, so it
+comfortably covers the new, shorter 7.0s step too — the trigger pin's
+own HIGH duration just shrinks by ~1s to match the shorter step,
+`has_sustained_high()`'s classification (0.5s minimum) isn't remotely
+close to that margin either.
+
+**Deployed and confirmed on real hardware the same day (2026-08-21).**
+`raspi/deploy.sh` run (one transient `motorpi.local` mDNS failure, its
+own built-in retry succeeded on attempt 2 — the usual flakiness, not a
+real problem), then verified directly on the Pi (`grep DURATION
+capture_step_response.py`) before a live test run. Actual measured
+duration `speed 1000` → final `speed 0`: 6.81s (35 samples × 0.2s =
+7.0s `DURATION`, matches exactly). `/analyze-logs`: only the expected
+`client disconnected — stopping motor` line, nothing else — cleaner
+than some prior 8.0s runs, which occasionally also showed the benign
+observe-only stall signature at coast-down. Step-response shape
+unchanged from the 8.0s baseline: fast rise (rpm≈850 within ~0.4s),
+settles into the same ~950–1025 oscillation band around the 1000
+target, current stable in the same roughly -0.44..-0.59A range — the
+last second that got trimmed was genuinely redundant steady-state data,
+not lost information.
+
+**First real `run_grid.py` sweep, confirmed end-to-end on real hardware
+(2026-08-20, `runs/2026-08-20_145713_grid/`, deltas ±0.01 — the
+smallest possible wire step, a deliberately conservative first test).**
+All 9 points completed, no abort. `analyze_logs.py` across all 10 log
+files (9 per-point `capture_step_response.log` copies + the one
+sweep-spanning `watchdog.log`): only expected/benign findings — 9
+normal `client disconnected` lines (one per point) plus one from an
+earlier same-day single-point test also caught in the same
+continuously-appended `watchdog.log`, 4 of the 9 points showing the
+known observe-only stall signature at coast-down, and a single
+one-off `rpm` call at 65ms (>50ms threshold, negligible). Confirms
+`run_grid.py`'s output-layout design working exactly as specified: one
+directory, 9 uniquely-named point CSV/log pairs, `watchdog.log` fetched
+once at the end already covering the whole sweep.
+
+Result — `grid_results.csv`:
+```
+             P=-0.01      P=+0.00      P=+0.01
+I=+0.01    3,574,375    2,146,875    1,428,750  <- best
+I=+0.00    2,184,375    1,573,750    1,582,500  <- center (defaults)
+I=-0.01    2,275,000    1,569,375    1,673,750
+```
+Best point: `P delta=+0.01, I delta=+0.01` (ISE 1,428,750, vs. 1,573,750
+at the untouched defaults). Pattern: `P` below the default is
+consistently worse across all three `I` rows (ISE roughly 1.4-2.3x
+higher) — a real, direction-consistent effect even at this smallest
+possible delta step, not just noise. `I`'s effect alone is less
+consistent (mixed sign depending on which `P` row), but combined with
+`P+0.01` it gives the sweep's best result — an early sign of real
+P/I coupling, i.e. exactly why a 2D grid (not two independent 1D
+sweeps) was the right call. **Caveat: each point was measured once, no
+repeats** — the direction of the P effect looks robust (same sign at
+every I level), but no run-to-run repeatability check has been done yet,
+so treat the exact magnitudes as provisional.
+
+**Qualitative confirmation, same run:** the best point's rpm trace
+(`best_point_p+0.01_i+0.01.png`) shows a smooth, monotonic PT1-like
+("Tiefpass") rise from 0 to ~1000 over about 1s, then settles into an
+even tighter ~950-1025 oscillation band than the default-gains
+baseline — visibly real electromechanical (rotor-inertia) dynamics, not
+a software-shaped curve, now that `updateramp(false)` is in effect (see
+the `updateramp()` entry above). Good independent confirmation that
+disabling the ramp was the right call for characterization.
+
+**Repeatability check on the same ±0.01 grid, same day
+(`runs/2026-08-20_151658_grid/`) — the caveat above was justified: the
+two runs are only weakly related.** Quantified, not just eyeballed:
+Pearson r=0.15, Spearman rank correlation ρ=0.17 between the two
+`grid_results.csv`s — both close to zero, not meaningfully different
+from "no relationship" at only 9 points. Mean ISE level stayed similar
+between runs (ratio 0.95, so no broad drift like a slowly discharging
+battery), meaning the mismatch is in each point's *relative* ranking,
+not a uniform shift. The run-1 "best point" (`P+0.01, I+0.01`,
+1,428,750) was rank 1 in run 1 but rank 7 of 9 in run 2 (2,017,500,
++41%) — not reproduced at all. The only part of the pattern that
+survived: the two `P=-0.01` points with `I≤0` landed in the worst two
+or three ranks in *both* runs. Conclusion carried into the next sweep
+below: at the smallest possible delta (±0.01), measurement noise is
+comparable to or larger than the real P/I effect for most of the grid.
+
+**Soft stop confirmed on real hardware the same day
+(2026-08-20, ~15:35 single-point test after deploying it).** Logged
+sequence: `speed 800` → `speed 600` → `speed 400` → `speed 200` →
+`speed 0`, each ~0.25s apart, 1.02s first-reduction-to-zero (target
+was 1.0s) — matches `_soft_stop()`'s design exactly.
+`/analyze-logs`: only the one expected `client disconnected` line, not
+even the usual observe-only stall signature this time (one data point,
+not yet enough to claim the softer stop reduces how often that fires).
+
+**Second real sweep, larger delta (2026-08-20, `runs/
+2026-08-20_153737_grid/`, deltas ±0.02 — deliberately larger than the
+±0.01 runs above, precisely because those showed noise dominating the
+signal).** All 9 points clean (`analyze_logs.py`: only expected
+disconnect/stall-signature lines, no real anomalies). Result:
+```
+             P=-0.02      P=+0.00      P=+0.02
+I=+0.02    2,172,500    1,978,750    1,770,000
+I=+0.00    2,133,125    2,143,125    1,651,875
+I=-0.02    3,065,625    2,153,125    1,646,250  <- best
+```
+**Much cleaner than either ±0.01 run: ISE decreases monotonically from
+`P=-0.02` to `P=+0.02` in all three `I` rows, no exceptions.** Confirms
+the "more `P` than default is better" direction seen (noisily) in both
+±0.01 runs, now as a clear, consistent signal — exactly the outcome
+expected if ±0.01 was genuinely too small relative to the noise floor.
+Best point `P+0.02, I-0.02` (1,646,250) is nearly tied with `P+0.02,
+I=0.00` (1,651,875) — once `P` is raised, the exact `I` value barely
+matters at this scale. Worst point is the `P=-0.02, I=-0.02` corner
+(3,065,625), clearly separated from the rest of its column. Natural
+next step (not yet done): push `P` further positive (e.g. ±0.03-0.05)
+to see where this trend levels off or reverses.
+
+**Future risk, not yet a problem: `capture_step_response.py`'s
+`TARGET_SPEED` (currently 1000) could change one day, and `run_grid.py`
+would not notice.** `run_grid.py` has its own separate `TARGET_SPEED =
+1000` constant for its ISE calculation (`_compute_ise()`), duplicated
+because no shared-config file crosses the Windows/Pi boundary in this
+project — same reasoning already applies to `PI_HOST`/`DEVICE_ID` etc.
+being hardcoded per file. If `capture_step_response.py`'s `TARGET_SPEED`
+is ever changed (e.g. to 1500) without also updating `run_grid.py`'s
+copy, nothing errors — `_compute_ise()` would silently score every
+point against the *wrong* setpoint, producing large, meaningless ISE
+values instead of a clear failure. There is also currently no
+`--target-speed` CLI flag on `capture_step_response.py` — `target_speed`
+is only overridable by calling `run()` directly in Python, not through
+the SSH/CLI path `run_grid.py`/`run_experiment.py` actually use, so
+changing it for real would need a source edit (+ redeploy) in the first
+place, same as the `DURATION` change above. Two more things that would
+need re-checking, not just assumed to carry over, if the target speed
+ever does change: `_soft_stop()` already scales proportionally
+(`target_speed * i / steps`) so needs no fix, but `DURATION`'s "enough
+margin over the ~2-3s settling time" reasoning was validated
+specifically at 1000rpm — PI settling dynamics don't necessarily scale
+linearly with setpoint, so that margin should be re-validated at a new
+target speed rather than assumed to still hold. ISE values gathered at
+different `TARGET_SPEED` settings also wouldn't be directly comparable
+to each other.
+
+**`run_grid.py` gained an automatic best-point chart (2026-08-20).**
+`_make_best_point_plot()`: same rpm-step + current-twin-axis style as
+`run_experiment.py`'s `_make_plot()`, but LIN-only (no Saleae/Hall
+overlay, consistent with the grid search staying LIN-only throughout).
+Runs automatically at the end of `main()` against whichever point had
+the lowest ISE, saved as `best_p{..}_i{..}.png` in the same sweep
+directory. Verified directly against the real
+`runs/2026-08-20_145713_grid/` data (not just a synthetic test).
+
 ## LIN Protocol
 ### Header Operation
 The header operation is like this:

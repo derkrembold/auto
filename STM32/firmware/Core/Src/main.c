@@ -72,7 +72,7 @@ void delay_ms(uint16_t);
 void delay_us(uint32_t);
 void fillbody(uint8_t, uint8_t*, uint8_t);
 void error (int);
-void updateramp(void);
+void updateramp(bool);
 uint8_t iam();
 uint8_t addparity(uint8_t);
 int8_t getindex(uint8_t);
@@ -295,7 +295,7 @@ int main(void)
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_10, GPIO_PIN_RESET);
 			  //HAL_GPIO_WritePin(GPIOE, GPIO_PIN_8, GPIO_PIN_RESET);
 		  }
-		  updateramp();
+		  updateramp(false);
 		  //picontrol(controlvariable, rpm);
 		  //driveStep(controlvariable);
 
@@ -812,8 +812,11 @@ int16_t picontrol(int16_t setpoint, int16_t processvalue)
 }
 
 
-void updateramp(void)
+void updateramp(bool enabled)
 {
+
+  if (enabled == true) {
+  
     if(controlvariable < controlvariableinput)
     {
         controlvariable += RAMPSTEP;
@@ -826,6 +829,10 @@ void updateramp(void)
         if(controlvariable < controlvariableinput)
         	controlvariable = controlvariableinput;
     }
+  } else {
+
+    controlvariable = controlvariableinput;
+  }
 }
 
 

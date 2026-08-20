@@ -325,6 +325,47 @@ instead of baked into the firmware source).
   being too short for the motor to finish spinning up, not a real
   stall (see `raspi/watchdog/CLAUDE.md`'s Two-Layer Safety Check for
   why that layer doesn't act on its own yet).
+
+- **`updateramp()` gained an `enabled` toggle (2026-08-20), deliberately
+  disabled for step-response characterization.** Was `void
+  updateramp(void)`, unconditionally advancing `controlvariable` toward
+  `controlvariableinput` by `RAMPSTEP` per call every main-loop
+  iteration (soft-start/soft-change behavior). Now `void
+  updateramp(bool enabled)`: `true` keeps the original `RAMPSTEP`-limited
+  ramp, `false` jumps `controlvariable = controlvariableinput` directly
+  — a true step, no smoothing. The only call site (`main.c`'s main loop)
+  currently passes `false` unconditionally, so ramping is off for *all*
+  speed changes right now, not just during step-response runs — there's
+  no separate "characterization mode" vs. "normal operation" distinction
+  yet. Deliberate, not an oversight: a software ramp on the setpoint
+  acts as an input prefilter, which distorts exactly what a step-response
+  characterization run is trying to measure (rise time, overshoot) —
+  agreed after review. Planned: flip back to `updateramp(true)` once the
+  grid search and gradient search (see root `CLAUDE.md`'s Goal) have
+  found the optimal `KP`/`KI`, restoring smooth setpoint changes for
+  normal/production operation.
+  - **Caution while it stays disabled:** current sensing is still
+    physically disabled (see Known Hardware Issue below), and an
+    un-ramped jump straight to a large `controlvariableinput` is exactly
+    the kind of event most likely to produce a large current spike —
+    the same failure class suspected of blowing the original current-
+    sense shunt (see Known Hardware Issue below). Worth keeping in mind
+    at higher target speeds/currents during grid-search sweeps.
+  - **Confirmed on real hardware the same day (2026-08-20,
+    `runs/2026-08-20_134718_experiment/`, `pi 0.0 0.0` i.e. default
+    gains): most of the previously-observed step-response "dead time"
+    was a ramp artifact, not a real property of the motor/controller.**
+    With the ramp disabled, `rpm` (both LIN `st2mot` and independent
+    Saleae Hall-edge ground truth) reaches ~875 (~88% of the 1000
+    target) within ~0.3s of the step, then oscillates/overshoots in a
+    ~950–1050 band before settling — a fast, visibly real step response.
+    Earlier ramp-enabled runs' apparent lag was mostly the
+    `RAMPSTEP`-limited setpoint itself taking time to reach the target,
+    not slow physical/control-loop dynamics. Relevant for the future
+    grid/gradient search's cost function (see `analysis/CLAUDE.md`'s
+    Open Points): any dead-time-like metric should be computed from
+    ramp-disabled runs, since the ramp-enabled number was inflated by
+    this artifact.
 - Full state tables (CW/CCW), the `driveState()`/`driveStep()`
   description, the PI controller source, measured RPM-vs-control-value
   and oscilloscope timing tables, and the STM32CubeIDE project's file

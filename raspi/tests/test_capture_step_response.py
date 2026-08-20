@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from capture_step_response import run
+from capture_step_response import run, _soft_stop
 
 
 class _FakeClock:
@@ -66,7 +66,41 @@ def test_run_sends_zero_then_target_speed_first():
     sent = [call.args[0] for call in conn.send.call_args_list]
     assert sent[0] == "speed 0"
     assert sent[1] == "speed 1000"
+    # Staged soft stop (2026-08-20), not a single abrupt "speed 0" --
+    # see _soft_stop()'s own tests below for the exact staging.
     assert sent[-1] == "speed 0"
+    assert sent[-2] != "speed 0"
+
+
+# --- soft stop (added 2026-08-20) ---
+
+def test_soft_stop_stages_speed_down_to_zero():
+    conn = _fake_conn([])
+    clock = _FakeClock()
+    with patch("capture_step_response.time.sleep", clock.sleep):
+        _soft_stop(conn, target_speed=1000, steps=5, duration=1.0)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent == ["speed 800", "speed 600", "speed 400", "speed 200", "speed 0"]
+
+
+def test_soft_stop_spans_the_requested_duration():
+    conn = _fake_conn([])
+    clock = _FakeClock()
+    with patch("capture_step_response.time.sleep", clock.sleep):
+        _soft_stop(conn, target_speed=1000, steps=5, duration=1.0)
+
+    assert clock.now == pytest.approx(1.0)
+
+
+def test_soft_stop_scales_with_target_speed():
+    conn = _fake_conn([])
+    clock = _FakeClock()
+    with patch("capture_step_response.time.sleep", clock.sleep):
+        _soft_stop(conn, target_speed=500, steps=5, duration=1.0)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent == ["speed 400", "speed 300", "speed 200", "speed 100", "speed 0"]
 
 
 def test_run_samples_rpm_expected_number_of_times():

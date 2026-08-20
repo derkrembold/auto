@@ -112,11 +112,56 @@ still a meaningful trend) — current only ever comes from the LIN side,
 the Saleae capture itself has no current channel. Reference
 implementation: `runs/2026-08-18_trigger_capture/plot_via_skill.py`.
 
+## Cost Function (Grid/Gradient Search Metric)
+
+**Decided 2026-08-21 (discussion only, not yet implemented): ISE
+(integral/sum of squared error).** Subtract the setpoint step function
+from the measured `rpm` trace, square each point, sum — low value means
+good tracking, high value means poor tracking (overshoot, oscillation,
+and slow settling all increase it). Standard step-response quality
+metric; matches what the `hall_vs_lin_rpm.png` plots already visualize
+by eye.
+
+**Measurement source: LIN `rpm` for the grid search; Saleae Hall-edge
+ground truth held in reserve for the gradient-search/validation phase,
+not spent per grid point.** Reasoning from the 2026-08-21 discussion:
+- **Scales to many unattended points.** A grid search calls
+  `capture_step_response.py --p-delta/--i-delta` repeatedly; LIN-only
+  needs no Saleae checklist/trigger-arm/false-trigger-retry/consent per
+  point, sidestepping the already-flagged "one-consent-per-run doesn't
+  scale to a full sweep" problem entirely for this phase (see the
+  grid-search TODO item, root `CLAUDE.md`'s Goal).
+- **Already validated as tracking Hall ground truth closely** across
+  multiple prior runs (see Hall-Edge RPM Conversion above and
+  `STM32/CLAUDE.md`'s `speed`≈`rpm` Open Points entry).
+- **The known measurement artifacts apply roughly equally to every grid
+  point** — same firmware measurement path (100ms free-running window
+  not synced to the step event, 25rpm quantization; see
+  `STM32/CLAUDE.md`'s RPM Measurement Resolution and Commutation &
+  Control sections) for all of them — so they should mostly wash out of
+  a *relative* ranking across candidates, even though they distort the
+  absolute step-response shape (see the "dead time was mostly a ramp
+  artifact" finding, 2026-08-20).
+- **Reconsider for the gradient-search phase.** Fewer, more closely-
+  spaced candidates around the grid search's best point means the same
+  quantization/windowing noise that washes out across a coarse grid
+  could obscure genuinely small differences there — Saleae ground truth
+  may be worth bringing back in for that narrower phase, or at least
+  for validating the final chosen point, not for scoring every point.
+
+**Still open, not yet decided:** exact ISE window (whole capture vs.
+just the step segment), how the 25rpm quantization/window-lag artifacts
+get handled in the subtraction (if at all), and the concrete mechanism
+for reintroducing Saleae in the gradient-search phase. Not implemented
+yet — this is a design decision only so far.
+
 ## Open Points (analysis-specific)
 
-- Cost function/metric weighting for the optimization loop — not yet
-  defined. Should decide there whether/how `hall_rpm.py`'s ground-truth
-  rpm gets used when available, vs. falling back to LIN `rpm` alone
-  when it isn't.
+- Whatever metric ends up including a dead-time/rise-time term must be
+  computed only from ramp-disabled runs (`updateramp(false)`, current
+  state as of 2026-08-20) — see `STM32/CLAUDE.md`'s Commutation &
+  Control section: a ramp-enabled run's apparent dead time is mostly a
+  ramp artifact, not the real motor/controller dynamics, confirmed by a
+  direct before/after comparison on real hardware.
 
 Fill this in here once fixed, not in the root `CLAUDE.md`.

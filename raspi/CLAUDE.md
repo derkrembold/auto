@@ -211,9 +211,32 @@ other. Same caution applies to any future same-named files across
   persistent-connection and Motor Execution Consent reasoning as
   `validate_speed.py` above.
 - `control/capture_step_response.py` — standalone script: `speed 0` →
-  `speed 1000` (step input), then samples `rpm` every 200ms for 8s
-  (measured from the step, not from the initial `speed 0`), always
-  ending with `speed 0`. Prints CSV
+  `speed 1000` (`TARGET_SPEED` — no `--target-speed` CLI flag exists,
+  only overridable by calling `run()` directly in Python, not through
+  the SSH/CLI path `run_grid.py`/`run_experiment.py` use; if this ever
+  changes, see root `CLAUDE.md`'s Grid Search section for why
+  `run_grid.py`'s own separate, duplicated `TARGET_SPEED` constant
+  would also need updating, silently, or its ISE scoring breaks) (step
+  input), then samples `rpm` every 200ms for 7s
+  (`DURATION`, shortened from 8s 2026-08-21 — see root `CLAUDE.md`'s
+  Grid Search section for the reasoning: enough margin over the ~2-3s
+  settling time observed at default gains to still show a slower-
+  settling/untested P/I candidate's true behavior, without running the
+  motor longer than needed) — measured from the step, not from the
+  initial `speed 0`, always ending with a **staged soft stop**
+  (`_soft_stop()`, added 2026-08-20), not a single abrupt `speed 0`.
+  Runs after the sampling loop closes (so it doesn't affect the CSV or
+  any score computed from it), reduces `target_speed` to 0 in
+  `STOP_RAMP_STEPS` (5) evenly-spaced steps over `STOP_RAMP_DURATION`
+  (1.0s) — e.g. 1000→800→600→400→200→0. Found live (2026-08-20): a
+  single abrupt `speed 0` after a sustained run stopped the motor
+  harder than a plain coast-down would, plausibly the PI controller
+  reacting aggressively to a sudden large negative error rather than
+  the rotor just freewheeling down. Deliberately a **Python-side**
+  ramp, not a firmware one — `updateramp()` stays disabled
+  (`updateramp(false)`, see `STM32/CLAUDE.md`'s Commutation & Control
+  section) so the *start* of the step stays an unramped true step for
+  characterization; this only smooths the stop. Prints CSV
   (`elapsed_ms,rpm,current_val1,current_val2`) to stdout — does not
   write a file itself, the caller (human or Claude capturing the SSH
   output) decides where it's saved, e.g. `runs/` in the main repo (see

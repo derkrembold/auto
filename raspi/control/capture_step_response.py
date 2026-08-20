@@ -28,6 +28,11 @@ the watchdog is the single source of truth for that, see
 run_experiment.py's own docstring for why duplicating it client-side
 was deliberately avoided. Omit both to leave KP/KI at their firmware
 defaults, same as never calling `pi` at all.
+
+Ends with a staged soft stop (added 2026-08-20), not a single abrupt
+`speed 0` — see _soft_stop()'s own docstring for why. Runs after the
+sampling loop closes, so it has no effect on the printed CSV/any
+ISE-style scoring computed from it.
 """
 import argparse
 import logging
@@ -45,7 +50,10 @@ logger = logging.getLogger("capture_step_response")
 TARGET_SPEED = 1000
 SAMPLE_INTERVAL = 0.2  # seconds, rpm sampling
 CURRENT_SAMPLE_INTERVAL = 1.0  # seconds -- matches the current sensor's own averaging window
-DURATION = 8.0  # seconds, measured from the speed step, not from speed 0
+DURATION = 7.0  # seconds, measured from the speed step, not from speed 0
+
+STOP_RAMP_STEPS = 5  # number of speed commands sent during the soft stop, last one is always 0
+STOP_RAMP_DURATION = 1.0  # seconds, total time from the first reduced speed to the final 0
 
 RPM_RE = re.compile(r"rpm=(-?\d+)")
 CURRENT_RE = re.compile(r"val1=(\S+) val2=(\S+)")
@@ -67,6 +75,24 @@ def _read_rpm(conn):
 def _read_current(conn):
     match = CURRENT_RE.search(_send(conn, "current"))
     return (match.group(1), match.group(2)) if match else (None, None)
+
+
+def _soft_stop(conn, target_speed, steps=STOP_RAMP_STEPS, duration=STOP_RAMP_DURATION):
+    # A single abrupt `speed 0` after a sustained high speed was
+    # observed live (2026-08-20) to stop the motor harder than a plain
+    # coast-down would -- plausibly the PI controller reacting to a
+    # sudden large negative error rather than the rotor just freewheeling
+    # down under friction. Firmware's own updateramp() stays disabled
+    # (updateramp(false), see STM32/CLAUDE.md's Commutation & Control
+    # section) deliberately -- re-enabling it would also smooth the
+    # *start* of the step, undoing the whole point of turning it off.
+    # This ramps down in stages from the Python side instead, only
+    # affecting the stop.
+    step_interval = duration / (steps - 1)
+    for i in range(steps - 1, 0, -1):
+        _send(conn, f"speed {round(target_speed * i / steps)}")
+        time.sleep(step_interval)
+    _send(conn, "speed 0")
 
 
 def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
@@ -108,7 +134,7 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
             elapsed_ms = (time.monotonic() - start) * 1000
             print(f"{elapsed_ms:.0f},{rpm},{current_val1},{current_val2}")
 
-        _send(conn, "speed 0")
+        _soft_stop(conn, target_speed)
 
 
 if __name__ == "__main__":
