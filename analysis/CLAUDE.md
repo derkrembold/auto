@@ -155,6 +155,54 @@ get handled in the subtraction (if at all), and the concrete mechanism
 for reintroducing Saleae in the gradient-search phase. Not implemented
 yet — this is a design decision only so far.
 
+## Grid Heatmap (`grid_heatmap.py`) — Built 2026-08-25
+
+Read-only merge/visualization tool, no motor interaction, no consent
+needed — combines multiple `run_grid.py`/`run_grid_row.py` output
+directories (any mix of 3×3 grids and 9-point rows, from different
+sessions/days) into a single set of heatmaps over the (P delta, I
+delta) plane. Built alongside `run_grid_row.py` (see root `CLAUDE.md`'s
+Row Search section) specifically because rows accumulate coverage
+incrementally across many separate runs — this is what turns that
+scattered set of `grid_results.csv` files into one combined picture.
+
+**Averages, doesn't just overwrite, when the same (P,I) coordinate
+appears in more than one input directory** (e.g. a repeated row, or a
+row's fixed-axis point landing on a grid's own center) — and prints/
+annotates how many observations went into each averaged cell (`n=`),
+never silently hiding it. This matches the project's whole
+repeatability-tracking habit so far (see `analysis/grid_search_log.md`)
+— a heatmap cell backed by one measurement and one backed by five
+shouldn't look identical.
+
+**Three heatmaps produced**, one per metric (`ise`, `mssd_2s`,
+`mssd_full`) — matching the three-metric convention `run_grid.py`/
+`run_grid_row.py` already use. `(0, 0)` is marked as the **current
+firmware default** (a red circle) — deliberately not "the best point,"
+see root `CLAUDE.md`'s Candidate Selection Philosophy section for why
+that distinction matters — and the single lowest-average-ISE point
+found is marked separately (an orange star). Sparse/irregular coverage
+(e.g. a row that only touches part of a grid's range) renders as blank
+cells, not a fabricated interpolation.
+
+**Rejects old-schema input explicitly, rather than silently
+misreading it:** files still using the pre-2026-08-25 `tv_2s`/
+`tv_full` column names (the linear Total Variation version, superseded
+by MSSD the same day) fail with a clear message telling the user to
+regenerate with current `run_grid.py`/`run_grid_row.py`, rather than
+being read as if they were the (differently-scaled, differently-
+meaning) MSSD columns.
+
+**Verified with synthetic data before any real use** (two overlapping
+synthetic `grid_results.csv`s, one mimicking a 3×3 grid and one a
+5-point row sharing one coordinate with it): correctly detected and
+averaged the one shared coordinate, correctly rendered the sparse
+combined shape, correctly marked both reference points. Not yet run
+against real hardware data, since no real `run_grid.py`/`run_grid_row.py`
+sweep has been captured with the final `mssd_2s`/`mssd_full` column
+names yet (every real sweep so far predates the MSSD rename — see
+`analysis/grid_search_log.md`'s 2026-08-25 section).
+
 ## Open Points (analysis-specific)
 
 - Whatever metric ends up including a dead-time/rise-time term must be

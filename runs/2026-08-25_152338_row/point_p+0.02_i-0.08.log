@@ -1,0 +1,100 @@
+15:23:39.376  INFO    -> pi 0.02 -0.08
+15:23:39.379  INFO    <- OK
+15:23:39.379  INFO    -> speed 0
+15:23:39.383  INFO    <- OK
+15:23:39.383  INFO    -> speed 1000
+15:23:39.386  INFO    <- OK
+15:23:39.387  INFO    -> rpm
+15:23:39.391  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+15:23:39.392  INFO    -> current
+15:23:39.396  INFO    <- OK ret=0 val1=-0.10 val2=0.05
+15:23:39.587  INFO    -> rpm
+15:23:39.591  INFO    <- OK ret=0 rpm=250 (hex=0x00fa)
+15:23:39.787  INFO    -> rpm
+15:23:39.791  INFO    <- OK ret=0 rpm=675 (hex=0x02a3)
+15:23:39.987  INFO    -> rpm
+15:23:39.991  INFO    <- OK ret=0 rpm=650 (hex=0x028a)
+15:23:40.187  INFO    -> rpm
+15:23:40.192  INFO    <- OK ret=0 rpm=750 (hex=0x02ee)
+15:23:40.387  INFO    -> rpm
+15:23:40.392  INFO    <- OK ret=0 rpm=850 (hex=0x0352)
+15:23:40.392  INFO    -> current
+15:23:40.398  INFO    <- OK ret=0 val1=-0.34 val2=-0.39
+15:23:40.587  INFO    -> rpm
+15:23:40.592  INFO    <- OK ret=0 rpm=850 (hex=0x0352)
+15:23:40.787  INFO    -> rpm
+15:23:40.792  INFO    <- OK ret=0 rpm=925 (hex=0x039d)
+15:23:40.987  INFO    -> rpm
+15:23:40.992  INFO    <- OK ret=0 rpm=900 (hex=0x0384)
+15:23:41.187  INFO    -> rpm
+15:23:41.192  INFO    <- OK ret=0 rpm=950 (hex=0x03b6)
+15:23:41.387  INFO    -> rpm
+15:23:41.392  INFO    <- OK ret=0 rpm=975 (hex=0x03cf)
+15:23:41.392  INFO    -> current
+15:23:41.398  INFO    <- OK ret=0 val1=-0.49 val2=-0.49
+15:23:41.587  INFO    -> rpm
+15:23:41.592  INFO    <- OK ret=0 rpm=975 (hex=0x03cf)
+15:23:41.787  INFO    -> rpm
+15:23:41.792  INFO    <- OK ret=0 rpm=975 (hex=0x03cf)
+15:23:41.987  INFO    -> rpm
+15:23:41.992  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:42.187  INFO    -> rpm
+15:23:42.192  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:42.387  INFO    -> rpm
+15:23:42.392  INFO    <- OK ret=0 rpm=975 (hex=0x03cf)
+15:23:42.392  INFO    -> current
+15:23:42.398  INFO    <- OK ret=0 val1=-0.59 val2=-0.44
+15:23:42.587  INFO    -> rpm
+15:23:42.592  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:42.787  INFO    -> rpm
+15:23:42.792  INFO    <- OK ret=0 rpm=1025 (hex=0x0401)
+15:23:42.987  INFO    -> rpm
+15:23:42.992  INFO    <- OK ret=0 rpm=975 (hex=0x03cf)
+15:23:43.187  INFO    -> rpm
+15:23:43.192  INFO    <- OK ret=0 rpm=1025 (hex=0x0401)
+15:23:43.387  INFO    -> rpm
+15:23:43.392  INFO    <- OK ret=0 rpm=1025 (hex=0x0401)
+15:23:43.392  INFO    -> current
+15:23:43.398  INFO    <- OK ret=0 val1=-0.39 val2=-0.44
+15:23:43.587  INFO    -> rpm
+15:23:43.592  INFO    <- OK ret=0 rpm=975 (hex=0x03cf)
+15:23:43.787  INFO    -> rpm
+15:23:43.792  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:43.987  INFO    -> rpm
+15:23:43.992  INFO    <- OK ret=0 rpm=1025 (hex=0x0401)
+15:23:44.187  INFO    -> rpm
+15:23:44.192  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:44.387  INFO    -> rpm
+15:23:44.392  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:44.392  INFO    -> current
+15:23:44.398  INFO    <- OK ret=0 val1=-0.54 val2=-0.54
+15:23:44.587  INFO    -> rpm
+15:23:44.592  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:44.787  INFO    -> rpm
+15:23:44.792  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:44.987  INFO    -> rpm
+15:23:44.992  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:45.187  INFO    -> rpm
+15:23:45.192  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:45.387  INFO    -> rpm
+15:23:45.392  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:45.392  INFO    -> current
+15:23:45.398  INFO    <- OK ret=0 val1=-0.54 val2=-0.44
+15:23:45.587  INFO    -> rpm
+15:23:45.592  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:45.787  INFO    -> rpm
+15:23:45.792  INFO    <- OK ret=0 rpm=1025 (hex=0x0401)
+15:23:45.987  INFO    -> rpm
+15:23:45.992  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:46.187  INFO    -> rpm
+15:23:46.192  INFO    <- OK ret=0 rpm=1000 (hex=0x03e8)
+15:23:46.192  INFO    -> speed 800
+15:23:46.197  INFO    <- OK
+15:23:46.448  INFO    -> speed 600
+15:23:46.453  INFO    <- OK
+15:23:46.704  INFO    -> speed 400
+15:23:46.708  INFO    <- OK
+15:23:46.959  INFO    -> speed 200
+15:23:46.964  INFO    <- OK
+15:23:47.215  INFO    -> speed 0
+15:23:47.220  INFO    <- OK

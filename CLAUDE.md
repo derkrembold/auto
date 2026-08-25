@@ -75,6 +75,8 @@ Auto/
 ├── generate_addresses.py   Generates addresses.md + writes directly to every consuming file
 ├── addresses.md            Generated "at a glance" occupied/free PID map
 ├── run_experiment.py       Standalone P/I grid/gradient-search point runner (see raspi/CLAUDE.md)
+├── run_grid.py             3x3 P/I stencil sweep around the firmware defaults (see Grid Search section)
+├── run_grid_row.py         One 9-point line along a single P/I axis (see Row Search section)
 ├── STM32/          Firmware + build/flash automation (STM32 CLI)
 ├── raspi/
 │   ├── control/    LIN master code (speed command) — already implemented
@@ -263,15 +265,45 @@ between `capture_step_response.py` invocations, so the final fetch
 already contains all 9 points' traffic; fetching it 9 times would just
 be 8 redundant, growing supersets of the same file.
 
-**Summary output: a 3×3 ISE matrix.** Each point's cost (see
-`analysis/CLAUDE.md`'s Cost Function section for the ISE formula) goes
-into `grid_results.csv` (columns: `p_delta,i_delta,ise`) in the same
-sweep directory — machine-readable input for the later gradient search
-(which needs the grid's best point as its seed), plus printed as a
-readable 3×3 table to the console at the end. A small heatmap PNG of
-the same matrix would fit this project's existing habit of producing a
-plot per experiment, but is a nice-to-have, not essential — the CSV is
-the output the gradient search actually depends on.
+**Summary output: a 3×3 ISE matrix, plus MSSD roughness matrices
+(added 2026-08-25).** Each point's cost (see `analysis/CLAUDE.md`'s
+Cost Function section for the ISE formula) goes into `grid_results.csv`
+(columns: `p_delta,i_delta,ise,mssd_2s,mssd_full`) in the same sweep
+directory — machine-readable input for the later gradient search
+(which needs the grid's best point as its seed), plus all three
+printed as readable 3×3 tables to the console at the end. A small
+heatmap PNG of the same matrix would fit this project's existing habit
+of producing a plot per experiment, but is a nice-to-have, not
+essential — the CSV is the output the gradient search actually depends
+on. The "best point" selection (for the automatic chart below) still
+uses ISE only, not MSSD.
+
+**MSSD (Mean Square Successive Difference, von Neumann 1941) — a
+second metric alongside ISE, added 2026-08-25, because ISE alone can't
+tell a smooth rise from a rough/hunting one that happens to reach the
+same target equally well.** Found by ear/eye first (a `P+0.10, I+0.03`
+step-response trace visibly and audibly hunted up and down during the
+first second, e.g. `rpm` going 575→800→650→950→750→950 within ~1s),
+then quantified: `_compute_mssd(csv_path, window_s)` is the mean of
+`(rpm[i+1]-rpm[i])²` over consecutive samples in a window — squared,
+not a plain absolute-difference sum, specifically because a linear sum
+scores "one violent single reversal" the same as "many small even
+wobbles" of similar total size, and a real comparison (`P+0.10, I=0.00`
+vs `P+0.10, I=-0.03`) showed exactly that failure mode: only ~14%
+apart on a linear sum despite one having a visibly sharper single
+double-reversal, but ~2.2x apart once squared — matching the actual
+audible/visible difference far better. Same quadratic-penalty
+philosophy as ISE itself (which already squares distance-from-target
+for the same reason: punish large deviations disproportionately).
+Mean, not sum, so results stay comparable in magnitude across windows
+covering a different number of samples. Two windows, both requested by
+the user: `mssd_2s` (`MSSD_SHORT_WINDOW_S = 2.0`, the rise/transient
+phase specifically) and `mssd_full` (the whole 7s capture, where every
+point's normal steady-state ripple also contributes, not just the
+rise). See `analysis/grid_search_log.md`'s 2026-08-25 section for the
+real traces and numbers that prompted this, including the earlier,
+rejected linear-sum "Total Variation" version and why it wasn't good
+enough on its own.
 
 **4-second pause between points (thermal caution + cleaner step
 starts).** Discussed 2026-08-21: motivated by a concern that the power
@@ -349,6 +381,198 @@ Runs automatically at the end of `main()` against whichever point had
 the lowest ISE, saved as `best_p{..}_i{..}.png` in the same sweep
 directory. Verified directly against the real
 `runs/2026-08-20_145713_grid/` data (not just a synthetic test).
+
+## Row Search (`run_grid_row.py`) — Built 2026-08-25
+
+A sibling to `run_grid.py`, for when a 3×3 stencil isn't the right
+shape — one line of 9 points along a single P/I axis, the other axis
+held fixed, instead of a symmetric 2D grid. Motivated by the same-day
+finding that a 3×3 grid couldn't easily reveal *where* the P trend
+actually turns over (see `analysis/grid_search_log.md`'s 2026-08-25
+section) — a wide, densely-sampled line along one axis gives that
+directly, without needing to re-guess a bigger delta and rebuild a
+whole new grid each time.
+
+**Mechanics: imports `run_grid.py` as a module and reuses its SSH/
+point-execution/ISE/MSSD/plotting machinery directly, not duplicated.**
+`run_grid.py` itself was lightly refactored to make this possible —
+`_fetch_watchdog_log()` and `_run_analyze_logs()` were pulled out of
+its `main()` into standalone functions specifically so `run_grid_row.py`
+could call them too, with identical behavior in `run_grid.py` itself
+verified unchanged (compiles, no logic moved into different order).
+
+**One row = one axis varying, the other fixed, 9 points always
+symmetric around delta=0** (`-4·step, -3·step, ..., 0, ..., +4·step`)
+— matches the "0 = current firmware default" convention `run_grid.py`
+already uses. `axis` ("p" or "i"), the fixed value for the other axis,
+and the step size are all required arguments (CLI or interactive
+prompt) — no built-in default step, deliberately, same reasoning as
+`run_grid.py` never assuming a default delta magnitude.
+
+**`P_DELTA_MAX_DEFAULT = 0.10` — a hard, client-side safety cap unique
+to this script, checked before any motor movement, on every point's `P`
+value regardless of whether `P` is the row's fixed or its varying
+axis.** This is deliberately *not* handled the way `run_grid.py`/
+`run_experiment.py` handle the wire-level P/I range (left entirely to
+the watchdog's own `validate()`, never duplicated client-side) — the
+watchdog has no way to know about this limit, since it isn't a
+hardware/protocol constraint at all. It's tool-specific policy from
+this project's own experience: `P delta≈0.10` is where audible motor
+roughness ("Ruppeln") was first found and where the user drew an
+explicit line ("da werden wir niemals hingehen" about going further —
+see `analysis/grid_search_log.md`'s 2026-08-25 section). A named,
+overridable constant rather than a hardcoded rule ("sag niemals nie") —
+may need to change later (e.g. once tested under load), but defaults to
+enforcing today's known boundary, and fails loud with a clear message
+before touching the motor if violated.
+
+**Consent model: one confirmation per row, and the script exits when
+the row finishes — no automated chaining across rows.** Same physical-
+presence reasoning as `run_grid.py`'s whole-sweep consent, just applied
+to the smaller 9-point unit. For another row (e.g. a different fixed
+value), the user re-runs `run_grid_row.py` manually, with a fresh
+consent — explicit user design choice: "Ein Bestätigung ist ein 9
+Punkte Lauf. Dann wird beendet. Dann starte ich `run_grid_row` von
+neu." Deliberately keeps every single run small enough that an abort
+mid-row costs almost nothing to redo, rather than growing rows to
+cover more of the P/I plane in one sitting.
+
+**Output: `runs/<timestamp>_row/grid_results.csv`, same column schema
+as `run_grid.py`'s** (`p_delta,i_delta,ise,mssd_2s,mssd_full`) —
+deliberately identical, so multiple rows (and grids) from different
+sessions can later be merged by `analysis/grid_heatmap.py` (see
+`analysis/CLAUDE.md`) without any format translation. Per-point CSV/
+log naming and the automatic best-point chart are unchanged from
+`run_grid.py`, just printed as a 1D list (`_print_row()`) instead of a
+2D matrix, since a single row has no second axis to lay out.
+
+**Future idea, explicitly not being built now: `run_grid_column.py`.**
+Raised in discussion as a possible companion — but the current `axis`
+parameter already covers both orientations (P varying/I fixed, or I
+varying/P fixed) through the same script, so a dedicated "column"
+script would only be a naming/ergonomics change (two fixed scripts
+instead of one parameterized one), not new capability. Worth
+reconsidering only if the `axis` parameter turns out confusing in
+practice — not a design gap today.
+
+## Candidate Selection Philosophy — `P` As High As Practical, `I` Only As High As Needed
+
+**Decided 2026-08-25, by discussion, not yet applied to an actual final
+choice.** Governs how a final `KP`/`KI` candidate should eventually be
+picked from the grid data — not a `run_grid.py` mechanics decision, but
+a control-engineering judgment call that sits downstream of it.
+
+**Why `I` can't just be minimized: the plant itself already contains an
+integrator** (`ω = ∫(torque − load)/J dt`), so a pure-P controller left
+with a constant added load torque settles at a nonzero steady-state
+speed error (`error = load / Kp` — classic droop behavior, the same
+effect seen on droop-controlled generators). Only the controller's own
+`I` term removes this. The project's actual near-term context makes
+this concrete, not hypothetical: today's bench load is just the motor's
+own wheels + gearbox, but the eventual vehicle adds roughly another
+50kg — a load increase that will make steady-state droop from an
+under-tuned `I` much more noticeable than it is on the current rig.
+**So `I` should not be tuned toward zero for "robustness" — that
+reasoning was considered and rejected.**
+
+**Why `I` also shouldn't be pushed to the aggressive edge of what looks
+best under today's no-load bench test.** A larger `I` reduces phase/
+stability margin, and that margin loss gets worse specifically as plant
+dynamics change (higher inertia from added load) — a gain combination
+that looks merely lively under the current light load could become
+properly unstable or oscillatory once the vehicle's mass is added,
+since the `KP`/`KI` pair was never tested under anything like that
+load. This is exactly what the MSSD roughness metric (see above) is
+already starting to show even under today's light load: `P+0.10,
+I=0.00` measurably rougher than `P+0.10, I=-0.03` — a preview of the
+same kind of degradation load would likely make worse.
+
+**The resulting principle: `I` only as high as needed to keep
+steady-state droop acceptable under the expected future load, with
+deliberate margin below whatever level looks most "optimal" (lowest
+ISE) on the current unloaded rig.** Practical consequence for picking
+a seed/final candidate out of the grid data: prefer a point from the
+lower-`I` side of whatever good region the search finds, not
+automatically whichever single point scored the lowest no-load ISE —
+the good region found so far (`P≈0.05..0.10, I≈0.00..0.03`, see
+`analysis/grid_search_log.md`) is fairly flat, so this costs little to
+nothing under today's test conditions while buying real margin for the
+load that hasn't been tested yet. Testing under a more realistic load
+(even an approximate one — extra inertia/friction on the bench, not
+necessarily the real vehicle) before finalizing anything remains the
+more direct fix; this principle is what to do in the meantime, while
+that isn't available yet.
+
+**`P` design principle, same discussion: prefer `P` as high as practical
+within the good region, bounded by no-load MSSD staying acceptable —
+unlike `I`, no deliberate margin needed below the best-looking value.**
+Derived from the same linearized 2nd-order model as the `I` principle
+above: for `J·dω/dt + B·ω = T − load` under PI control, the closed-loop
+damping ratio works out to `ζ = (B+Kp) / (2·√(J·Ki))`. Two things fall
+out of this directly: `J` (inertia, grows with the eventual vehicle
+load) sits in the denominator, so **added load reduces damping for any
+fixed gains** — the system gets more oscillation-prone under load,
+independent of tuning. But `Kp` sits in the numerator, additively with
+the plant's own friction `B` — **so a higher `Kp` directly buys back
+damping margin against exactly that load-driven loss**, while `Ki`
+(denominator only, no compensating numerator term) purely erodes it.
+`P` and `I` are thus mirror images here: more `P` builds load-robustness
+margin, more `I` spends it.
+
+**Cross-checked against the real 2026-08-25 MSSD data, not just the
+model:** in 2 of the 3 tested `I` rows, `MSSD_2s` fell as `P` rose from
+-0.10 to 0.00 to +0.10 (less roughness with more `P`, matching the
+model). The one exception (`I=0.00`: high at both `P` extremes, lowest
+at the center) is exactly the point already flagged as the *least*
+reproducible in the whole dataset (a +50% swing between the two ±0.10
+repeats) — read as likely noise, not a real counter-effect, though not
+proven either way yet.
+
+**Practical consequence: unlike `I`, `P` does not need to be pulled back
+from the best-looking value for load-safety reasons — if anything, more
+`P` is protective as load increases.** The only ceiling on `P` is
+no-load smoothness itself: push `P` as high as the good region allows
+while `MSSD` (both windows) stays at a level the user is willing to
+accept hearing on the bench today, since that's the one hard constraint
+this whole exercise started from — see the note below on what "accept"
+currently means in practice.
+
+**Net effect on how ISE factors into candidate selection: the
+de-emphasis of ISE described above applies specifically to the `I`
+axis, not to `P`.** For `P`, "as high as practical" and "lowest ISE"
+point the same direction in every sweep run so far (`P` above default
+has been the single most consistent finding across the whole grid
+search) — there's no real tension to resolve there, `MSSD` just acts as
+the practical ceiling on how far to push it. The place ISE is
+genuinely overridden by a non-ISE criterion is `I`, where the
+lowest-ISE value and the load-safe value are not the same point.
+
+**Open caveat on `MSSD` itself, explicitly acknowledged, not yet
+resolved: the whole point of this metric is to proxy for something the
+user can hear** — "ich will einfach kein Ruppeln hören, auch ohne
+Last" (2026-08-25) is the actual requirement; `MSSD` is only a
+stand-in for it. So far `MSSD` has been calibrated against exactly
+**one** real ear-confirmed event (the original `P+0.10, I+0.03` trace
+that started this whole investigation) — everything since (the
+`I=0.00` vs. `I=-0.03` comparison, the theoretical cross-check above)
+has been visual/numeric reasoning built on that single anchor, not a
+second independent by-ear confirmation. **Correlation between `MSSD`
+and actually-audible roughness is plausible but not yet proven.**
+Practical fix, not yet started: on future real motor runs, explicitly
+note by ear whether a run sounded rough or not, and check that against
+the computed `MSSD` — a handful of paired observations would turn this
+from "plausible proxy" into either a trusted one or a metric that needs
+rethinking.
+
+**Related, same discussion: this is also part of why a classic small-
+step gradient search was judged a poor fit for the next phase (see
+`analysis/grid_search_log.md`'s 2026-08-25 section) — finite-difference
+gradient estimates get noisier as the step shrinks (already measured:
+±0.01 gave ~zero repeat-to-repeat correlation, ±0.02-0.03+ gave good
+correlation), so a literal gradient descent would tend to chase noise
+exactly in the fine-tuning regime it needs to be most careful in. Not
+worth over-optimizing a fragile local optimum on the unloaded rig in
+the first place, given it may not even transfer to the loaded vehicle.**
 
 ## LIN Protocol
 ### Header Operation
