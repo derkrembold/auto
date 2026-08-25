@@ -252,6 +252,19 @@ other. Same caution applies to any future same-named files across
   round-trip latency doesn't drift the interval over the run. Every
   command/reply also logged to `capture_step_response.log` (file only,
   same stdout-stays-clean-for-CSV reasoning as `validate_speed.py`).
+  **Gotcha confirmed live (2026-08-22): running this directly/
+  interactively without redirecting stdout loses the CSV entirely** —
+  the script itself never writes a file (by design, see above), so if
+  the caller doesn't save stdout somewhere, the data only ever existed
+  in a terminal that then scrolled away. Recoverable after the fact
+  only because `capture_step_response.log` independently timestamps
+  every `rpm`/`current` command and reply — the same data can be
+  reconstructed from those lines (elapsed time relative to the `speed
+  <target>` send), just not as conveniently as having the real CSV.
+  Redirect stdout to a file (`python3 capture_step_response.py >
+  runs/mytest.csv`) for any future ad hoc/direct run that isn't going
+  through `run_experiment.py`/`run_grid.py` (which already save it
+  properly).
   Both this and `validate_speed.py` above have their pre-flight checks
   (watchdog running? client already connected?), consent gating, and
   output-saving convention written up once in the `/run-raspi-validation`

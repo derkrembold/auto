@@ -96,6 +96,20 @@ millisecond-scale current spike. That gap is exactly why the STM32-local
 Hall-based approach (below) remains a real, deprioritized-not-discarded
 future plan.
 
+**Lower layer confirmed acting autonomously on real hardware
+(2026-08-22, battery power, no transformer).** Manual `speed 200` via
+`motorcontrol.py` (11:50:10.393) didn't get the motor moving; the
+watchdog's own `_check_stall()` fired at 11:50:13.602 — exactly
+`STALL_GRACE_PERIOD` (3.0s) later — and stopped the motor on its own,
+~10s *before* the user's own manual `speed 0` (11:50:23.323) reached
+it. Confirms the self-polling design goal directly: the check reacted
+correctly and faster than the human at the controls, with no client
+action needed to trigger it. Whether the slow start itself was
+battery-specific or just this speed being close to the motor's
+breakaway/static-friction threshold is unresolved — only one data
+point, not investigated further per the user's own read ("das finde
+ich jetzt völlig uninteressant").
+
 ## Architecture: Sole LIN Master
 
 LIN only tolerates one master on the bus. The watchdog is that master —

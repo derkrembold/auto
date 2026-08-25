@@ -1,0 +1,21 @@
+11:49:16.234  INFO    connected to watchdog
+11:49:20.211  INFO    -> hal
+11:49:20.217  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+11:49:24.067  INFO    -> hal
+11:49:24.073  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+11:49:43.318  INFO    -> current
+11:49:43.325  INFO    <- OK ret=0 val1=0.05 val2=0.05
+11:49:55.176  INFO    -> speed 0
+11:49:55.181  INFO    <- OK
+11:50:10.393  INFO    -> speed 200
+11:50:10.399  INFO    <- OK
+11:50:23.323  INFO    -> speed 0
+11:50:23.329  INFO    <- OK
+11:50:34.493  INFO    -> speed 400
+11:50:34.499  INFO    <- OK
+11:50:40.395  INFO    -> speed 0
+11:50:40.401  INFO    <- OK
+11:50:53.167  INFO    -> speed 500
+11:50:53.173  INFO    <- OK
+11:50:56.544  INFO    -> speed 0
+11:50:56.549  INFO    <- OK

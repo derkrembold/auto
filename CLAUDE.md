@@ -167,12 +167,16 @@ Server section, not duplicated here — in short, the Saleae
 kept the process alive after `main()` returned. Confirmed fixed live:
 a bare connect+`close_manager()` cycle now exits promptly on its own.
 
-## Grid Search (`run_grid.py`) — Design Settled 2026-08-21, Not Yet Built
+## Grid Search (`run_grid.py`)
 
-Discussed and agreed over several rounds 2026-08-21; deliberately not
-implemented yet (each round ended "nicht machen"). Named in the same
-style as `run_experiment.py`/`build.sh`/`flash.sh`. Captures the design
-decisions so building it next session doesn't need to re-derive them.
+Design/mechanics only — this section is stable and rarely changes.
+**Real-hardware results (every sweep run so far, matrices, findings,
+outliers, reproducibility checks) live in `analysis/grid_search_log.md`
+instead, as a growing chronological log — check there for "what has the
+grid search actually found," not here.** Design settled over several
+rounds 2026-08-21 (each round ended "nicht machen" at the time), built
+and confirmed 2026-08-20/22, deployed. Named in the same style as
+`run_experiment.py`/`build.sh`/`flash.sh`.
 
 **3×3 stencil centered on the firmware defaults, not an arbitrary
 range.** `KP`/`KI`'s current defaults (`KPDEFAULT`/`KIDEFAULT` in
@@ -214,7 +218,7 @@ prompt's discipline. The single upfront consent is standing in for "I
 will be physically present and able to intervene," not "I have reviewed
 and approved all 9 specific runs."
 
-**Ctrl-C abort, discussed but not yet implemented:**
+**Ctrl-C abort — implemented:**
 1. `KeyboardInterrupt` (SIGINT) hits the local `run_grid.py` process;
    since the SSH call for the in-flight point runs via a blocking
    `subprocess.run()`, the local `ssh` client normally receives the
@@ -307,115 +311,9 @@ longer than the old 8.0s `DURATION` with margin to spare, so it
 comfortably covers the new, shorter 7.0s step too — the trigger pin's
 own HIGH duration just shrinks by ~1s to match the shorter step,
 `has_sustained_high()`'s classification (0.5s minimum) isn't remotely
-close to that margin either.
-
-**Deployed and confirmed on real hardware the same day (2026-08-21).**
-`raspi/deploy.sh` run (one transient `motorpi.local` mDNS failure, its
-own built-in retry succeeded on attempt 2 — the usual flakiness, not a
-real problem), then verified directly on the Pi (`grep DURATION
-capture_step_response.py`) before a live test run. Actual measured
-duration `speed 1000` → final `speed 0`: 6.81s (35 samples × 0.2s =
-7.0s `DURATION`, matches exactly). `/analyze-logs`: only the expected
-`client disconnected — stopping motor` line, nothing else — cleaner
-than some prior 8.0s runs, which occasionally also showed the benign
-observe-only stall signature at coast-down. Step-response shape
-unchanged from the 8.0s baseline: fast rise (rpm≈850 within ~0.4s),
-settles into the same ~950–1025 oscillation band around the 1000
-target, current stable in the same roughly -0.44..-0.59A range — the
-last second that got trimmed was genuinely redundant steady-state data,
-not lost information.
-
-**First real `run_grid.py` sweep, confirmed end-to-end on real hardware
-(2026-08-20, `runs/2026-08-20_145713_grid/`, deltas ±0.01 — the
-smallest possible wire step, a deliberately conservative first test).**
-All 9 points completed, no abort. `analyze_logs.py` across all 10 log
-files (9 per-point `capture_step_response.log` copies + the one
-sweep-spanning `watchdog.log`): only expected/benign findings — 9
-normal `client disconnected` lines (one per point) plus one from an
-earlier same-day single-point test also caught in the same
-continuously-appended `watchdog.log`, 4 of the 9 points showing the
-known observe-only stall signature at coast-down, and a single
-one-off `rpm` call at 65ms (>50ms threshold, negligible). Confirms
-`run_grid.py`'s output-layout design working exactly as specified: one
-directory, 9 uniquely-named point CSV/log pairs, `watchdog.log` fetched
-once at the end already covering the whole sweep.
-
-Result — `grid_results.csv`:
-```
-             P=-0.01      P=+0.00      P=+0.01
-I=+0.01    3,574,375    2,146,875    1,428,750  <- best
-I=+0.00    2,184,375    1,573,750    1,582,500  <- center (defaults)
-I=-0.01    2,275,000    1,569,375    1,673,750
-```
-Best point: `P delta=+0.01, I delta=+0.01` (ISE 1,428,750, vs. 1,573,750
-at the untouched defaults). Pattern: `P` below the default is
-consistently worse across all three `I` rows (ISE roughly 1.4-2.3x
-higher) — a real, direction-consistent effect even at this smallest
-possible delta step, not just noise. `I`'s effect alone is less
-consistent (mixed sign depending on which `P` row), but combined with
-`P+0.01` it gives the sweep's best result — an early sign of real
-P/I coupling, i.e. exactly why a 2D grid (not two independent 1D
-sweeps) was the right call. **Caveat: each point was measured once, no
-repeats** — the direction of the P effect looks robust (same sign at
-every I level), but no run-to-run repeatability check has been done yet,
-so treat the exact magnitudes as provisional.
-
-**Qualitative confirmation, same run:** the best point's rpm trace
-(`best_point_p+0.01_i+0.01.png`) shows a smooth, monotonic PT1-like
-("Tiefpass") rise from 0 to ~1000 over about 1s, then settles into an
-even tighter ~950-1025 oscillation band than the default-gains
-baseline — visibly real electromechanical (rotor-inertia) dynamics, not
-a software-shaped curve, now that `updateramp(false)` is in effect (see
-the `updateramp()` entry above). Good independent confirmation that
-disabling the ramp was the right call for characterization.
-
-**Repeatability check on the same ±0.01 grid, same day
-(`runs/2026-08-20_151658_grid/`) — the caveat above was justified: the
-two runs are only weakly related.** Quantified, not just eyeballed:
-Pearson r=0.15, Spearman rank correlation ρ=0.17 between the two
-`grid_results.csv`s — both close to zero, not meaningfully different
-from "no relationship" at only 9 points. Mean ISE level stayed similar
-between runs (ratio 0.95, so no broad drift like a slowly discharging
-battery), meaning the mismatch is in each point's *relative* ranking,
-not a uniform shift. The run-1 "best point" (`P+0.01, I+0.01`,
-1,428,750) was rank 1 in run 1 but rank 7 of 9 in run 2 (2,017,500,
-+41%) — not reproduced at all. The only part of the pattern that
-survived: the two `P=-0.01` points with `I≤0` landed in the worst two
-or three ranks in *both* runs. Conclusion carried into the next sweep
-below: at the smallest possible delta (±0.01), measurement noise is
-comparable to or larger than the real P/I effect for most of the grid.
-
-**Soft stop confirmed on real hardware the same day
-(2026-08-20, ~15:35 single-point test after deploying it).** Logged
-sequence: `speed 800` → `speed 600` → `speed 400` → `speed 200` →
-`speed 0`, each ~0.25s apart, 1.02s first-reduction-to-zero (target
-was 1.0s) — matches `_soft_stop()`'s design exactly.
-`/analyze-logs`: only the one expected `client disconnected` line, not
-even the usual observe-only stall signature this time (one data point,
-not yet enough to claim the softer stop reduces how often that fires).
-
-**Second real sweep, larger delta (2026-08-20, `runs/
-2026-08-20_153737_grid/`, deltas ±0.02 — deliberately larger than the
-±0.01 runs above, precisely because those showed noise dominating the
-signal).** All 9 points clean (`analyze_logs.py`: only expected
-disconnect/stall-signature lines, no real anomalies). Result:
-```
-             P=-0.02      P=+0.00      P=+0.02
-I=+0.02    2,172,500    1,978,750    1,770,000
-I=+0.00    2,133,125    2,143,125    1,651,875
-I=-0.02    3,065,625    2,153,125    1,646,250  <- best
-```
-**Much cleaner than either ±0.01 run: ISE decreases monotonically from
-`P=-0.02` to `P=+0.02` in all three `I` rows, no exceptions.** Confirms
-the "more `P` than default is better" direction seen (noisily) in both
-±0.01 runs, now as a clear, consistent signal — exactly the outcome
-expected if ±0.01 was genuinely too small relative to the noise floor.
-Best point `P+0.02, I-0.02` (1,646,250) is nearly tied with `P+0.02,
-I=0.00` (1,651,875) — once `P` is raised, the exact `I` value barely
-matters at this scale. Worst point is the `P=-0.02, I=-0.02` corner
-(3,065,625), clearly separated from the rest of its column. Natural
-next step (not yet done): push `P` further positive (e.g. ±0.03-0.05)
-to see where this trend levels off or reverses.
+close to that margin either. Confirmed deployed and working on real
+hardware the same day — see `analysis/grid_search_log.md`'s 2026-08-20
+entries for the measured duration and step-response shape.
 
 **Future risk, not yet a problem: `capture_step_response.py`'s
 `TARGET_SPEED` (currently 1000) could change one day, and `run_grid.py`
