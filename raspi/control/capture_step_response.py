@@ -33,6 +33,19 @@ Ends with a staged soft stop (added 2026-08-20), not a single abrupt
 `speed 0` — see _soft_stop()'s own docstring for why. Runs after the
 sampling loop closes, so it has no effect on the printed CSV/any
 ISE-style scoring computed from it.
+
+Optional --target-speed (added 2026-08-27, prompted by kick-starts
+being observed at target speeds other than the 1000 default): the step
+target, positive or negative (negative = CCW, same sign convention as
+`speed`). Defaults to TARGET_SPEED (1000) if omitted, same as before
+this flag existed. _soft_stop()'s ramp already scales proportionally
+with whatever target_speed it's given, so it needs no change for this.
+**Not yet re-validated: DURATION's (7.0s) margin over the settling time
+was only ever confirmed at the 1000 default** — see root CLAUDE.md's
+Grid Search section ("Future risk, not yet a problem" note) — a
+different target speed's settling dynamics aren't guaranteed to fit in
+the same window, so treat any run at a non-default --target-speed as
+unvalidated on that front until checked against its own capture.
 """
 import argparse
 import logging
@@ -141,7 +154,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--p-delta", type=float, default=None)
     parser.add_argument("--i-delta", type=float, default=None)
+    parser.add_argument("--target-speed", type=int, default=TARGET_SPEED,
+                         help=f"step target, +/- (default {TARGET_SPEED})")
     args = parser.parse_args()
     if (args.p_delta is None) != (args.i_delta is None):
         sys.exit("--p-delta and --i-delta must be given together, or not at all")
-    run(p_delta=args.p_delta, i_delta=args.i_delta)
+    run(p_delta=args.p_delta, i_delta=args.i_delta, target_speed=args.target_speed)

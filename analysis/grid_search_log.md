@@ -241,6 +241,58 @@ shot. **Strategy for handling this (e.g., detecting/mitigating it, or
 just tolerating it as rare noise) deliberately deferred, not decided
 here** — noted only as a mechanism hypothesis for now.
 
+**Terminology added 2026-08-26, and a second, compounding mechanical
+cause raised alongside the electromagnetic one above.** The
+"Hall-sector boundary rest position" idea above has an established
+name in BLDC motor control: a **Dead Zone** — a rotor position (usually
+near a commutation sector boundary) where the currently active phase
+configuration produces little to no torque. Matches this project's
+hypothesis directly, not just an analogy.
+
+**Mechanical static friction ("stiction") is a separate, second
+possible contributor, and the two can compound rather than compete as
+explanations.** A Dead Zone position only means the *available* torque
+is weak at that instant — whether that's enough to actually stall the
+rotor also depends on how much torque is needed to break static
+friction and start moving at all. A rotor resting at a *mild* Dead Zone
+might still start fine most of the time if breakaway friction is low
+that moment (bearing lubrication state, exact contact point, etc. —
+inherently a bit variable run to run); resting at that *same* mild Dead
+Zone on a run where friction happens to be a bit higher could be enough
+to actually stall it. This gives a natural explanation for why the
+stall duration and its exact trigger point aren't perfectly
+repeatable/predictable even at the same nominal `P`/`I` and even at the
+same rough rotor region (see the `P=-0.10` row's per-point timing
+spread, ~0.60-0.61s across most points but 1.4-1.5s for a couple —
+consistent with "usually a mild Dead Zone, occasionally compounded by
+higher-than-usual friction that same run," not one fixed mechanism with
+one fixed severity).
+
+**Two named candidate fix strategies discussed, both deliberately not
+designed or built yet — mechanism verification (the planned Saleae
+investigation) comes first:**
+- **Lead Angle Control (a.k.a. Phase Advance):** commutate to the next
+  state slightly *before* the Hall sensor's nominal transition, rather
+  than exactly at it. Classically discussed in BLDC literature more as
+  a running-speed efficiency technique (compensating winding-inductance
+  current lag as electrical frequency rises) than a standstill fix, but
+  the same underlying principle — never dwelling exactly at a
+  sector-edge Dead Zone — directly supports it as a candidate here too,
+  and it's conceptually close to the project's own earlier "kick to the
+  next-next commutation state during a stall" idea, just continuous
+  rather than an occasional forced jump.
+- **Forced/Open-Loop Commutation start-up:** a more standstill-specific
+  standard technique — briefly drive a fixed blind commutation sequence
+  regardless of Hall feedback to get the rotor moving, then hand off to
+  normal closed-loop Hall commutation once enough speed is reached.
+  **User confirmed the precise relationship: the project's own
+  kick-start idea is the goal/strategy ("still absolutely current"),
+  and Forced/Open-Loop Commutation is the established mechanism that
+  realizes it** — periodically forcing the next-next commutation state
+  during a stall, rather than waiting on real Hall feedback, is a
+  kick-start implemented via forced/open-loop commutation, not two
+  competing names for the same thing at the same level.
+
 **Fourth sweep, same day, same ±0.03 deltas, repeated on impulse
 (`runs/2026-08-22_122821_grid/`) — the stiction/overshoot outlier above
 did NOT reproduce, and once it's excluded the two ±0.03 sweeps agree
@@ -784,4 +836,369 @@ both the original stiction event (long stall then overshoot) and the
 general negative-`P` slow start above — a brief, isolated overshoot
 spike with no stall precursor at all. Only measured once (`n=1`); the
 `P=+0.06` MSSD value should be treated as unconfirmed until repeated.
+
+## 2026-08-26: Saleae Investigation Session, Detector Gap Found, Kick-Start Design Started
+
+**Plan executed: repeat a `P=-0.10` row coordinate with `run_experiment.py`
+(Saleae running) until a genuine stiction event is caught.** `P=-0.10,
+I=+0.04` chosen first (had the single worst delay, ~1.2-1.4s, in
+yesterday's row data). Confirmed `run_experiment.py` itself has no
+`P_DELTA_MAX_DEFAULT`-style cap of its own (only `run_grid_row.py`
+does) — user explicitly declined going to `P delta=-0.11` anyway,
+correctly noting it would break yesterday's own deliberately-set
+boundary for no real benefit (the Dead Zone mechanism is about rotor
+rest position, not the exact `P` value).
+
+**Five real attempts, `P=-0.10` throughout, `I` varied (`+0.04` ×2,
+then `-0.06`/`-0.08`-ish ×3 based on the user's own reasoning that a
+weaker `I` should delay the integral term's ability to break through a
+Dead Zone, making a bigger event more likely to be caught):**
+- Attempts 1-4: clean logs, Saleae trigger caught every time, Hall
+  ground truth closely tracked LIN `rpm` throughout (confirming the
+  overshoots seen are real, not measurement artifacts) — but all four
+  showed only *moderate* events: ~200-400ms at/near zero (under the
+  0.6s stiction threshold, `_detect_stiction()` correctly returned
+  `None` each time), followed by a moderate overshoot (1300, 1350-1375,
+  1375, 1325 rpm — 30-38% over the 1000 target).
+- **Attempt 5, the real catch (`P delta=-0.1, I delta=-0.06` per the
+  plot title):** `rpm` sequence `0, 25, 0, 0, 0, 1550, 1800, ...` across
+  six consecutive 200ms samples — briefly ticked to 25 at 204ms, then
+  fell *back* to 0 for three more samples (~800ms total near-zero),
+  then jumped to 1550 and peaked at **1800rpm (80% over target)** —
+  much closer in severity to the original 2026-08-22 event (2100rpm)
+  than the four moderate attempts. Saleae Hall ground truth showed
+  something LIN alone couldn't: during the "stuck" window, the rotor
+  wasn't perfectly motionless — Hall-edge-derived rpm oscillated
+  roughly between 50 and 350 (never reading a hard, flat zero the way
+  LIN did) before the real breakaway. Plausible reading: the rotor was
+  rocking/hunting near a Dead Zone boundary (weak or direction-
+  ambiguous torque there) rather than in a hard mechanical lock —
+  consistent with the Dead Zone hypothesis, and a genuinely new piece
+  of evidence for it, not just circumstantial.
+
+**Real bug found in `_detect_stiction()` (`run_grid.py`) from this
+attempt 5 data: it missed this event entirely.** The function only
+counts zeros from the very first sample and stops at the *first*
+non-zero value — the brief 25rpm blip at 204ms in attempt 5 broke the
+count immediately, so it never saw the three zeros that followed. This
+is a genuine detector gap, not yet fixed (discussed, not implemented
+yet — see below for the direction agreed on).
+
+**Fix direction discussed (not yet built):** redefine "stuck" as "`rpm`
+below a low threshold (e.g. ~10% of target) and not yet *sustainably*
+risen above it for a few consecutive samples" instead of "literally
+zero from sample one." Tolerates a brief blip like the 25rpm one
+without ending the stuck-count early, while still correctly recognizing
+a genuine, sustained rise (as seen in the four moderate attempts) as
+"started." Needs validation against the whole existing corpus (the
+original 2026-08-22 event, today's 4 moderate + 1 severe attempts,
+yesterday's ~18+ clean row points) before being trusted — not done yet,
+explicitly deferred pending further discussion.
+
+**Kick-start firmware design discussion started (not built, no
+timeline yet) — this is the mitigation strategy referenced since
+2026-08-25, now being designed for real.** Confirmed spelling:
+**stiction** (static + friction), not "striction."
+
+- **Detection should live in `main.c`, not the watchdog.** These are
+  two unrelated mechanisms: the watchdog's `_check_stall()`
+  (`raspi/watchdog/watchdog.py`) is a real-time *safety* cutoff running
+  on the Pi (3.0s grace period, stops the motor on true stall) —
+  completely separate in purpose, threshold, and trigger condition from
+  a firmware-side kick-start, which would need to react much faster and
+  push the motor forward rather than cut it. Confirmed this connects
+  directly to `STM32/CLAUDE.md`'s existing (deprioritized) "Stall
+  Detection" plan — the *detection* half (no Hall transition despite a
+  nonzero command) is the same building block already sketched there,
+  just paired with a kick-start *reaction* instead of only a cutoff.
+- **Detection timing analysis, real data:** checked "time to first
+  non-zero `rpm`" across all 268 available point CSVs (every grid, row,
+  and experiment run so far). Distribution (all values land on the
+  200ms LIN sampling grid, a real resolution limit, not a true
+  continuous distribution): 50.4% already moving by the very first
+  sample (204ms), 29.1% by 404ms, 17.2% by 605ms — **96.7% cumulative
+  by 605ms** — only 3.3% (9 of 268) took longer (805ms-1406ms), which
+  is the genuine problem tail this whole investigation is about.
+  Median 208ms, mean 359ms. Caveat repeated: LIN's 200ms sampling can't
+  resolve anything finer than its own grid, so "50.4% at the first
+  sample" really means "sometime before 204ms," not literally at 204ms.
+- **Firmware threshold decided: 4 consecutive 100ms `rpm`-computation
+  windows reading `rpm=0` (i.e. 400ms) before triggering a kick-start.**
+  Deliberately reuses the firmware's own existing 100ms `SAMPLERATE`
+  `rpm`-calculation cycle as the counting unit (see `STM32/CLAUDE.md`'s
+  RPM Measurement Resolution section) rather than a new raw-Hall-edge
+  timer — `rpm==0` over a full 100ms window already means zero Hall
+  transitions that whole window, a naturally debounced signal, not
+  raw, unfiltered GPIO noise. 300ms (3 windows) was the first anchor
+  (comfortably below the ~700ms+ problem tail, above the ~605ms
+  covering 96.7% of normal starts), then widened to 400ms (4 windows)
+  as a deliberate compromise for extra margin against false-triggering
+  on a normal-but-slightly-slow start, at the cost of 100ms slower
+  reaction to a genuine stall — the LIN data can't distinguish 300ms
+  from 400ms precisely enough to prefer one on data alone, so this was
+  a judgment call, not a data-forced one.
+- **Not yet decided:** the actual kick-start mechanism itself (how far
+  to jump ahead — "next-next" state specifically, or something else;
+  how long to hold the forced state; how often to retry if the first
+  kick doesn't work; how/when to hand back to normal closed-loop Hall
+  commutation). Explicitly deferred — this session only settled
+  detection timing, not the response.
+
+## 2026-08-27: Kick-Start Implemented in `main.c` (User's Own Code,
+Reviewed), Confirmed Firing on Real Hardware
+
+**User implemented `driveKickStart()`/`driveStepKickStart()` themselves
+in `STM32/firmware/Core/Src/main.c`** (per their own explicit request
+throughout — Claude reviewed/discussed, never edited `main.c` directly),
+realizing the 400ms/4-window detection threshold decided above via the
+established "Forced/Open-Loop Commutation" mechanism.
+
+**Mechanism, confirmed correct by direct derivation:**
+`driveStepKickStart(speed)` mirrors `driveStep()`'s Hall-read-and-drive
+structure exactly, but targets one additional real commutation step
+ahead of what `driveStep()` itself would drive — `Hall+2` for CW
+(`driveStep()`'s own CW increment is `Hall+1`) and `Hall+4` for CCW
+(`driveStep()`'s own CCW increment is `Hall+2`, an inherent asymmetry in
+the existing, already-tested commutation table, not a new bug). Called
+from `driveKickStart()` once `stuckwindowcount` (incremented once per
+100ms `SAMPLERATE` window with `rpm==0` and a nonzero commanded speed)
+reaches `KICKSTART_STUCK_LOWER_WINDOWS=4`, up through
+`KICKSTART_STUCK_UPPER_WINDOWS=8` — an escalating repeat count (1
+kick+normal pair at window 4, growing to 5 pairs at window 8),
+deliberately minimal/experimental as a starting point, not yet tuned.
+`driveKickStart()`'s call site stays in the "lower" block (right after
+`rpm` is recomputed and the SAMPLERATE timer stops), a deliberate
+trade-off: moving it to the timer-*start* block would avoid a small
+(max ~13ms across the largest escalation) drift in the real-time
+sampling cadence, but isn't safety-relevant, so left as-is for now.
+
+**`KICKSTART_SPEED` derived from a real current-limit calculation, not
+picked arbitrarily** (an earlier draft used `GLOBALRATE/20`, flagged
+during review as coincidental/unjustified): average current under PWM
+= `Duty × V_batt / R`, valid independent of the motor's unknown winding
+inductance specifically because the *average* value of an RL circuit's
+current under periodic drive depends only on the average voltage and
+resistance (inductance only affects ripple/whether conduction is
+continuous) — and at these low duty cycles, conduction is plausibly
+discontinuous anyway, which would only make the true average *lower*
+than this estimate, i.e. the calculation is a conservative upper bound
+either way. Inputs: `R=0.065Ω` (winding resistance U-V/V-W/U-W, motor
+datasheet — matches directly, since one active commutation state always
+drives exactly two windings in series), `V_batt_max=27V` (full battery,
+root `CLAUDE.md`'s Battery section), `I_max=5A` (target). Gives
+`Duty_max ≈ 1.20%` → `speed ≈ GLOBALRATE/83`; implemented as
+`GLOBALRATE/80` (≈5.19A at 27V, close enough, not re-tightened).
+
+**Three real bugs found in review, all fixed before flashing:**
+1. **Missing `;` and missing `i++`** in the escalation `while` loop —
+   would have been a genuine infinite loop on real hardware (motor
+   stuck fully unresponsive to LIN, including `speed 0`, until physical
+   power was cut) had it reached hardware unfixed. Caught by code
+   review, not by testing.
+2. **Kick direction bug:** `KICKSTART_SPEED` is a fixed positive
+   constant: the first implementation passed it unconditionally to both
+   `driveStepKickStart()`/`driveStep()`, meaning the kick always drove
+   CW regardless of the actually-commanded direction — a CCW stall
+   (negative `controlvariable`) would get kicked the *wrong* way. Fixed
+   to `speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED`.
+3. **Diagnostic-counter byte bug** (see below): `(kickStartCount >> 8) &
+   0xFF` always transmitted `0`, since `kickStartCount` is capped `mod
+   16` and fits entirely in the low byte. Fixed to `kickStartCount &
+   0xFF`.
+
+**`kickStartCount` — explicit throwaway/experimental diagnostic, may or
+may not survive in this form.** Built specifically because rpm-trace
+timing alone couldn't answer "did the kick-start actually fire" (a
+`P=-0.10,I=-0.06` repeat looked identical, timing-wise, to yesterday's
+4 *pre-kick-start* "moderate" baseline events — the ~400ms stuck window
+in every case lands almost exactly on the 400ms trigger threshold,
+making the rpm curve alone ambiguous either way). `st3mot`'s `data[3]`
+(previously `checksumErrorCount`'s unused high byte — `checksumErrorCount`
+itself is now transmitted as a single byte, `data[2]` only, plenty for a
+rare-event counter) repurposed as a free-running `mod 16` counter,
+incremented once per 100ms *firing* (not once per stall event — up to 5
+increments possible per single stall). `raspi/watchdog/linbus.py`:
+`get_motor_counters()` updated to match (checksum now `data[2]` only);
+new, separate `get_kick_start_count(lin)` reads `data[3]` — kept
+separate specifically so `watchdog.py`'s `selftest()` (6 existing call
+sites) needed zero changes. New `watchdog.py` "kickcount" verb,
+`motorcontrol.py` help text updated, `run_experiment.py` now reads
+`kickcount` once before the first capture attempt and once after the
+last, prints the before/after/delta (with a `mod 16` wraparound
+caveat — practically not a concern within one ~7-8s capture). Test
+suite extended (2 new tests), 130/130 passing.
+
+**Confirmed no regression from the byte-layout split, via a real
+`selftest()` run:** `checksumErrorCount` and `bodyTimeoutCount` reacted
+independently and correctly (each +1 only for its own provocation,
+`kickStartCount` untouched throughout all three provocations) — no
+bit-overlap between the three counters.
+
+**Real-hardware confirmation, 4 `run_experiment.py` runs, kick-start
+firing tied directly to known-problematic P/I combinations for the
+first time (not just timing inference):**
+
+| run | P delta, I delta | rpm (first ~1s) | kickcount before→after | kicks fired |
+|---|---|---|---|---|
+| `142957` | -0.10, -0.08 | 0,0,0,150,950 (peak 1200) | 5→7 | 2 |
+| `143100` | -0.10, -0.06 | 0,0,0,350,1175 (peak 1275) | 7→8 | 1 |
+| `143150` | -0.10, 0.0 | 0,0,0,200,1275 (peak 1425) | 8→9 | 1 |
+| `143227` | **0.0, 0.0 (default)** | 0,**50**,**875**,825,825 (peak 975) | 9→9 | **0** |
+
+All three `P=-0.10` runs show the familiar ~400-600ms stuck window
+*and* the kick-start firing (1-2x); the default-gains run shows an
+almost immediate, clean start (`rpm` already 50 by 204ms, 875 by 404ms)
+*and* zero kicks — exactly the expected behavior, firing only when a
+real dead-zone/stiction condition is present, silent otherwise.
+
+**Still open / not yet resolved:**
+- Whether the kick-start actually **improves** recovery (faster
+  breakthrough, lower overshoot) is still not cleanly separated from
+  ordinary run-to-run variance — every kick-start-confirmed event so
+  far (this session) looks similar in magnitude to yesterday's 4
+  *pre-kick-start* "moderate" baseline events (peak ~1200-1425 vs.
+  1300-1375 yesterday, both ~30-40% overshoot). A genuinely severe
+  (~800ms+ stuck) reproduction under the new firmware, with `kickcount`
+  confirming multiple escalated attempts, is needed before claiming the
+  mechanism *works*, not just that it *fires*.
+  Yesterday's real severe event (Attempt 5, `P=-0.10,I=-0.06`, 800ms
+  stuck, 1800rpm overshoot) has not yet been reproduced under the new
+  firmware.
+- `driveKickStart()`'s call site stays in the timer-*stop* block
+  (accepted small taktrate-drift trade-off, see above) — not revisited.
+- Escalation repeat-count (currently 1-5 pairs) and `kickStartCount`'s
+  per-firing (not per-event) granularity are both unrefined/
+  experimental — may change, or the whole diagnostic counter may be
+  dropped once the kick-start itself is trusted.
+- No fault/escalation behavior once `stuckwindowcount` exceeds
+  `KICKSTART_STUCK_UPPER_WINDOWS=8` — the firmware just stops trying
+  silently; still relies entirely on the Raspi-side watchdog's own
+  `_check_stall()` (3.0s grace period) as the actual safety backstop.
+
+## 2026-08-27 (continued): `P=-0.10` Row Re-Run With Kick-Start Active
+— Two Extreme Cases Found, Both Expose Real Gaps
+
+**Motivation:** since the kick-start now fires automatically, a clean
+"with vs. without" A/B on the *same* firmware is no longer possible —
+the mechanism we want to evaluate is exactly what would prevent a
+severe event from developing in the first place. Chosen approach:
+re-run the *exact same* row already on record from before the
+kick-start existed (`python3 run_grid_row.py i -0.10 0.02` — see the
+2026-08-25 section above, 3 prior attempts, every one flagged
+stiction), and compare the resulting distribution against that
+documented pre-kick-start baseline. `run_grid.py`/`run_grid_row.py`
+extended the same day to read `kickcount` before/after *every point*
+(not just once per whole run like `run_experiment.py`) via the new
+`_read_kickcount()` — new `kicks` column in `grid_results.csv`, printed
+per-point/matrix same as `ise`/`mssd_*`.
+
+**Results (`runs/2026-08-27_144449_row/grid_results.csv`):**
+```
+i_delta   ise         mssd_full    kicks
+-0.08     3,869,375     22,757       2
+-0.06     3,870,625     31,250       2
+-0.04     3,342,500     25,313       1
+-0.02    16,615,625    133,456       5   <- extreme #1
+ 0.00     3,394,375     26,140       1
+ 0.02     3,477,500     30,110       1
+ 0.04     3,342,500     29,596       1
+ 0.06     2,963,125     33,787       0
+ 0.08     4,467,500     66,765       0   <- extreme #2
+```
+7 of 9 points landed in an unremarkable ~2.9-3.9M ISE / ~23-34k
+`mssd_full` band, each with 0-2 kicks — consistent with the earlier
+`run_experiment.py` confirmations (moderate stalls, kick-start engages
+a couple of times, resolves normally). Two points stand well outside
+that band, each exposing a different real gap in the current design.
+
+**Extreme #1 — `I delta=-0.02`, ISE 16.6M (~5x neighbors), `mssd_full`
+133k (~4-5x neighbors), `kicks=5` (the maximum possible):**
+```
+rpm: 0 (x9, from 9ms through 1806ms) -> jump to 2725 by ~2012ms
+current: -2.29A / -2.34A at the jump (vs. the usual ~-0.5A elsewhere)
+```
+Chart: `runs/2026-08-27_144449_row/extreme_point_p-0.10_i-0.02.png`.
+The motor was stuck for **~1.8-2.0s** — the kick-start correctly fired
+through all 5 escalation steps (windows 4 through 8, i.e. it kept
+trying up to the 800ms mark), but that wasn't enough. Past window 8
+the firmware silently stops attempting anything further (the open gap
+already flagged above, "No fault/escalation behavior...") — the motor
+then stayed stuck for **another full second** with zero intervention
+before finally breaking free on its own, into the most violent
+overshoot recorded in this whole project so far (+172.5% over target,
+current more than 4x the usual peak). **This is the first real-hardware
+case where that documented gap actually mattered**, not just a
+theoretical concern: the mechanism engaged correctly, exhausted its
+allotted attempts, and the underlying stall outlasted them.
+
+**Extreme #2 — `I delta=+0.08`, ISE 4.47M (~1.2x neighbors), `mssd_full`
+66.8k (~2x neighbors), `kicks=0` (never engaged at all):**
+```
+rpm: 0, 25, 0, 175, 1575, 1625, 1250, 975, 825, 900, 975, ...
+```
+Chart: `runs/2026-08-27_144449_row/extreme_point_p-0.10_i+0.08.png`.
+A brief 25rpm blip at 205ms reset `stuckwindowcount` back to 0 (per
+`driveKickStart()`'s `measuredrpm != 0` check — any nonzero sample
+counts as "moving," no debounce) before the 4-window threshold could
+be reached; by the time it read 0 again, only ~1-2 windows passed
+before real motion resumed at 606ms — never enough consecutive stuck
+windows for a single kick to fire. Yet the event was still clearly
+rough: peak overshoot +62.5%, plus a distinct **second dip** to
+~825-900rpm around 1.5-1.7s before finally settling — a rockier
+recovery than the untouched, kick-engaged neighbors despite zero
+kick-start involvement. **This is the exact same blip-reset failure
+mode already found in the Python-side `_detect_stiction()`** (see the
+2026-08-26 section above — a brief non-zero blip breaks a naive "still
+at zero" count) — now confirmed to exist in the firmware's own
+detection logic too, not just the offline analysis tooling. Same fix
+direction likely applies: a low-but-nonzero threshold plus a
+sustained-rise confirmation instead of "any nonzero sample immediately
+means recovered," though not yet designed or built for the firmware
+side.
+
+**Net takeaway:** the kick-start mechanism is confirmed working
+correctly *when it engages* (fires only on genuine stuck conditions,
+silent at default gains, per the 2026-08-27 `run_experiment.py`
+confirmations above) — but this row re-run surfaced two distinct,
+real ways it can still fail to help on a genuinely severe event: (a)
+the escalation cap being reached before the real stall resolves, and
+(b) a transient blip preventing it from ever starting to count in the
+first place. Both are concrete next design targets, not yet addressed.
+
+**Follow-up the same day: `I=-0.02` repeated 6x via `run_experiment.py`
+— the severe event does NOT reproduce.** Discussed first whether to
+raise `KICKSTART_STUCK_UPPER_WINDOWS` (currently 8) given extreme #1
+above hit it exactly at the maximum (5/5 possible firings) — user's
+own instinct, based on this row's prior history (2026-08-25: three
+separate `P=-0.10` attempts, every one flagged stiction, never a clean
+repeat), was that this specific point likely isn't reliably severe in
+the first place, so raising the cap off one N=1 data point would be
+premature. Checked directly instead:
+
+```
+run          rpm (first ~1s)            peak    kicks
+150332       0,0,0,475,1200             1325    1
+150415       0,0,0,525,1225             1275    1
+150507       0,0,200,725,1075           1150    0
+150547       0,0,0,225,1275             1425    2
+150632       0,0,0,350,1250             1350    1
+150715       0,0,0,600,1250             1300    1
+```
+
+All six landed in the ordinary ~400ms-stuck / 1150-1425rpm-peak /
+0-2-kicks band seen at the row's other 8 points — **none** came
+anywhere close to the ~1.8-2.0s stall / 2725rpm / 5-kicks extreme case.
+Confirms the user's instinct directly: `P=-0.10, I=-0.02` is not a
+reliably-severe point, the earlier extreme event was a rare/unlucky
+draw at this coordinate, not a reproducible property of it — consistent
+with this exact row's already-documented poor reproducibility
+(2026-08-25 section above). **Practical consequence: raising
+`KICKSTART_STUCK_UPPER_WINDOWS` off this one data point would be
+premature** — there's no evidence yet that the cap itself was the
+limiting factor for *this coordinate* specifically, since it mostly
+doesn't need anywhere near 5 kicks to resolve. The escalation-cap gap
+found above remains real (confirmed once, on real hardware), but
+tuning a new specific threshold value needs either a genuinely
+reproducible severe point to test against, or a broader sweep to find
+one — not decided yet, no further action taken this session.
 

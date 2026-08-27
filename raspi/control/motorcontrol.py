@@ -37,6 +37,8 @@ HELP_TEXT = """Commands:
   temp                     read temperature
   current                  read current sensor (amps, val1/val2 = ACS712 #1/#2)
   errors                   read currentsensor's last 8 error codes (most recent first)
+  kickcount                read the firmware kick-start counter (experimental/throwaway
+                           diagnostic, mod-16, only useful as a before/after delta)
   selftest                 currentsensor errorstorage roundtrip + deliberately send a
                            bad-checksum cntl0cur write and confirm currentsensor logged it
                            but skipped the action + deliberately provoke a currentsensor/

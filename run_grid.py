@@ -32,6 +32,7 @@ immediately -- no partial/inconsistent grid is left lying around for
 the future gradient search to misread.
 """
 import csv
+import re
 import subprocess
 import sys
 import time
@@ -119,10 +120,26 @@ def _send_speed_zero():
     print(f"speed 0 (Abbruch-Absicherung): {result.stdout.strip() or result.stderr.strip()}")
 
 
+def _read_kickcount():
+    # Experimental/throwaway diagnostic for the firmware kick-start
+    # mechanism (main.c's driveKickStart()) -- see watchdog.py's
+    # "kickcount" verb / linbus.get_kick_start_count()'s docstring, and
+    # run_experiment.py's own _read_kickcount() (same pattern, one-shot
+    # IPC call via motorcontrol.send_command()). Returns None on any
+    # failure rather than aborting the point over a nice-to-have.
+    cmd = ("cd /home/pi/auto && python3 -c "
+           "\"import motorcontrol; print(motorcontrol.send_command('kickcount'))\"")
+    result = _ssh_check(cmd)
+    match = re.search(r"kickcount=(\d+)", result.stdout)
+    return int(match.group(1)) if match else None
+
+
 def _run_point(p, i, run_dir, index, total):
     print(f"\nPunkt {index}/{total}: P delta={p:+.2f}, I delta={i:+.2f}")
     name = _point_name(p, i)
     csv_path = run_dir / f"{name}.csv"
+
+    kickcount_before = _read_kickcount()
 
     # stdout/stderr captured separately, not merged -- same reasoning
     # as run_experiment.py's _run_motor_capture(): ssh's own banner
@@ -133,7 +150,14 @@ def _run_point(p, i, run_dir, index, total):
     csv_path.write_text(result.stdout)
     if result.returncode != 0:
         print(result.stderr, file=sys.stderr)
-        return None
+        return None, None
+
+    kickcount_after = _read_kickcount()
+    kicks = None
+    if kickcount_before is not None and kickcount_after is not None:
+        # mod-16 wraparound, see run_experiment.py's own comment --
+        # not a concern within one ~7s point in practice.
+        kicks = (kickcount_after - kickcount_before) % 16
 
     # capture_step_response.log rotates fresh on every invocation (one
     # generation kept) -- fetch it now, right after this point, or it's
@@ -153,7 +177,7 @@ def _run_point(p, i, run_dir, index, total):
         print(f"WARNUNG: capture_step_response.log für {name} nicht abholbar "
               f"(3 Versuche): {fetch.stderr.strip()}")
 
-    return csv_path
+    return csv_path, kicks
 
 
 def _read_rpm_series(csv_path):
@@ -277,9 +301,9 @@ def _print_matrix(results, p_values, i_values, key, label):
 def _write_results_csv(results, out_path):
     with open(out_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["p_delta", "i_delta", "ise", "mssd_2s", "mssd_full"])
+        writer.writerow(["p_delta", "i_delta", "ise", "mssd_2s", "mssd_full", "kicks"])
         for (p, i), r in results.items():
-            writer.writerow([p, i, r["ise"], r["mssd_2s"], r["mssd_full"]])
+            writer.writerow([p, i, r["ise"], r["mssd_2s"], r["mssd_full"], r.get("kicks")])
 
 
 def _make_best_point_plot(csv_path, out_path, p_delta, i_delta, ise):
@@ -386,7 +410,7 @@ def main():
     aborted = False
     try:
         for idx, (p, i) in enumerate(points, start=1):
-            csv_path = _run_point(p, i, run_dir, idx, len(points))
+            csv_path, kicks = _run_point(p, i, run_dir, idx, len(points))
             if csv_path is None:
                 sys.exit(f"pi-Kommando abgelehnt oder SSH-Fehler bei "
                           f"P delta={p:+.2f}, I delta={i:+.2f} -- ganze Runde abgebrochen.")
@@ -394,6 +418,7 @@ def main():
                 "ise": _compute_ise(csv_path),
                 "mssd_2s": _compute_mssd(csv_path, window_s=MSSD_SHORT_WINDOW_S),
                 "mssd_full": _compute_mssd(csv_path, window_s=None),
+                "kicks": kicks,
             }
             if idx < len(points):
                 time.sleep(INTER_POINT_PAUSE_S)
@@ -412,6 +437,8 @@ def main():
                       f"MSSD-Matrix (erste {MSSD_SHORT_WINDOW_S:.0f}s)")
         _print_matrix(results, p_values, i_values, "mssd_full",
                       "MSSD-Matrix (gesamte 7s)")
+        _print_matrix(results, p_values, i_values, "kicks",
+                      "Kickstart-Zaehler (Anzahl Feuerungen, experimentelle Diagnose)")
         best = min(results, key=lambda k: results[k]["ise"])
         best_ise = results[best]["ise"]
         print(f"\nBester Punkt (nach ISE): P delta={best[0]:+.2f}, I delta={best[1]:+.2f}, "

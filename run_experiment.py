@@ -35,6 +35,7 @@ rejects it and exits nonzero before the motor is touched at all, and
 this script aborts everything else too (no Saleae capture is left
 armed, no analysis, no plot) -- see _run_motor_capture() below.
 """
+import re
 import subprocess
 import sys
 import time
@@ -65,6 +66,22 @@ Physische Vorbereitung (siehe saleae/CLAUDE.md's Physical Pre-Flight Checklist):
 
 def _ssh_check(cmd):
     return subprocess.run(["ssh", PI_HOST, cmd], capture_output=True, text=True)
+
+
+def _read_kickcount():
+    # Experimental/throwaway diagnostic for the firmware kick-start
+    # mechanism (main.c's driveKickStart()) -- see watchdog.py's
+    # "kickcount" verb / linbus.get_kick_start_count()'s docstring.
+    # One-shot IPC call via motorcontrol.send_command(), same pattern as
+    # capture_step_response.py's own one-shot SSH invocation below --
+    # no persistent connection needed for a single read. Returns None on
+    # any failure (SSH hiccup, unparseable reply) rather than aborting
+    # the whole experiment over a nice-to-have diagnostic.
+    cmd = ("cd /home/pi/auto && python3 -c "
+           "\"import motorcontrol; print(motorcontrol.send_command('kickcount'))\"")
+    result = _ssh_check(cmd)
+    match = re.search(r"kickcount=(\d+)", result.stdout)
+    return int(match.group(1)) if match else None
 
 
 def _check_stm32_and_watchdog():
@@ -214,6 +231,8 @@ def main():
     run_dir.mkdir(parents=True, exist_ok=True)
     motor_csv = run_dir / "capture_step_response.csv"
 
+    kickcount_before = _read_kickcount()
+
     digital_csv = None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         print(f"Versuch {attempt}/{MAX_ATTEMPTS} ...")
@@ -231,6 +250,17 @@ def main():
         print("Fehlalarm (Störimpuls) oder Timeout — versuche nochmal.")
     else:
         sys.exit(f"{MAX_ATTEMPTS} Versuche fehlgeschlagen, kein echter Trigger — Abbruch.")
+
+    kickcount_after = _read_kickcount()
+    if kickcount_before is not None and kickcount_after is not None:
+        # Mod-16 wraps -- a negative-looking delta means it wrapped
+        # around at least once, so this can only say "at least" that
+        # many, see linbus.get_kick_start_count()'s docstring.
+        delta = (kickcount_after - kickcount_before) % 16
+        print(f"\nKickstart-Zaehler: vorher={kickcount_before} nachher={kickcount_after} "
+              f"(mind. {delta}x gefeuert waehrend dieses Laufs, mod-16 Wraparound moeglich)")
+    else:
+        print("\nWARNUNG: kickcount konnte nicht gelesen werden (vorher/nachher) — übersprungen.")
 
     fetched_logs = []
     for f in ("watchdog.log", "capture_step_response.log"):

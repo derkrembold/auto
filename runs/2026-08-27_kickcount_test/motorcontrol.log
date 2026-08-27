@@ -1,0 +1,17 @@
+14:20:41.327  INFO    connected to watchdog
+14:20:45.213  INFO    -> kickcount
+14:20:45.220  INFO    <- OK ret=0 kickcount=0
+14:20:46.573  INFO    -> kickcount
+14:20:46.580  INFO    <- OK ret=0 kickcount=0
+14:20:47.246  INFO    -> kickcount
+14:20:47.252  INFO    <- OK ret=0 kickcount=0
+14:20:48.830  INFO    -> hal
+14:20:48.836  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+14:21:04.288  INFO    -> speed 0
+14:21:04.293  INFO    <- OK
+14:21:10.417  INFO    -> speed 500
+14:21:10.423  INFO    <- OK
+14:21:12.721  INFO    -> speed 0
+14:21:12.726  INFO    <- OK
+14:21:16.001  INFO    -> kickcount
+14:21:16.008  INFO    <- OK ret=0 kickcount=3

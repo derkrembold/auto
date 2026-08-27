@@ -47,6 +47,7 @@ CNTL0CUR_WIRE = constants.cntl0cur | CURRENT_INSTANCE_ID
     ("current", (True, None)),
     ("errors", (True, None)),
     ("selftest", (True, None)),
+    ("kickcount", (True, None)),
     ("hal extra", (False, "usage: hal")),
     ("banana", (False, "unknown command: banana")),
     ("", (False, "empty command")),
@@ -116,6 +117,13 @@ def test_execute_temp_reply_includes_hex():
     wd.lin.read_responses[constants.st1mot] = [0x10, 0x00]  # 16
     reply = wd.execute("temp")
     assert reply == "OK ret=0 temp=16 (hex=0x0010)"
+
+
+def test_execute_kickcount_reads_data3():
+    wd = Watchdog(DryRunLin())
+    wd.lin.read_responses[constants.st3mot] = [0x00, 0x00, 0x01, 0x07]
+    reply = wd.execute("kickcount")
+    assert reply == "OK ret=0 kickcount=7"
 
 
 def test_execute_current_parses_and_converts_to_amps():
@@ -194,12 +202,22 @@ def test_execute_selftest_reads_and_decodes_st1cur_after_each_write():
     )
 
 
-def test_get_motor_counters_decodes_two_little_endian_uint16_fields():
+def test_get_motor_counters_decodes_timeout_uint16_and_checksum_byte():
     from linbus import get_motor_counters
     lin = DryRunLin()
-    lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x00]  # timeout=300, checksum=3
+    # data[3] (0x07) is kickStartCount since 2026-08-27 -- not part of
+    # checksum_error_count anymore, see get_kick_start_count() below.
+    lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x07]  # timeout=300, checksum=3
     ret, timeout_count, checksum_error_count = get_motor_counters(lin)
     assert (ret, timeout_count, checksum_error_count) == (0, 300, 3)
+
+
+def test_get_kick_start_count_decodes_data3():
+    from linbus import get_kick_start_count
+    lin = DryRunLin()
+    lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x07]
+    ret, kick_start_count = get_kick_start_count(lin)
+    assert (ret, kick_start_count) == (0, 7)
 
 
 def test_provoke_checksum_error_writes_safe_speed_zero_via_bad_checksum():

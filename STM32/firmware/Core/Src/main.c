@@ -81,6 +81,8 @@ void allOff();                 // Schaltet alle MOSFET-Ausgaenge aus (Motor stro
 void driveMOSFET(int, GPIO_PinState);
 void driveState(uint16_t speed, int);
 uint8_t driveStep(int16_t);
+uint8_t driveStepKickStart(int16_t);
+void driveKickStart(int16_t, int16_t);
 int16_t picontrol(int16_t setpoint, int16_t processvalue);
 
 
@@ -103,9 +105,14 @@ volatile uint32_t bodyWaitStartTick = 0;
 volatile bool bodyTimedOut = false;
 volatile uint16_t bodyTimeoutCount = 0;
 volatile uint16_t checksumErrorCount = 0;
+volatile uint16_t kickStartCount = 0;
+
 #define LIN_BODY_TIMEOUT_MS 50
-
-
+/* Anzahl aufeinanderfolgender 100ms-rpm-Fenster mit rpm==0 (bei
+ * ungleich-0-Kommando), bevor ein Kick versucht wird.
+ * 4 * 100ms = 400ms, siehe analysis/grid_search_log.md, 2026-08-26. */
+#define KICKSTART_STUCK_LOWER_WINDOWS   4
+#define KICKSTART_STUCK_UPPER_WINDOWS   8
 
 // eine konstante mit 8-Bit-Ganzzahl, Ã¤ndert sich nie
 // hier die drei hallsensoren des bdlc's motors
@@ -125,13 +132,20 @@ const uint8_t CL = 5;
 
 
 const uint32_t GLOBALRATE = 1275; // in mikrosekunden
-//const int16_t MINCONTROLVARIABLE = 200; //
 const uint32_t RAMPSTEP = 1;
 const float CONTROLLIMIT = GLOBALRATE - 100;
 const float KPDEFAULT = 0.15f;
 const float KIDEFAULT = 0.4f;
 float KP = KPDEFAULT;
 float KI = KIDEFAULT;
+// Kick-Geschwindigkeit aus Strombegrenzung hergeleitet, nicht willkuerlich gewaehlt:
+// Duty = speed/GLOBALRATE; I_mittel = Duty * V_batt / R (RL-Mittelwert im eingeschwungenen
+// Zustand, unabhaengig von der unbekannten Wicklungsinduktivitaet -- siehe Diskussion)
+// V_batt_max = 27V (volle Batterie), R = 0,065 Ohm (Wicklungswiderstand U-V/V-W/U-W, Datenblatt)
+// I_max = 5A Ziel:
+// Duty_max = I_max * R / V_batt_max = 5A * 0,065 Ohm / 27V = 0,01204 (~1,20%)
+// speed = Duty_max * GLOBALRATE = 0,01204 * 1275us = 15,36us  =>  GLOBALRATE/83
+const int16_t KICKSTART_SPEED = GLOBALRATE/80;  // ~5A bei voller Batterie, R=65mOhm
 
 
 // RPMFACTOR: 60*speedcount/(24*0.1); 60sec/min; 24steps/Umdrehung; 0.1s==100ms;
@@ -141,6 +155,7 @@ const float DT = GLOBALRATE / 1000000.0f;  // in seconds
 
 int16_t controlvariable = 0;
 int16_t controlvariableinput = 0;
+uint16_t stuckwindowcount = 0;
 
 //Sollwert = setpoint
 //Istwert = actual value (oder process value)
@@ -301,11 +316,13 @@ int main(void)
 
 		  driveStep(picontrol(controlvariable, rpm));
 
+		  
 	    if (__HAL_TIM_GET_COUNTER(&htim4) > SAMPLERATE) {
 	    	HAL_TIM_Base_Stop(&htim4); // Stop the timer
 	    	done = 1;
 	    	rpm = RPMFACTOR*hallCounter;
 	    	hallCounter = 0;
+		driveKickStart(controlvariable, rpm);
 	    }
 	  }
 	  // some LIN message was received.
@@ -914,7 +931,7 @@ void fillbody(uint8_t addr, uint8_t *data, uint8_t len) {
     data[0] = (uint8_t)(bodyTimeoutCount & 0xFF);
     data[1] = (uint8_t)((bodyTimeoutCount >> 8) & 0xFF);
     data[2] = (uint8_t)(checksumErrorCount & 0xFF);
-    data[3] = (uint8_t)((checksumErrorCount >> 8) & 0xFF);
+    data[3] = (uint8_t)(kickStartCount & 0xFF);
   }
 }
 
@@ -1184,6 +1201,100 @@ uint8_t driveStep(int16_t speed)
 		}
 	}
 	return 6;
+}
+
+
+uint8_t driveStepKickStart(int16_t speed)
+{
+
+	GPIO_PinState high = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_0); //gelb
+	GPIO_PinState middle = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_1); //rot
+	GPIO_PinState low = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_2); //blau
+	uint8_t first = (high == GPIO_PIN_RESET) ? 0x00 : 0x01; //gelb
+	uint8_t second  = (middle == GPIO_PIN_RESET) ? 0x00 : 0x01; //rot
+	uint8_t third = (low == GPIO_PIN_RESET) ? 0x00 : 0x01;//blau
+
+	if (speed >= 0) { // CW -> stated ascending
+		if (first == 0x01 && second == 0x0 && third == 0x0) { // state 4 100
+			driveState(abs(speed), 0); // 101
+			return 4;
+		}
+		if (first == 0x01 && second == 0x0 && third == 0x01) { // state 5 101
+			driveState(abs(speed), 1); // 001
+			return 5;
+		}
+		if (first == 0x0 && second == 0x0 && third == 0x01) { // state 0 001
+			driveState(abs(speed), 2); // 011
+			return 0;
+		}
+		if (first == 0x0 && second == 0x1 && third == 0x1) { // state 1 011
+			driveState(abs(speed), 3); // 020
+			return 1;
+		}
+		if (first == 0x0 && second == 0x01 && third == 0x0) { // state 2 010
+			driveState(abs(speed), 4); // 110
+			return 2;
+		}
+		if (first == 0x01 && second == 0x1 && third == 0x0) { //state 3 110
+			driveState(abs(speed), 5); // 110
+			return 3;
+		}
+	}
+	if (speed < 0) { // CCW -> states descending
+		if (first == 0x0 && second == 0x1 && third == 0x0) { // state 2 010
+			driveState(abs(speed), 0);
+			return 2;
+		}
+		if (first == 0x0 && second == 0x01 && third == 0x01) { // state 1 011
+			driveState(abs(speed), 5);
+			return 1;
+		}
+		if (first == 0x0 && second == 0x0 && third == 0x01) { // state 0 001
+			driveState(abs(speed), 4);
+			return 0;
+		}
+		if (first == 0x01 && second == 0x0 && third == 0x1) { // state 5 101
+			driveState(abs(speed), 3);
+			return 5;
+		}
+		if (first == 0x01 && second == 0x0 && third == 0x0) { // state 4 100
+			driveState(abs(speed), 2);
+			return 4;
+		}
+		if (first == 0x01 && second == 0x1 && third == 0x0) { // state 3 110
+			driveState(abs(speed), 1);
+			return 3;
+		}
+	}
+	return 6;
+}
+
+
+
+
+void driveKickStart(int16_t speed, int16_t measuredrpm)
+{
+  if (speed == 0 || measuredrpm != 0) {
+    /* Kein Kommando, oder er bewegt sich schon -- alles gut. */
+    stuckwindowcount = 0;
+    return;
+  }
+
+  stuckwindowcount++;
+
+  if (stuckwindowcount >= KICKSTART_STUCK_LOWER_WINDOWS && stuckwindowcount <= KICKSTART_STUCK_UPPER_WINDOWS) {
+
+    uint16_t i = 0;
+
+    kickStartCount++;
+    kickStartCount %= 16;
+    
+    while (i < (stuckwindowcount + 1 - KICKSTART_STUCK_LOWER_WINDOWS)) {
+      driveStepKickStart(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED);
+      driveStep(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED);
+      i++;
+    }
+  }
 }
 
 

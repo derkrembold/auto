@@ -375,23 +375,45 @@ def get_temp(lin):
 
 
 def get_motor_counters(lin):
-    # 4-byte reply, split 2026-08-14 into two uint16_t counters (was one
-    # uint32_t bodyTimeoutCount) -- STM32/firmware/Core/Src/main.c's
-    # fillbody() st3mot case: data[0:2] = bodyTimeoutCount (how many
-    # times the HAL_GetTick() bus-hang timeout has fired, see
-    # STM32/CLAUDE.md's Status section), data[2:4] = checksumErrorCount
-    # (how many times a cntl*mot write addressed to this motor instance
-    # failed its checksum check -- scoped to writes actually addressed to
-    # this device, not every checksum mismatch snooped on the shared
-    # bus). Both little-endian, plain unsigned -- unlike
-    # get_error_history()'s codes, these are counters, not
-    # two's-complement error codes.
+    # 4-byte reply -- STM32/firmware/Core/Src/main.c's fillbody() st3mot
+    # case: data[0:2] = bodyTimeoutCount (how many times the
+    # HAL_GetTick() bus-hang timeout has fired, see STM32/CLAUDE.md's
+    # Status section), little-endian uint16_t.
+    # data[2] = checksumErrorCount (how many times a cntl*mot write
+    # addressed to this motor instance failed its checksum check --
+    # scoped to writes actually addressed to this device, not every
+    # checksum mismatch snooped on the shared bus). **Only the low byte
+    # since 2026-08-27** (0-255, wraps silently past that -- fine for a
+    # rare-event counter) -- data[3] used to be its high byte but was
+    # repurposed for kickStartCount (see get_kick_start_count() below,
+    # STM32/firmware/Core/Src/main.c's driveKickStart(), experimental/
+    # throwaway diagnostic for the kick-start dead-zone/stiction fix).
+    # Plain unsigned -- unlike get_error_history()'s codes, these are
+    # counters, not two's-complement error codes.
     ret, data = lin.read(constants.st3mot, instance=MOTOR_INSTANCE_ID)
     if ret < 0:
         return ret, None, None
     timeout_count = data[0] | (data[1] << 8)
-    checksum_error_count = data[2] | (data[3] << 8)
+    checksum_error_count = data[2]
     return ret, timeout_count, checksum_error_count
+
+
+def get_kick_start_count(lin):
+    # Experimental/throwaway diagnostic (2026-08-27) for the firmware
+    # kick-start mechanism (main.c's driveKickStart()) -- st3mot's
+    # data[3], a free-running counter (mod 16 on the firmware side,
+    # wraps silently) incremented once per 100ms window the kick fires.
+    # Only tells you "did it fire, roughly how often recently" -- not a
+    # reliable whole-session total, see root CLAUDE.md/analysis/
+    # grid_search_log.md for the kick-start design discussion. Separate
+    # function rather than folded into get_motor_counters() so that
+    # function's existing callers (selftest()'s checksum/bus-hang
+    # provocations) don't need updating for a value they don't care
+    # about.
+    ret, data = lin.read(constants.st3mot, instance=MOTOR_INSTANCE_ID)
+    if ret < 0:
+        return ret, None
+    return ret, data[3]
 
 
 # currentsensor/firmware/main.cpp's storeerror() ring buffer (see

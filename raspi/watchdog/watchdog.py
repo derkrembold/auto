@@ -18,7 +18,7 @@ LOG_PATH = "watchdog.log"
 
 logger = logging.getLogger("watchdog")
 
-KNOWN_COMMANDS = {"speed", "pi", "hal", "rpm", "temp", "current", "errors", "selftest"}
+KNOWN_COMMANDS = {"speed", "pi", "hal", "rpm", "temp", "current", "errors", "selftest", "kickcount"}
 
 # Business/safety speed limit — separate from the protocol-level int16
 # range linbus.set_speed() clamps to. Deliberately below the motor's
@@ -187,6 +187,14 @@ class Watchdog:
             ret, value = linbus.get_temp(self.lin)
             hex_value = linbus.hexword(value) if value is not None else None
             return f"OK ret={ret} temp={value} (hex={hex_value})"
+        if verb == "kickcount":
+            # Experimental/throwaway diagnostic for the firmware
+            # kick-start mechanism (main.c's driveKickStart()) -- see
+            # linbus.get_kick_start_count()'s own docstring. Free-running
+            # mod-16 counter, only useful as a before/after delta over one
+            # run, not a reliable whole-session total.
+            ret, value = linbus.get_kick_start_count(self.lin)
+            return f"OK ret={ret} kickcount={value}"
         if verb == "current":
             ret, val1, val2 = linbus.get_current(self.lin)
             val1_str = f"{val1:.2f}" if val1 is not None else None
