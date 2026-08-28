@@ -336,6 +336,24 @@ def set_speed(lin, value):
     return lin.write(constants.cntl3mot, data, instance=MOTOR_INSTANCE_ID)
 
 
+def set_pulse(lin, value):
+    # cntl1mot -- a single raw, open-loop driveStep() pulse (main.c's
+    # cntl1mot dispatch), no PI controller/ramp involved at all. Built
+    # 2026-08-28 for characterizing torque response by starting Hall
+    # position (see analysis/grid_search_log.md's Dead Zone discussion).
+    # This module-level clamp is just the wire-format safety backstop
+    # (same SPEED_MIN/MAX int16 range set_speed() above clamps to, so
+    # struct.pack() below can never overflow) -- the real, much
+    # tighter policy range (driveState() silently no-ops once the
+    # magnitude reaches GLOBALRATE=1275us rather than clamping or
+    # erroring) lives in watchdog.py's PULSE_SPEED_MIN/MAX, checked in
+    # validate() before this function is ever called, same two-tier
+    # pattern as set_speed()/SPEED_MIN/MAX above.
+    value = max(SPEED_MIN, min(SPEED_MAX, int(value)))
+    data = struct.pack('>h', value)
+    return lin.write(constants.cntl1mot, data, instance=MOTOR_INSTANCE_ID)
+
+
 def set_pi(lin, p_delta, i_delta):
     # cntl0mot's body is two signed bytes (int8_t), each *100 -- the
     # firmware always computes KP = KPDEFAULT + byte/100.0 (never

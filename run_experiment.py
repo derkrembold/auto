@@ -84,6 +84,39 @@ def _read_kickcount():
     return int(match.group(1)) if match else None
 
 
+# Commutation state (0-5) from the 3 raw Hall bits -- mirrors
+# STM32/firmware/Core/Src/main.c's getState()/driveStep() if-chain
+# exactly. Built 2026-08-28 to test whether stiction likelihood
+# correlates with the rotor's resting position before a step -- see
+# analysis/grid_search_log.md's Dead Zone discussion. Only resolves the
+# 6 electrical states, not which of the motor's 4 mechanical pole-pair
+# repetitions it is (would need an absolute position reference this
+# project doesn't have -- discussed, not built).
+HALL_STATE_TABLE = {
+    (1, 0, 0): 4,
+    (1, 0, 1): 5,
+    (0, 0, 1): 0,
+    (0, 1, 1): 1,
+    (0, 1, 0): 2,
+    (1, 1, 0): 3,
+}
+
+HAL_RE = re.compile(r"data=\['(0x[0-9a-f]{2})', '(0x[0-9a-f]{2})', '(0x[0-9a-f]{2})'\]")
+
+
+def _read_hal():
+    # One-shot IPC call, same pattern as _read_kickcount() above.
+    # Returns (None, None) on any failure.
+    cmd = ("cd /home/pi/auto && python3 -c "
+           "\"import motorcontrol; print(motorcontrol.send_command('hal'))\"")
+    result = _ssh_check(cmd)
+    match = HAL_RE.search(result.stdout)
+    if not match:
+        return None, None
+    bits = tuple(int(b, 16) for b in match.groups())
+    return bits, HALL_STATE_TABLE.get(bits)
+
+
 def _check_stm32_and_watchdog():
     result = _ssh_check("pgrep -af watchdog.py; echo '---'; tail -3 /home/pi/auto/watchdog.log")
     print(result.stdout)
@@ -238,6 +271,10 @@ def main():
         print(f"Versuch {attempt}/{MAX_ATTEMPTS} ...")
         export_name = f"experiment_{timestamp}_attempt{attempt}"
         capture_id = _arm_trigger_capture()
+
+        hal_bits, hal_state = _read_hal()
+        if hal_state is not None:
+            print(f"Hall-Startposition vor diesem Versuch: state={hal_state} (bits={hal_bits})")
 
         if not _run_motor_capture(p_delta, i_delta, motor_csv):
             _abort_pending_capture(capture_id)

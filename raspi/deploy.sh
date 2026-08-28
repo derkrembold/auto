@@ -46,6 +46,7 @@ run_with_retry scp \
   "$REPO_ROOT/raspi/control/validate_speed.py" \
   "$REPO_ROOT/raspi/control/validate_motor_currentsensor.py" \
   "$REPO_ROOT/raspi/control/capture_step_response.py" \
+  "$REPO_ROOT/raspi/control/characterize_hall_positions.py" \
   "$REPO_ROOT/raspi/control/linaddresses.py" \
   "$REPO_ROOT/raspi/watchdog/watchdog.py" \
   "$REPO_ROOT/raspi/watchdog/linbus.py" \

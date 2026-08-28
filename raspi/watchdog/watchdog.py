@@ -18,7 +18,8 @@ LOG_PATH = "watchdog.log"
 
 logger = logging.getLogger("watchdog")
 
-KNOWN_COMMANDS = {"speed", "pi", "hal", "rpm", "temp", "current", "errors", "selftest", "kickcount"}
+KNOWN_COMMANDS = {"speed", "pi", "hal", "rpm", "temp", "current", "errors", "selftest",
+                   "kickcount", "pulse"}
 
 # Business/safety speed limit — separate from the protocol-level int16
 # range linbus.set_speed() clamps to. Deliberately below the motor's
@@ -37,6 +38,21 @@ SPEED_MAX = 3000
 # SPEED_MIN/MAX above.
 PI_DELTA_MIN = -1.28
 PI_DELTA_MAX = 1.27
+
+# `pulse <value>` range -- a single raw, open-loop driveStep() pulse
+# (main.c's cntl1mot dispatch), no PI controller/ramp involved. Built
+# 2026-08-28 for characterizing torque response by starting Hall
+# position (see analysis/grid_search_log.md's Dead Zone discussion).
+# Deliberately much tighter than SPEED_MIN/MAX above and NOT an
+# arbitrary business limit like that one either -- it mirrors main.c's
+# own GLOBALRATE (1275us): driveState() silently no-ops (drives
+# nothing, just burns GLOBALRATE us) once the magnitude reaches
+# GLOBALRATE, so anything at or above that is a wasted/meaningless
+# command, not merely "faster." 1274, not 1275, since driveState()'s
+# own check is `rate <= speedrate` (equality already triggers the
+# no-op).
+PULSE_SPEED_MIN = -1274
+PULSE_SPEED_MAX = 1274
 
 # `motorcontrol.py` holds one persistent connection for its whole
 # session — a closed connection is detected immediately (EOFError) and
@@ -84,6 +100,15 @@ def validate(command):
             return False, "speed value must be an integer"
         if not (SPEED_MIN <= value <= SPEED_MAX):
             return False, f"speed value out of range ({SPEED_MIN}..{SPEED_MAX})"
+    elif verb == "pulse":
+        if len(parts) != 2:
+            return False, "usage: pulse <value>"
+        try:
+            value = int(parts[1])
+        except ValueError:
+            return False, "pulse value must be an integer"
+        if not (PULSE_SPEED_MIN <= value <= PULSE_SPEED_MAX):
+            return False, f"pulse value out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})"
     elif verb == "pi":
         if len(parts) != 3:
             return False, "usage: pi <p_delta> <i_delta>"
@@ -170,6 +195,19 @@ class Watchdog:
             elif value == 0:
                 self.speed_became_nonzero_at = None
             self.last_commanded_speed = value
+            return "OK"
+        if verb == "pulse":
+            # A single raw, open-loop driveStep() pulse (cntl1mot) --
+            # deliberately does NOT touch last_commanded_speed/
+            # speed_became_nonzero_at like "speed" above does. It's a
+            # brief characterization probe, not a sustained speed
+            # command -- the rpm-based stall check firing off a single
+            # short pulse (which never settles to a steady rpm at all)
+            # would be nonsensical. Same as every other non-"speed"
+            # verb here, this leaves the stall-check state exactly as
+            # the last real "speed" command left it.
+            value = int(parts[1])
+            linbus.set_pulse(self.lin, value)
             return "OK"
         if verb == "pi":
             p_delta = float(parts[1])

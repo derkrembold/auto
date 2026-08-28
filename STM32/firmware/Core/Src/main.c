@@ -350,12 +350,12 @@ int main(void)
 	  }
 	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl1mot | hwbits)) {
 		  int16_t speedlocal = (int16_t)((rx_body[0] << 8) | rx_body[1]);
-		  driveStep(speedlocal);
+		  /*driveStep(speedlocal);
 		  driveStep(0);
 		  driveStep(0);
 		  driveStep(speedlocal);
 		  driveStep(0);
-		  driveStep(0);
+		  driveStep(0);*/
 		  driveStep(speedlocal);
 		  driveStep(0);
 		  driveStep(0);

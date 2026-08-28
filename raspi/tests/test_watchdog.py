@@ -1,6 +1,7 @@
 import pytest
 
-from watchdog import validate, Watchdog, SPEED_MIN, SPEED_MAX, IDLE_TIMEOUT, PI_DELTA_MIN, PI_DELTA_MAX
+from watchdog import (validate, Watchdog, SPEED_MIN, SPEED_MAX, IDLE_TIMEOUT,
+                      PI_DELTA_MIN, PI_DELTA_MAX, PULSE_SPEED_MIN, PULSE_SPEED_MAX)
 from linbus import DryRunLin, MOTOR_INSTANCE_ID, CURRENT_INSTANCE_ID
 from linaddresses import constants
 
@@ -12,11 +13,13 @@ from linaddresses import constants
 RANGE_ERROR = f"speed value out of range ({SPEED_MIN}..{SPEED_MAX})"
 PI_RANGE_ERROR_P = f"p_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
 PI_RANGE_ERROR_I = f"i_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
+PULSE_RANGE_ERROR = f"pulse value out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})"
 
 # Expected on-wire pid for motor commands: base pid combined with the one
 # motor currently on the bus's strap-pin instance id — see linbus.py's
 # TARGET_MOTOR_INSTANCE comment.
 CNTL0MOT_WIRE = constants.cntl0mot | MOTOR_INSTANCE_ID
+CNTL1MOT_WIRE = constants.cntl1mot | MOTOR_INSTANCE_ID
 CNTL3MOT_WIRE = constants.cntl3mot | MOTOR_INSTANCE_ID
 CNTL0CUR_WIRE = constants.cntl0cur | CURRENT_INSTANCE_ID
 
@@ -41,6 +44,14 @@ CNTL0CUR_WIRE = constants.cntl0cur | CURRENT_INSTANCE_ID
     ("pi abc 0", (False, "p_delta/i_delta must be numbers")),
     ("pi 0.1", (False, "usage: pi <p_delta> <i_delta>")),
     ("pi 0.1 0.1 0.1", (False, "usage: pi <p_delta> <i_delta>")),
+    ("pulse 300", (True, None)),
+    ("pulse -300", (True, None)),
+    (f"pulse {PULSE_SPEED_MAX}", (True, None)),
+    (f"pulse {PULSE_SPEED_MIN}", (True, None)),
+    (f"pulse {PULSE_SPEED_MAX + 1}", (False, PULSE_RANGE_ERROR)),
+    (f"pulse {PULSE_SPEED_MIN - 1}", (False, PULSE_RANGE_ERROR)),
+    ("pulse abc", (False, "pulse value must be an integer")),
+    ("pulse", (False, "usage: pulse <value>")),
     ("hal", (True, None)),
     ("rpm", (True, None)),
     ("temp", (True, None)),
@@ -69,6 +80,26 @@ def test_execute_speed_relays_to_dry_run_bus():
     address, data = wd.lin.writes[0]
     assert address == CNTL3MOT_WIRE
     assert data == [0x01, 0x2c]  # struct.pack('>h', 300)
+
+
+def test_execute_pulse_relays_to_dry_run_bus():
+    wd = Watchdog(DryRunLin())
+    assert wd.execute("pulse 300") == "OK"
+    assert len(wd.lin.writes) == 1
+    address, data = wd.lin.writes[0]
+    assert address == CNTL1MOT_WIRE
+    assert data == [0x01, 0x2c]  # struct.pack('>h', 300)
+
+
+def test_execute_pulse_does_not_touch_stall_check_state():
+    # A single open-loop probe pulse, unlike "speed", must not feed the
+    # rpm-based stall check -- see watchdog.py's _dispatch() comment.
+    wd = Watchdog(DryRunLin())
+    wd.last_commanded_speed = 300
+    wd.speed_became_nonzero_at = 12345.0
+    assert wd.execute("pulse -300") == "OK"
+    assert wd.last_commanded_speed == 300
+    assert wd.speed_became_nonzero_at == 12345.0
 
 
 def test_execute_pi_relays_to_dry_run_bus():

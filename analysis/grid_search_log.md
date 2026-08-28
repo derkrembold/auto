@@ -1202,3 +1202,361 @@ tuning a new specific threshold value needs either a genuinely
 reproducible severe point to test against, or a broader sweep to find
 one — not decided yet, no further action taken this session.
 
+## 2026-08-28: Hall-Position Torque Characterization — New Tool Built,
+State 0 Identified as the Worst Position
+
+**Motivation:** the user's hypothesis, raised the same day — stiction
+likelihood may depend on *where* the rotor happens to rest (which of
+the 6 Hall states, and potentially which of the motor's 4 mechanical
+pole-pair repetitions of that state) when a step command arrives, not
+just on `P`/`I`. Neither `run_experiment.py` nor
+`capture_step_response.py` had ever queried `hal` before a step — a
+real, previously unexamined gap. `cntl1mot` (PID `0x04`) turned out to
+already be defined in `addresses.json`/handled by firmware (a single
+raw, open-loop `driveStep()` pulse, no PI/ramp) but never wired up on
+the Python side at all — built fresh this session: `linbus.set_pulse()`,
+`watchdog.py`'s new `pulse <value>` verb (own `PULSE_SPEED_MIN/MAX =
+±1274`, one below `GLOBALRATE=1275` where `driveState()` itself
+silently no-ops — deliberately *not* reusing `speed`'s `SPEED_MIN/MAX`,
+a different, tighter policy range for a fundamentally different,
+unramped command), and a `kickcount`-style `motorcontrol.py` entry.
+Also does **not** feed the rpm-based stall check (`last_commanded_speed`
+untouched) — a single probe pulse firing that check 3s later would be
+nonsensical.
+
+**Manual probing found the real breakaway range before building
+anything automatic — and it directly questioned `KICKSTART_SPEED`
+itself:** `pulse 16` (`KICKSTART_SPEED` itself, the exact value the
+firmware kick-start already uses) produced only an audible tick, no
+real movement. `pulse 600` was audibly stronger but still produced no
+permanent movement. `pulse 1000` broke through and kept the rotor
+advancing. **This means a single kick-start pulse, at its current
+strength, is probably nowhere near strong enough to do the actual work
+of breaking stiction on its own** — every past "the kick-start
+helped" observation (2026-08-27 sections above) is now more plausibly
+attributable to the PI controller's own steadily-rising `controlvariable`
+running in parallel, not the kicks themselves. This is a real, still
+unresolved tension: `KICKSTART_SPEED` was deliberately kept low
+(≈5A, current-limit-derived) for safety, but real efficacy — per this
+session's data — looks like it needs something in the 600-1000+ range,
+far above that safety target. Not resolved this session; flagged as a
+real design question for whenever kick-start tuning resumes.
+
+**Cogging-torque ("Rast") confirmed as a distinct, real phenomenon at
+`pulse 750`:** the rotor visibly moved but sprang back to *exactly* the
+same position — the signature of a genuine magnetic detent (rotor
+permanent magnets vs. stator slot reluctance), not just "too weak a
+push." A second, independent effect layered on top of the existing
+Dead Zone (weak *commutation* torque near a Hall-sector boundary)
+theory — the two can coincide and compound.
+
+**Tool built and iterated live, same session,
+`raspi/control/characterize_hall_positions.py`:**
+1. First version: single fixed pulse per position, human judged
+   "weit/mittel/wenig" by eye. Abandoned once it became clear a fixed
+   pulse can't distinguish "sprang back into the same detent" from
+   "barely moved at all" — both look identical from a bare `hal`
+   reading, and the qualitative judgment couldn't capture the
+   spring-back signature at all.
+2. Redesigned around an **escalating-threshold search per position**
+   instead: read `hal` as reference, fire `pulse` at increasing
+   magnitude (defaults 750 start / +50 step / 1100 ceiling, chosen
+   from the manual probing above, `SETTLE_S=0.5` between pulse and
+   re-read — raised from an initial 0.3s specifically to let the
+   mechanical re-detent finish, not just the electrical pulse — see
+   the user's own reasoning), until the Hall state *permanently*
+   differs from the reference. The threshold value itself is the
+   quantitative measurement, no human judgment needed for the core
+   loop.
+3. **Made fully automatic mid-session**, on the user's own realization:
+   since a strong-enough pulse (1000) reliably *drives the rotor
+   forward*, the pulse that characterizes one position doubles as the
+   transport to the next — no manual repositioning needed between
+   measurements at all. The operator now positions the rotor by hand
+   only *once*, at the very start; the script then runs
+   `NUM_POSITIONS_DEFAULT=24` (6 states x 4 pole-pair repetitions)
+   positions completely unattended, stopping early (with a clear
+   report, not a silent guess) only if a position fails to break
+   through by the ceiling — there's no "next position" to continue to
+   in that case. `Ctrl-C` and a mid-run crash both leave every
+   already-collected row on disk (`csv.writer` flushed after every
+   row) — the script writes its own CSV file directly rather than the
+   project's usual "print CSV to stdout, caller redirects" convention,
+   specifically because this script's own interactive prompts share
+   the same stdout a redirect would otherwise capture, which would
+   have interleaved prompts into the data.
+4. **`direction` parameter added** (cw/ccw, prompted at startup,
+   default cw) — a plain sign flip applied to every pulse sent. One
+   run only ever covers one direction; running both means invoking the
+   script twice.
+5. **`detent_type` prompt added**, asked only when the ceiling is hit
+   without a permanent transition: `mittelrast` (shallow detent, easy
+   to escape by hand, but the pulse's fixed torque direction may be
+   poorly aligned with the escape direction at this exact rotor angle
+   — see the Dead Zone reasoning) vs. `tiefrast` (genuinely
+   strong/deep). Not distinguishable from `hal`/`attempts` data alone,
+   so asked live and logged alongside the current Hall position.
+
+**Companion plotting tool, `analysis/plot_hall_characterization.py`:**
+step-plot of `attempts` (escalation steps needed) vs. sequence index,
+x-axis labelled with each iteration's starting Hall state, multiple
+CSVs overlaid for direct reproducibility comparison, ceiling-hit points
+marked with an "x". Read-only, `csv.DictReader`-based (tolerates the
+`detent_type` column added after the first plots were made).
+
+**Phase 1 — uncontrolled starting position (2 full 24-position runs,
+`characterize_hall_positions_cw_2026-08-28_110732.csv`/`_111732.csv`):**
+- **Breakaway threshold is clearly state-dependent and highly
+  reproducible for states 1, 2, 4, 5** — identical threshold *and*
+  attempt count in both runs: state 1 → 850 (3 attempts), state 2 → 900
+  (4), state 4 → 900 (4), state 5 → 750 or 850 (1 or 3, same bimodal
+  pattern both times). **State 0 was the exception — 1000 (6 attempts)
+  every time in run 1, but only 800-850 (2-3 attempts) in run 2** — a
+  real inconsistency, not yet explained (candidate causes: different
+  approach history/momentum into state 0 each time, or genuine
+  variability specific to this position).
+- **Destination state after breakthrough is not fixed by the origin
+  state alone** — e.g. state 2 landed on 0 most of the time but on 5
+  twice in both runs; state 5 landed on both 1 and 2. Correlates with
+  how many escalation attempts were needed to get there (more failed
+  attempts beforehand → landed further away) — most likely explained
+  by residual momentum/partial movement from the *failed* escalation
+  pulses accumulating before the one that finally registers as a
+  permanent transition, not a clean single-pulse-in-isolation effect.
+  Confirmed live by direct observation the same session: watching the
+  rotor during a repeat run, the user saw it visibly skip multiple
+  Hall sectors at once on some transitions, not always one — a real
+  physical effect, not a measurement artifact.
+- **State 3 did not appear once in 48 transitions across both full
+  runs** (neither as a starting nor a landing state) — later shown
+  *not* to be categorically unreachable (see Phase 1 continued below),
+  but clearly rare relative to the other 5 states.
+- **Two runs stopped early at the pulse ceiling (1100) without a
+  permanent transition** — `_113010` at position 17 (state 2, 8
+  escalation attempts, no breakthrough) and `_113328` at position 2
+  (state 0, 8 attempts, no breakthrough). The user's live observation
+  at these exact stuck points: **easy to move past by hand, but the
+  pulses couldn't do it** — the seed of the `mittelrast`/`tiefrast`
+  distinction added to the tool afterward. Read as evidence for a pure
+  Dead Zone (commutation-torque-direction) failure rather than strong
+  cogging: a hand can push tangentially in exactly the needed
+  direction; a fixed commutation state's pulse can only push in
+  whatever direction that specific winding-current combination
+  happens to produce, which may be poorly aligned with the escape
+  direction at that exact rotor angle even at high current.
+- **Phase 1 continued** (`_112652`, a third full run): state 3 *did*
+  appear this time (`2→3`, `3→4`) — refutes "categorically
+  unreachable," supports "rare, not impossible."
+
+**The "cut": controlled starting position, from `_114345`/`_114903`
+onward.** The user's own root-cause diagnosis of Phase 1's
+run-to-run inconsistencies (especially state 0's varying threshold):
+the *starting* rotor position before each 24-position run was itself
+not being held consistent by hand, confounding every downstream
+comparison. Deliberately not treated as invalidating Phase 1's data —
+kept, not deleted (already archived locally in
+`runs/2026-08-28_hall_characterization/` regardless of what happens to
+the Pi's own working copies) — but a clean methodological break before
+trusting cross-run comparisons further.
+
+**Phase 2 — controlled starting position (7 runs,
+`_114345` through `_115614`):**
+- **The controlled start worked exactly as intended: every single run
+  begins identically** — state 2, threshold 900, 4 attempts, all 7
+  times. Confirms Phase 1's state-2 reproducibility wasn't a fluke and
+  that hand-positioning repeatability is achievable when deliberately
+  controlled.
+- **But even from this identical, controlled start, the destination
+  still varies: 5 of 7 runs landed on state 5, 2 of 7 on state 0** —
+  same threshold, same attempt count, different outcome. Points to a
+  genuine bistability/tie-breaking right at this position's boundary
+  (imperceptibly small differences in exact rest angle, or real
+  electrical/thermal noise), not something explainable by prior-run
+  momentum this time, since it's always the first position in a fresh
+  run.
+- **State 0 confirmed as the single worst position across this batch:**
+  encountered ~7 times, broke through only 3 (inconsistently, at 850,
+  1000, and 1000), and **got stuck at the 1100 ceiling 4 times** — a
+  roughly 4-in-7 stall rate at this one position, far above every
+  other state. **All 4 stuck cases were independently judged
+  `mittelrast`, never `tiefrast`** — a consistent, repeated result, not
+  a one-off — strong support for the Dead Zone
+  (torque-direction-misalignment) explanation specifically at this
+  position, over a strong mechanical lock.
+- One additional stuck case at state 2 (`_115502`, position 9,
+  `mittelrast`) — again a *different* encounter of state 2 than the
+  every-run-identical starting one, consistent with the standing
+  "different mechanical pole-pair repetition of the same electrical
+  state can behave differently" hypothesis (not proven, no absolute
+  position reference exists to confirm it directly — see the
+  2026-08-28 discussion earlier in this log about why `hal` alone
+  can't distinguish which of the 4 repetitions is active).
+
+**Net takeaway so far:** the Hall-position hypothesis is strongly
+supported — breakaway difficulty is real, measurable, and (for most
+states) reproducible, with state 0 standing out as a specific,
+repeatedly-confirmed problem position. Two things remain open: (1) the
+real-efficacy-vs-current-safety tension for `KICKSTART_SPEED` raised
+by the manual probing above, and (2) CCW characterization — every run
+so far has been `cw` only, `ccw` not yet attempted.
+
+## 2026-08-28 (continued): Quarter-Anchored Tracking, Finer Resolution,
+and a Cluster of Manual-Testing Findings (Chattering, Reversed Torque)
+
+**The user's own challenge to the state-only analysis above turned out
+correct, and led to a real redesign.** Asked directly whether grouping
+by "6 states" was even the right frame, given the motor mechanically
+has 24 positions — confirmed this is a genuine blind spot: `hal`
+readings, and therefore the `%6` cumulative-position math the plotting
+tool already used, cannot distinguish *which* of the 4 mechanical
+pole-pair repetitions of a state is active, only the electrical state
+itself. The user's fix: since only a human with a physical mark on the
+shaft can reliably track which quarter is active (watched by eye, not
+inferred), have the operator supply the **starting quarter (0-3)**
+once per run, then trust the script's own step-accumulation (assumed
+never to skip a full extra electrical revolution in one short pulse —
+physically plausible, not provable from `hal` alone) to propagate that
+quarter number forward for the rest of that one run.
+
+**`characterize_hall_positions.py` redesigned around this:**
+- Startup now asks for the starting quarter; a new `quarter` CSV column
+  is computed (not measured) from it for every row.
+- **A run now characterizes exactly one quarter, not a fixed 24-position
+  sweep** — stops once `QUARTER_STEPS=6` electrical states have been
+  crossed since the start, deliberately bounding how far the unverified
+  step-accumulation assumption has to hold before the operator
+  re-anchors by hand (same one-confirmed-unit-then-stop spirit as
+  `run_grid_row.py`'s row consent model).
+- **Extended the same day**, after the user found a mittelrast sitting
+  right at a quarter boundary that a hard stop-at-6 would have missed:
+  the run now continues up to `BONUS_ATTEMPTS_AFTER_BOUNDARY=2` more
+  positions past the boundary specifically to catch that. A normal
+  (non-stuck) bonus-round transition is deliberately **not** written to
+  the CSV — its estimated quarter is past the operator's anchor point,
+  not trustworthy data — only a stuck result during the bonus round is
+  recorded.
+- **`PULSE_STEP_DEFAULT` lowered 50 → 25`** — now that a run covers one
+  quarter instead of 24 positions, finer resolution costs proportionally
+  less total time.
+- Plotting tool gained a many-file overlay mode (>8 files): all traces
+  drawn in one translucent color instead of a per-file legend — genuine
+  reproducibility shows up directly as darker/opaque overlapping
+  segments, divergent paths stay faint. Built specifically because a
+  16-file batch with per-file colors was unreadable.
+
+**Phase 3 results — 16 quarter-0 runs, finer resolution
+(`characterize_hall_positions_cw_q0_*.csv`):**
+- **The first two thresholds converge precisely and identically across
+  all 16 runs: state 2→5 at 875 (6 attempts), state 5→(1 or 2) at 825
+  (4 attempts) — both exact, no spread at all.** The earlier "bimodal
+  750-or-850" reading for this same transition (Phase 1/2, 50-step
+  resolution) is now understood as a coarse-grid artifact straddling
+  this one true value, not real bimodality.
+- **The "second visit to state 2" finding, now with a much larger
+  sample:** of the runs whose path went state 2 → 5 → 2 (back to state
+  2 a second time within the same run), roughly half got stuck for the
+  *entire* escalation ceiling (15 attempts at the finer 25-step
+  resolution) immediately afterward, every one flagged `mittelrast`.
+  The always-clean *first* visit to state 2 (position 1 of every run,
+  875/6 attempts, never stuck) versus the unreliable *second* visit is
+  the clearest evidence yet that these are genuinely different
+  mechanical instances of the same electrical state, not the same
+  physical spot behaving inconsistently.
+
+**Manual follow-up testing (via `motorcontrol.py`'s new `pulse`
+command directly, not the automated script) produced a cluster of
+significant findings the same session:**
+
+1. **Direct, hand-verified confirmation of quarter-dependent behavior.**
+   State 4 (`[0x1,0x0,0x0]`) — one of the most reliable states in the
+   Q0 data, always breaking through cleanly at 900/4 attempts, never
+   once stuck — got stuck in a mittelrast under `pulse 1000` (stronger
+   than the Q0 value that always worked) while in **quarter 1**. Same
+   electrical reading, different quarter, clearly different real
+   behavior — not inferred this time, directly observed.
+2. **Occasionally reversed effective torque, not just weak torque.**
+   At that same stuck spot, the user observed the rotor visibly moving
+   **CCW** under `pulse 1000` (a positive, CW-signed command) in some
+   attempts. Plausible mechanism: if the true magnet angle has drifted
+   far enough from the Hall reading's "expected" position, the
+   commanded commutation phase can fall past the torque curve's zero
+   crossing, producing net torque in the *wrong* direction even though
+   the correct (CW) state was commanded. This is the first concrete,
+   observed motivation for the bidirectional kick-start idea discussed
+   the previous evening (2026-08-27) — escalating a single-direction
+   pulse can't help, and may actively hurt, at a position where the
+   commutation torque itself points the wrong way.
+3. **Root cause found for the inconsistent behavior at that spot:
+   Hall-sensor chattering right at the Tiefrast/Mittelrast transition.**
+   Reading `hal` repeatedly with no pulse in between, at that exact
+   resting position, flickered between `[0x1,0x1,0x0]` (state 3) and
+   `[0x1,0x0,0x0]` (state 4) — the rotor wasn't moving, but the Hall
+   sensor's digital output was toggling between two adjacent electrical
+   readings, almost certainly from insufficient hysteresis at its
+   switching threshold when the magnetic field sits right on the
+   boundary. Named: **chattering** (a threshold/switching-boundary
+   oscillation, not a software race condition, though the observable
+   effect — outcome depends on unlucky timing of the read — feels the
+   same). Directly explains findings 1 and 2 above: `driveStep()`/
+   `driveStepKickStart()` compute their target state fresh from
+   whatever `hal` returns at that instant, so the *same* physical rotor
+   position can issue two *different* commutation commands purely
+   depending on which side of the chattering threshold got sampled.
+4. **Refined further by manual stepping: the Hall switching threshold
+   sits inside the Mittelrast itself, not cleanly at the mechanical
+   Tiefrast/Mittelrast boundary.** Turning by hand from a Tiefrast into
+   the following Mittelrast usually still reads the Tiefrast's old Hall
+   value throughout the Mittelrast, but occasionally flips early to the
+   next state's value while the rotor is still mechanically captured in
+   the Mittelrast. Consequence: a bare `hal`-based "did it transition"
+   check can be fooled into believing a breakthrough happened when the
+   rotor is mechanically still trapped — a real measurement-validity
+   caveat for every threshold value gathered by this whole
+   investigation, not just an isolated curiosity.
+5. **User's own independent, repeated physical finding (by feel, not
+   inferred): mittelrasten always sit between tiefrasten** — a
+   structural, repeating cogging pattern around the rotor, not
+   occasional/random weak spots. Consistent with normal cogging-torque
+   physics (multiple ripples per electrical sector are common,
+   depending on pole/slot count) but now confirmed specifically for
+   this motor by direct touch, independent of any electrical
+   measurement.
+
+**Net effect on the whole investigation:** what started as "does
+starting position affect stiction" has surfaced a genuine, specific
+hardware-level finding (Hall sensor chattering at sector boundaries,
+compounded by quarter-to-quarter mechanical variation) that plausibly
+explains much of the run-to-run unpredictability seen throughout this
+whole project's stiction investigation — not just a P/I tuning
+question. Not yet resolved: whether the chattering is inherent to this
+specific Hall sensor/mounting (fixable only mechanically) or could be
+mitigated in firmware (e.g. requiring N consecutive identical readings
+before trusting a state change — a debounce, conceptually related to
+the already-open `_detect_stiction()` blip-handling bug). CCW
+characterization still not started.
+
+**Same-day follow-up discussion: `KICKSTART_SPEED` reconsidered in
+light of today's whole characterization effort — decision deliberately
+deferred to next week, thoughts captured here only.** The user pointed
+out `driveKickStart()` has been driving every real kick with
+`KICKSTART_SPEED=16` this whole time, which today's own data shows
+could never have worked as a single-pulse breakaway mechanism — every
+measured threshold today (750-1000+, some positions not breaking
+through even past 1100) is far above it. Naive duty-cycle current
+estimate at the higher end (`pulse 1000`) is ≈325A, nominally alarming
+against the original 5A safety target — but the user has been running
+real hardware at 750-1100+ repeatedly all session (dozens of pulses
+across many positions) with no observed damage, real empirical
+evidence the theoretical estimate may be overly conservative for a
+pulse this brief (~1.3ms). Caveat noted: current sensing is still
+disabled (known hardware issue), so "no visible damage" isn't the same
+as "current stayed low" — absence of failure, not a measurement.
+**Considered raising `KICKSTART_SPEED` to 800 — checked against
+today's data and flagged as likely insufficient:** state 2→5 (the
+single most common and most reliably measured transition today, exact
+875 in all 16 Q0 runs) would still not break through in one shot at
+800. 900-950 would cover that specific case with margin; no fixed
+value covers everything found today (quarter 1's >1100 no-breakthrough
+case). **No firmware change made — explicitly a next-week decision**,
+the user edits `main.c` themselves.
+

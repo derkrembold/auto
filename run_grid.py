@@ -73,8 +73,43 @@ geprueft.)
 """
 
 
+# Commutation state (0-5) from the 3 raw Hall bits (high/middle/low,
+# i.e. PC0/PC1/PC2) -- mirrors STM32/firmware/Core/Src/main.c's
+# getState()/driveStep() if-chain exactly, see that table for the
+# meaning of each state. Built 2026-08-28 to test whether stiction
+# likelihood correlates with the rotor's resting position before a
+# step -- see analysis/grid_search_log.md's Dead Zone discussion. Only
+# resolves the 6 electrical states, not which of the motor's 4
+# mechanical pole-pair repetitions it is (that would need an absolute
+# position reference this project doesn't have -- discussed, not built).
+HALL_STATE_TABLE = {
+    (1, 0, 0): 4,
+    (1, 0, 1): 5,
+    (0, 0, 1): 0,
+    (0, 1, 1): 1,
+    (0, 1, 0): 2,
+    (1, 1, 0): 3,
+}
+
+HAL_RE = re.compile(r"data=\['(0x[0-9a-f]{2})', '(0x[0-9a-f]{2})', '(0x[0-9a-f]{2})'\]")
+
+
 def _ssh_check(cmd):
     return subprocess.run(["ssh", PI_HOST, cmd], capture_output=True, text=True)
+
+
+def _read_hal():
+    # One-shot IPC call via motorcontrol.send_command(), same pattern
+    # as _read_kickcount(). Returns (None, None) on any failure rather
+    # than aborting the point over a nice-to-have diagnostic.
+    cmd = ("cd /home/pi/auto && python3 -c "
+           "\"import motorcontrol; print(motorcontrol.send_command('hal'))\"")
+    result = _ssh_check(cmd)
+    match = HAL_RE.search(result.stdout)
+    if not match:
+        return None, None
+    bits = tuple(int(b, 16) for b in match.groups())
+    return bits, HALL_STATE_TABLE.get(bits)
 
 
 def _check_stm32_and_watchdog():
@@ -139,6 +174,14 @@ def _run_point(p, i, run_dir, index, total):
     name = _point_name(p, i)
     csv_path = run_dir / f"{name}.csv"
 
+    # Starting Hall/rotor position, before anything else touches the
+    # motor this point -- see analysis/grid_search_log.md's Dead Zone
+    # discussion (2026-08-28). Reflects wherever the previous point's
+    # soft-stop happened to leave the rotor, not a controlled start.
+    hal_bits, hal_state = _read_hal()
+    if hal_state is not None:
+        print(f"  Hall-Startposition: state={hal_state} (bits={hal_bits})")
+
     kickcount_before = _read_kickcount()
 
     # stdout/stderr captured separately, not merged -- same reasoning
@@ -150,7 +193,7 @@ def _run_point(p, i, run_dir, index, total):
     csv_path.write_text(result.stdout)
     if result.returncode != 0:
         print(result.stderr, file=sys.stderr)
-        return None, None
+        return None, None, None
 
     kickcount_after = _read_kickcount()
     kicks = None
@@ -177,7 +220,7 @@ def _run_point(p, i, run_dir, index, total):
         print(f"WARNUNG: capture_step_response.log für {name} nicht abholbar "
               f"(3 Versuche): {fetch.stderr.strip()}")
 
-    return csv_path, kicks
+    return csv_path, kicks, hal_state
 
 
 def _read_rpm_series(csv_path):
@@ -301,9 +344,10 @@ def _print_matrix(results, p_values, i_values, key, label):
 def _write_results_csv(results, out_path):
     with open(out_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["p_delta", "i_delta", "ise", "mssd_2s", "mssd_full", "kicks"])
+        writer.writerow(["p_delta", "i_delta", "ise", "mssd_2s", "mssd_full", "kicks", "hal_state"])
         for (p, i), r in results.items():
-            writer.writerow([p, i, r["ise"], r["mssd_2s"], r["mssd_full"], r.get("kicks")])
+            writer.writerow([p, i, r["ise"], r["mssd_2s"], r["mssd_full"], r.get("kicks"),
+                              r.get("hal_state")])
 
 
 def _make_best_point_plot(csv_path, out_path, p_delta, i_delta, ise):
@@ -410,7 +454,7 @@ def main():
     aborted = False
     try:
         for idx, (p, i) in enumerate(points, start=1):
-            csv_path, kicks = _run_point(p, i, run_dir, idx, len(points))
+            csv_path, kicks, hal_state = _run_point(p, i, run_dir, idx, len(points))
             if csv_path is None:
                 sys.exit(f"pi-Kommando abgelehnt oder SSH-Fehler bei "
                           f"P delta={p:+.2f}, I delta={i:+.2f} -- ganze Runde abgebrochen.")
@@ -419,6 +463,7 @@ def main():
                 "mssd_2s": _compute_mssd(csv_path, window_s=MSSD_SHORT_WINDOW_S),
                 "mssd_full": _compute_mssd(csv_path, window_s=None),
                 "kicks": kicks,
+                "hal_state": hal_state,
             }
             if idx < len(points):
                 time.sleep(INTER_POINT_PAUSE_S)
@@ -439,6 +484,8 @@ def main():
                       "MSSD-Matrix (gesamte 7s)")
         _print_matrix(results, p_values, i_values, "kicks",
                       "Kickstart-Zaehler (Anzahl Feuerungen, experimentelle Diagnose)")
+        _print_matrix(results, p_values, i_values, "hal_state",
+                      "Hall-Startposition (Zustand 0-5 vor dem Sprung, experimentelle Diagnose)")
         best = min(results, key=lambda k: results[k]["ise"])
         best_ise = results[best]["ise"]
         print(f"\nBester Punkt (nach ISE): P delta={best[0]:+.2f}, I delta={best[1]:+.2f}, "

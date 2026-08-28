@@ -29,6 +29,8 @@ logger = logging.getLogger("motorcontrol")
 
 HELP_TEXT = """Commands:
   speed <value>            set speed, 0 = stop
+  pulse <value>            single raw open-loop driveStep() pulse (cntl1mot, no PI/ramp),
+                           +/- , must stay under GLOBALRATE (1274) -- see PULSE_SPEED_MIN/MAX
   pi <p_delta> <i_delta>   set KP/KI as (firmware default + delta), each
                            in -1.28..1.27 -- not calling this leaves both
                            at their firmware defaults

@@ -155,7 +155,7 @@ def main():
     aborted = False
     try:
         for idx, (p, i) in enumerate(points, start=1):
-            csv_path, kicks = rg._run_point(p, i, run_dir, idx, len(points))
+            csv_path, kicks, hal_state = rg._run_point(p, i, run_dir, idx, len(points))
             if csv_path is None:
                 sys.exit(f"pi-Kommando abgelehnt oder SSH-Fehler bei "
                           f"P delta={p:+.2f}, I delta={i:+.2f} -- ganze Zeile abgebrochen.")
@@ -164,6 +164,7 @@ def main():
                 "mssd_2s": rg._compute_mssd(csv_path, window_s=rg.MSSD_SHORT_WINDOW_S),
                 "mssd_full": rg._compute_mssd(csv_path, window_s=None),
                 "kicks": kicks,
+                "hal_state": hal_state,
             }
             if idx < len(points):
                 time.sleep(rg.INTER_POINT_PAUSE_S)
@@ -183,6 +184,8 @@ def main():
         _print_row(results, points, "mssd_full", "MSSD (gesamte 7s)")
         _print_row(results, points, "kicks",
                    "Kickstart-Zaehler (Anzahl Feuerungen, experimentelle Diagnose)")
+        _print_row(results, points, "hal_state",
+                   "Hall-Startposition (Zustand 0-5 vor dem Sprung, experimentelle Diagnose)")
 
         best = min(results, key=lambda k: results[k]["ise"])
         best_ise = results[best]["ise"]
