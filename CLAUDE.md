@@ -67,6 +67,59 @@ The "how" — evolves as the system gets built out.
   trigger for capture start — no software synchronization between
   systems needed.
 
+## Two-Motor Vehicle Architecture (Planned)
+
+**Everything in this section is planned, not built — ideas from a
+2026-09-07 design session (originally written up as a standalone
+`BLDC_System_Specification.md`, folded into this file and its
+subsystem `CLAUDE.md`s the same day, then deleted — see git history
+for the original wording if needed). Subject to change as design
+continues; don't treat this the way the rest of this file's "built and
+confirmed" material is treated.** Mid-term priority — the user's own
+framing: solve the urgent near-term problems (kickstart reliability,
+see `STM32/CLAUDE.md`'s Open Points) before this hardware work starts.
+
+The long-term target: two BLDC motors (same Bosch 1000W/24V motor as
+today's single bench motor), one STM32H743 controller each
+(`STM32_A`→left, `STM32_B`→right), driving a vehicle via differential
+drive (steering from left/right speed difference, no separate steering
+mechanism). A Raspberry Pi is the central hub — joystick input, safety
+supervision, sensor fusion, eventually autonomous navigation (see Long-
+Term Roadmap below).
+
+```
+Joystick → Pi → STM32_A → Motor Links
+                STM32_B → Motor Rechts
+```
+
+Planned hardware additions: a second motor+controller (identical to
+today's, addressed via the existing multi-instance LIN scheme — see
+LIN Protocol section above, `addresses.json` already reserves room for
+up to 4 motors, this would be the first time a second one actually
+exists); an **external current-sensor module** for both motors over
+LIN — a *different* device than the STM32's own internal current
+sense, which stays physically disabled on today's board (see
+`STM32/CLAUDE.md`'s Known Hardware Issue) — not yet decided whether
+this reuses the existing `currentsensor/` LIN-slave design or is a new
+one; an **IFM sensor suite** (own Ethernet controller, MQTT or direct
+IP — TBD) — O3D depth camera (front, obstacle detection), 4x LiDAR
+(side, precise/long-range), 4x ultrasonic (side/rear, wide-angle near-
+field, backup for the O3D in direct sunlight); the Pi as a WiFi access
+point (phone SSH/browser, Bluetooth joystick, Ethernet to the IFM
+controller, LIN to both motors + current-sensor module).
+
+**Planned STM32-side redesign** (pulse/reset/status protocol, kickstart
+algorithm): see `STM32/CLAUDE.md`'s Commutation & Control section.
+
+**Planned Pi-side redesign** (multi-process architecture, stall/
+stiction response building blocks, ML-driven recovery, logging
+database, web UI): see `raspi/watchdog/CLAUDE.md`. **Deliberately not
+a from-scratch redesign** — the user wants to keep as much of the
+existing, proven watchdog/`motorcontrol.py` architecture as possible
+and build additively; the actual redesign happens interactively
+between the user and Claude Code as it's built, not by following this
+plan mechanically.
+
 ## Repo Structure
 
 ```
@@ -721,6 +774,43 @@ obviously can't run through a 60W supply).
 Buck Converter
 * Victron Orion-Tr 24/12-5
 
+## Long-Term Roadmap (Planned)
+
+**Explicitly far future — "Zukunftsmusik" in the user's own words
+(2026-09-07) — direction confirmed correct, no near-term commitment,
+sequenced well after the Two-Motor Vehicle Architecture section
+above.** Captured here so the destination stays visible while nearer-
+term work (kickstart reliability, the two-motor build-out) happens
+first.
+
+- **GPS navigation**: a GPS module on the Pi (or a phone's GPS), point-
+  to-point destination entry via the web UI (see
+  `raspi/watchdog/CLAUDE.md`'s planned Webserver process).
+- **Odometry**: `rpm × wheel circumference × time` per motor →
+  relative motion; steering direction from the left/right `rpm`
+  difference (differential drive); position by integrating over time.
+- **Sensor fusion (Kalman filter)**: GPS alone is coarse (3-10m error,
+  ~1Hz) and odometry alone drifts unbounded — combining them (ROS's
+  `robot_localization` package, already-implemented Kalman filter,
+  just needs configuring) lets GPS correct odometry drift and odometry
+  fill GPS gaps.
+- **Obstacle avoidance via ROS**: IFM ultrasonic/LiDAR/O3D data feeds a
+  ROS costmap; `move_base` handles both global path planning (A→B) and
+  local obstacle avoidance, both off-the-shelf ROS capability, not
+  custom-built.
+- **Full ROS integration**: ROS on the Pi once joystick control is
+  stable and GPS/autonomy is actually wanted — `joy` node (Logitech
+  controller), `robot_localization` (Kalman filter), `move_base`
+  (navigation), the watchdog itself becoming a ROS node, an IFM-to-ROS
+  bridge (`sensor_msgs/PointCloud2` for the O3D, `sensor_msgs/Range`
+  for LiDAR/ultrasonic), and the STM32 LIN link as its own ROS node.
+  Topics: `/cmd_vel`, `/odom`, `/gps`, `/scan`, `/lidar`, `/ultraschall`,
+  `/rpm`, `/current`.
+- **Migration phases** (the user's own framing): Phase 1 (current) —
+  joystick control, watchdog, stall/stiction response. Phase 2 — GPS,
+  odometry, web UI with a map. Phase 3 — ROS, Kalman filter, A→B
+  navigation. Phase 4 — autonomous driving, obstacle avoidance, full
+  ROS integration.
 
 # Safety
 

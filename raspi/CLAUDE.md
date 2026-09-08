@@ -48,6 +48,7 @@ watchdog one as `watchdog-CLAUDE.md` to avoid silently overwriting the
 other. Same caution applies to any future same-named files across
 `raspi/` subfolders.
 
+
 ## Structure
 
 - `control/motorcontrol.py` — small interactive CLI (`speed <value>`
@@ -94,7 +95,7 @@ other. Same caution applies to any future same-named files across
      project's own `motorcontrol.py`, so the coupling (LED test and
      errorstorage inject/reset always happening together) has no real
      cost.
-  1.5. (Added 2026-08-15) Deliberately provokes currentsensor's
+  2. (Added 2026-08-15) Deliberately provokes currentsensor's
      `cntl0cur` checksum gate (`main.cpp` — see `currentsensor/CLAUDE.md`'s
      Status section for the bug this fixed): sends the *inject* bytes
      (`[0x01,0xab]`) with a deliberately wrong checksum via
@@ -116,7 +117,7 @@ other. Same caution applies to any future same-named files across
      stayed `0` and both STM32 counters stayed flat, while the other two
      parts below moved only their own respective counter — all three
      provocations confirmed mutually isolated.
-  2. Deliberately reproduces, on demand, the 2026-08-11 STM32 bus-hang
+  3. Deliberately reproduces, on demand, the 2026-08-11 STM32 bus-hang
      scenario and confirms both sides actually caught it
      (`linbus.provoke_bus_hang_timeout()`, see `STM32/CLAUDE.md`'s and
      `currentsensor/CLAUDE.md`'s Status sections for the full story):
@@ -129,7 +130,7 @@ other. Same caution applies to any future same-named files across
      incremented/logged the event.
      Confirmed against real hardware repeatedly, motor both idle and
      running — see the CLAUDE.md sections above.
-  3. (Added 2026-08-14) Deliberately provokes the STM32's `checksum_ok`
+  4. (Added 2026-08-14) Deliberately provokes the STM32's `checksum_ok`
      gate (`main.c`'s main-loop dispatch on `cntl0mot`/`cntl1mot`/
      `cntl2mot`/`cntl3mot` — see `STM32/CLAUDE.md`): sends a `cntl3mot`
      (speed) write with a deliberately wrong checksum via
@@ -296,6 +297,7 @@ other. Same caution applies to any future same-named files across
   `/dev/ttyS0` — `control/` no longer does). See `watchdog/CLAUDE.md`
   for details, including `linbus.py` (the `Lin` class + command
   functions, moved there from `control/motorcontrol.py`).
+
 
 ## LIN Protocol Timing
 

@@ -19,6 +19,23 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="$REPO_ROOT/STM32/firmware/Debug"
 LOG_FILE="$REPO_ROOT/STM32/build.log"
+ADDRESSES_JSON="$REPO_ROOT/addresses.json"
+ADDRESSES_H="$REPO_ROOT/STM32/firmware/Core/Inc/addresses.h"
+
+# Staleness check only -- deliberately does NOT run generate_addresses.py
+# itself. That script also writes raspi/control/linaddresses.py,
+# currentsensor/firmware/addresses.h, and addresses.md -- files well
+# outside STM32/, which a "just build the firmware" script shouldn't
+# silently touch as a side effect. See root CLAUDE.md's LIN Protocol
+# "Address Table Single Source of Truth" section for why regeneration
+# stays a deliberate, separate step. Hit live 2026-09-07: addresses.json
+# was edited but the generator never re-run, so this build would have
+# silently compiled a stale addresses.h.
+if [ -f "$ADDRESSES_JSON" ] && [ -f "$ADDRESSES_H" ] && [ "$ADDRESSES_JSON" -nt "$ADDRESSES_H" ]; then
+  echo "ERROR: addresses.json is newer than $ADDRESSES_H"
+  echo "Run 'python generate_addresses.py' from the repo root first, then build again."
+  exit 1
+fi
 
 # Bundled inside the STM32CubeIDE install — adjust if the IDE version
 # changes (these paths are version-specific).

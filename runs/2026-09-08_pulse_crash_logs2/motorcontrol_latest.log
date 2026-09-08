@@ -1,0 +1,51 @@
+16:56:29.904  INFO    connected to watchdog
+16:56:35.954  INFO    -> status
+16:56:35.962  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+16:56:44.452  INFO    -> hal
+16:56:44.458  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+16:56:49.092  INFO    -> hal
+16:56:49.098  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+16:56:54.901  INFO    -> pulse
+16:56:54.902  INFO    <- ERR usage: pulse <value>
+16:56:59.813  INFO    -> pulse
+16:56:59.815  INFO    <- ERR usage: pulse <value>
+16:57:04.294  INFO    -> pulse
+16:57:04.295  INFO    <- ERR usage: pulse <value>
+16:57:07.958  INFO    -> hal
+16:57:07.965  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+16:57:13.175  INFO    -> hal
+16:57:13.181  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+16:57:14.455  INFO    -> status
+16:57:14.463  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+16:57:19.736  INFO    -> hal
+16:57:19.742  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+16:57:24.057  INFO    -> pulse
+16:57:24.058  INFO    <- ERR usage: pulse <value>
+16:57:29.689  INFO    -> pulse 1000
+16:57:29.695  INFO    <- OK
+16:57:31.401  INFO    -> pulse 1000
+16:57:31.407  INFO    <- OK
+16:57:32.474  INFO    -> pulse 1000
+16:57:32.479  INFO    <- OK
+16:57:33.418  INFO    -> pulse 1000
+16:57:33.423  INFO    <- OK
+16:57:33.866  INFO    -> pulse 1000
+16:57:33.871  INFO    <- OK
+16:57:34.282  INFO    -> pulse 1000
+16:57:34.287  INFO    <- OK
+16:57:34.634  INFO    -> pulse 1000
+16:57:34.639  INFO    <- OK
+16:57:34.938  INFO    -> pulse 1000
+16:57:36.694  INFO    <- OK
+16:57:36.695  INFO    -> pulse 1000
+16:57:36.703  INFO    <- OK
+16:57:36.704  INFO    -> pulse 1000
+16:57:36.710  INFO    <- OK
+16:57:42.027  INFO    -> status
+16:57:44.722  INFO    <- OK ret=-5 timeout=None checksum=None kickstart=None sys_error=None
+16:57:49.340  INFO    -> status
+16:57:52.755  INFO    <- OK ret=-5 timeout=None checksum=None kickstart=None sys_error=None
+16:58:05.326  INFO    -> status
+16:58:07.333  INFO    <- OK ret=-5 timeout=None checksum=None kickstart=None sys_error=None
+16:58:20.544  INFO    -> status
+16:58:23.398  INFO    <- OK ret=-5 timeout=None checksum=None kickstart=None sys_error=None

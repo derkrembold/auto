@@ -20,6 +20,7 @@ PULSE_RANGE_ERROR = f"pulse value out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_
 # TARGET_MOTOR_INSTANCE comment.
 CNTL0MOT_WIRE = constants.cntl0mot | MOTOR_INSTANCE_ID
 CNTL1MOT_WIRE = constants.cntl1mot | MOTOR_INSTANCE_ID
+CNTL2MOT_WIRE = constants.cntl2mot | MOTOR_INSTANCE_ID
 CNTL3MOT_WIRE = constants.cntl3mot | MOTOR_INSTANCE_ID
 CNTL0CUR_WIRE = constants.cntl0cur | CURRENT_INSTANCE_ID
 
@@ -59,6 +60,21 @@ CNTL0CUR_WIRE = constants.cntl0cur | CURRENT_INSTANCE_ID
     ("errors", (True, None)),
     ("selftest", (True, None)),
     ("kickcount", (True, None)),
+    ("reset", (True, None)),
+    ("reset extra", (False, "usage: reset")),
+    ("status", (True, None)),
+    ("status extra", (False, "usage: status")),
+    ("burst -500 10 1000 5", (True, None)),
+    (f"burst {PULSE_SPEED_MIN} 0 {PULSE_SPEED_MAX} 0", (True, None)),
+    (f"burst {PULSE_SPEED_MIN - 1} 10 100 5",
+     (False, f"value1 out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})")),
+    (f"burst -100 10 {PULSE_SPEED_MAX + 1} 5",
+     (False, f"value2 out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})")),
+    ("burst -500 -10 1000 5", (False, "pause1_ms/pause2_ms must be non-negative")),
+    ("burst -500 10 1000 -5", (False, "pause1_ms/pause2_ms must be non-negative")),
+    ("burst abc 10 1000 5",
+     (False, "burst usage: value1/value2 must be integers, pause1_ms/pause2_ms must be numbers")),
+    ("burst -500 10 1000", (False, "usage: burst <value1> <pause1_ms> <value2> <pause2_ms>")),
     ("hal extra", (False, "usage: hal")),
     ("banana", (False, "unknown command: banana")),
     ("", (False, "empty command")),
@@ -100,6 +116,45 @@ def test_execute_pulse_does_not_touch_stall_check_state():
     assert wd.execute("pulse -300") == "OK"
     assert wd.last_commanded_speed == 300
     assert wd.speed_became_nonzero_at == 12345.0
+
+
+def test_execute_burst_relays_two_pulses_in_order():
+    wd = Watchdog(DryRunLin())
+    assert wd.execute("burst -500 0 1000 0") == "OK"
+    assert len(wd.lin.writes) == 2
+    address1, data1 = wd.lin.writes[0]
+    address2, data2 = wd.lin.writes[1]
+    assert address1 == CNTL1MOT_WIRE
+    assert address2 == CNTL1MOT_WIRE
+    assert data1 == [0xfe, 0x0c]  # struct.pack('>h', -500)
+    assert data2 == [0x03, 0xe8]  # struct.pack('>h', 1000)
+
+
+def test_execute_burst_does_not_touch_stall_check_state():
+    wd = Watchdog(DryRunLin())
+    wd.last_commanded_speed = 300
+    wd.speed_became_nonzero_at = 12345.0
+    assert wd.execute("burst -500 0 1000 0") == "OK"
+    assert wd.last_commanded_speed == 300
+    assert wd.speed_became_nonzero_at == 12345.0
+
+
+def test_execute_reset_relays_to_dry_run_bus():
+    wd = Watchdog(DryRunLin())
+    assert wd.execute("reset") == "OK"
+    assert wd.lin.writes == [(CNTL2MOT_WIRE, [0, 0, 0, 0, 0, 0])]
+
+
+def test_execute_reset_clears_stall_check_state():
+    # controlvariableinput going to 0 firmware-side is the same
+    # real-world effect as "speed 0" -- see watchdog.py's _dispatch()
+    # comment for why the Pi-side bookkeeping is updated to match.
+    wd = Watchdog(DryRunLin())
+    wd.last_commanded_speed = 300
+    wd.speed_became_nonzero_at = 12345.0
+    assert wd.execute("reset") == "OK"
+    assert wd.last_commanded_speed == 0
+    assert wd.speed_became_nonzero_at is None
 
 
 def test_execute_pi_relays_to_dry_run_bus():
@@ -157,6 +212,17 @@ def test_execute_kickcount_reads_data3():
     assert reply == "OK ret=0 kickcount=7"
 
 
+def test_execute_status_decodes_all_fields():
+    wd = Watchdog(DryRunLin())
+    # timeout=300 (0x012c), checksum=3, kickstart=7, sys_error=-65 (0xbf
+    # two's complement) -- same STALL_TIM_ERR value used elsewhere in
+    # this file, confirms the negative decoding survives execute() too.
+    wd.lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x07, 0xbf, 0x00]
+    reply = wd.execute("status")
+    assert reply == ("OK ret=0 timeout=300 checksum=3 kickstart=7 "
+                      "sys_error=-65")
+
+
 def test_execute_current_parses_and_converts_to_amps():
     wd = Watchdog(DryRunLin())
     # raw val1=300 (0x2c, high bits 0x01), raw val2=100 (0x64, high bits
@@ -195,6 +261,7 @@ def test_execute_selftest_writes_inject_reset_csbadwrite_sabotage_then_bad_check
         (CNTL0CUR_WIRE, [0x01, 0xab]),  # provoke_currentsensor_checksum_error()'s bad-checksum inject
         (CNTL0CUR_WIRE, [0xfa, 0x17]),
         (CNTL3MOT_WIRE, [0x00, 0x00]),  # provoke_checksum_error()'s speed-0 write
+        (CNTL2MOT_WIRE, [0, 0, 0, 0, 0, 0]),  # reset_motor(), part 4
     ]
 
 
@@ -207,7 +274,10 @@ def test_execute_selftest_reads_and_decodes_st1cur_after_each_write():
     # need real/dry-run hardware, see raspi/watchdog/CLAUDE.md's Test
     # Suite section).
     wd.lin.read_responses[constants.st1cur] = [0xfb, 0, 0, 0, 0, 0, 0, 0]
-    wd.lin.read_responses[constants.st3mot] = [0x05, 0x00, 0x00, 0x00]  # timeout=5, checksum=0
+    # timeout=5, checksum=0, kickstart=0, sys_error=0, reserved=0 --
+    # 6 bytes since the 2026-09-07 st3mot extension (see linbus.py's
+    # get_motor_status()).
+    wd.lin.read_responses[constants.st3mot] = [0x05, 0x00, 0x00, 0x00, 0x00, 0x00]
     reply = wd.execute("selftest")
     assert reply == (
         "OK inject_ret=0 "
@@ -229,7 +299,10 @@ def test_execute_selftest_reads_and_decodes_st1cur_after_each_write():
         "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])) "
         "checksum_test(before(ret=0 timeout=5 checksum=0) "
         "bad_write_ret=0 "
-        "after(ret=0 timeout=5 checksum=0))"
+        "after(ret=0 timeout=5 checksum=0)) "
+        "reset_test(before(ret=0 timeout=5 checksum=0 kickstart=0 sys_error=0) "
+        "reset_ret=0 "
+        "after(ret=0 timeout=5 checksum=0 kickstart=0 sys_error=0))"
     )
 
 
@@ -249,6 +322,24 @@ def test_get_kick_start_count_decodes_data3():
     lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x07]
     ret, kick_start_count = get_kick_start_count(lin)
     assert (ret, kick_start_count) == (0, 7)
+
+
+def test_get_motor_status_decodes_all_six_bytes():
+    from linbus import get_motor_status
+    lin = DryRunLin()
+    # timeout=300, checksum=3, kickstart=7, sys_error=0 (MOT_OK), reserved=0
+    lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x07, 0x00, 0x00]
+    result = get_motor_status(lin)
+    assert result == (0, 300, 3, 7, 0)
+
+
+def test_get_motor_status_decodes_negative_sys_error():
+    from linbus import get_motor_status
+    lin = DryRunLin()
+    # sys_error=0xbf -- two's complement for -65 (errors.h's STALL_TIM_ERR)
+    lin.read_responses[constants.st3mot] = [0x00, 0x00, 0x00, 0x00, 0xbf, 0x00]
+    result = get_motor_status(lin)
+    assert result == (0, 0, 0, 0, -65)
 
 
 def test_provoke_checksum_error_writes_safe_speed_zero_via_bad_checksum():

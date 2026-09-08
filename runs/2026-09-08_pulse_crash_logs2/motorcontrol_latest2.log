@@ -1,0 +1,71 @@
+17:02:27.234  INFO    connected to watchdog
+17:02:33.794  INFO    -> pulse 1000
+17:02:33.799  INFO    <- OK
+17:02:34.978  INFO    -> pulse 1000
+17:02:34.983  INFO    <- OK
+17:02:35.938  INFO    -> pulse 1000
+17:02:35.943  INFO    <- OK
+17:02:36.706  INFO    -> pulse 1000
+17:02:36.711  INFO    <- OK
+17:02:37.442  INFO    -> pulse 1000
+17:02:37.447  INFO    <- OK
+17:02:38.274  INFO    -> pulse 1000
+17:02:38.279  INFO    <- OK
+17:02:39.954  INFO    -> pulse 1000
+17:02:39.960  INFO    <- OK
+17:02:40.915  INFO    -> pulse 1000
+17:02:40.920  INFO    <- OK
+17:02:43.858  INFO    -> pulse -1000
+17:02:43.863  INFO    <- OK
+17:02:46.579  INFO    -> pulse 1000
+17:02:46.584  INFO    <- OK
+17:02:48.963  INFO    -> status
+17:02:48.971  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+17:02:53.412  INFO    -> pulse 1000
+17:02:53.417  INFO    <- OK
+17:02:54.580  INFO    -> pulse 1000
+17:02:54.585  INFO    <- OK
+17:02:55.076  INFO    -> pulse 1000
+17:02:55.081  INFO    <- OK
+17:02:55.524  INFO    -> pulse 1000
+17:02:55.529  INFO    <- OK
+17:02:57.140  INFO    -> hal
+17:02:57.146  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+17:02:59.909  INFO    -> pulse 1000
+17:02:59.914  INFO    <- OK
+17:03:00.885  INFO    -> pulse 1000
+17:03:00.890  INFO    <- OK
+17:03:01.381  INFO    -> pulse 1000
+17:03:01.386  INFO    <- OK
+17:03:01.781  INFO    -> pulse 1000
+17:03:01.786  INFO    <- OK
+17:03:02.181  INFO    -> pulse 1000
+17:03:02.186  INFO    <- OK
+17:03:02.597  INFO    -> pulse 1000
+17:03:02.602  INFO    <- OK
+17:03:02.997  INFO    -> pulse 1000
+17:03:03.002  INFO    <- OK
+17:03:03.429  INFO    -> pulse 1000
+17:03:03.434  INFO    <- OK
+17:03:03.845  INFO    -> pulse 1000
+17:03:03.850  INFO    <- OK
+17:03:04.261  INFO    -> pulse 1000
+17:03:04.267  INFO    <- OK
+17:03:07.542  INFO    -> status
+17:03:07.549  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+17:03:19.720  INFO    -> pulse 1000
+17:03:19.725  INFO    <- OK
+17:03:20.456  INFO    -> pulse 1000
+17:03:21.766  INFO    <- OK
+17:03:21.767  INFO    -> pulse 1000
+17:03:21.773  INFO    <- OK
+17:03:29.321  INFO    -> status
+17:03:29.328  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=-8
+17:03:46.155  INFO    -> pulse 1000
+17:03:46.160  INFO    <- OK
+17:03:47.179  INFO    -> pulse 1000
+17:03:47.184  INFO    <- OK
+17:04:12.526  INFO    -> hal
+17:04:12.532  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+17:04:16.591  INFO    -> hal
+17:04:16.597  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']

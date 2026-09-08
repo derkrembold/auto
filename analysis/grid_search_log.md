@@ -1560,3 +1560,20 @@ value covers everything found today (quarter 1's >1100 no-breakthrough
 case). **No firmware change made — explicitly a next-week decision**,
 the user edits `main.c` themselves.
 
+**One more nuance raised right after, worth weighing against the
+2026-08-27 conclusion that `KICKSTART_SPEED=16`'s real-world
+"successes" were probably all the PI controller, not the kicks:** the
+`pulse 16` finding ("barely moves the rotor") only means it produces
+no *measurable full sector transition* — today's whole characterization
+method is Hall-state-based and therefore structurally blind to any
+sub-sector displacement (a shift from one point in a detent to another
+nearby point, without crossing the electrical boundary). A weak kick
+could still be nudging the rotor's exact resting position within its
+current detent, without registering as movement at all, potentially
+leaving it better-positioned for whatever acts next (the ongoing PI
+effort, or a later escalation step) even though the kick itself never
+shows up as a breakthrough. Not verifiable with Hall-only
+instrumentation — would need close visual/physical observation during
+a `pulse 16` event specifically to check for any sub-sector shift.
+Not investigated further this session, captured for next week.
+

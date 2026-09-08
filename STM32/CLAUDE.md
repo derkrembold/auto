@@ -375,6 +375,138 @@ instead of baked into the firmware source).
   Projektstruktur" section, which will need to change or go away
   entirely if the standalone-build goal below is achieved).
 
+## Planned Redesign: Pulse/Reset/Status Protocol + Kickstart Algorithm
+
+**Everything in this section is planned, not built — captured
+2026-09-07 from the user's own design draft (originally a standalone
+`BLDC_System_Specification.md`, folded into this file and deleted the
+same day — see git history for the original wording). Subject to
+change; the actual redesign happens interactively between the user and
+Claude Code as it's built, not by following this plan mechanically.**
+This redesigns/extends the currently-*built* kickstart mechanism
+(`driveKickStart()`/`driveStepKickStart()`, `KICKSTART_SPEED`,
+`stuckwindowcount` — see `analysis/grid_search_log.md`'s 2026-08-27/28
+sections for its full build history, real-hardware confirmation, and
+the two real gaps already found there) — this section is **not** yet
+reflected as "built" state anywhere else in this file, only in that
+chronological log.
+
+**Planned LIN command changes:**
+- `pulse` (Pi → STM32): currently a single raw open-loop `driveStep()`
+  pulse (`cntl1mot`, built 2026-08-28 for Hall-position
+  characterization — see `raspi/control/characterize_hall_positions.py`
+  and `linbus.set_pulse()`). Planned: the firmware-side handler fires a
+  **3-pulse sequence** (previous state n-1, current state n, next
+  state n+1) automatically per `pulse` command, not a single directional
+  pulse — see the Kickstart Algorithm entry below for why (hedges
+  against Hall-sensor chattering at sector boundaries, see the "Hall
+  Chattering" caveat below). Needs reconciling with the existing
+  single-pulse `cntl1mot` infrastructure before implementation — not
+  yet decided whether the 3-pulse behavior replaces the single-pulse
+  one outright or the two coexist as different commands.
+- `reset` (Pi → STM32, new, separate command): resets `integral`,
+  `kickstartCounter`, `timeoutCounter`, `checksumCounter`, `errorCode`.
+  Not yet assigned a PID in `addresses.json` — needs one before
+  implementation (see root `CLAUDE.md`'s LIN Protocol section for the
+  single-source-of-truth address process).
+  `raspi/watchdog/watchdog.py` needs a corresponding verb.
+- `status` (STM32 → Pi, 4 bytes, replaces/extends today's `st3mot`):
+  comm errors, checksum errors, kickstart counter, error code. Today's
+  `st3mot` already carries `bodyTimeoutCount`/`checksumErrorCount`
+  (2 bytes each) plus the experimental `kickStartCount` byte added
+  2026-08-27/28 (see `analysis/grid_search_log.md`) — this planned
+  4-byte layout needs reconciling with what's already there, including
+  adding the new `errorCode` field, before implementation.
+
+**Planned Kickstart Algorithm** (replaces the currently-built escalating-
+repeat-count design, see the chronological log above for that one):
+```
+rpm == 0 and speed != 0:
+  wait 400ms
+  → rpm != 0? → closed loop
+  → rpm == 0? → start kickstart
+
+  6 attempts, 100ms apart:
+    check rpm → rpm != 0? → immediately closed loop
+    pulse 1: previous state (n-1)
+    pulse 2: current state (n)
+    pulse 3: next state (n+1)
+    → next attempt
+
+  after 6 attempts (400ms + 600ms = 1s total) → hard stop:
+    → controlvariable = 0, integral = 0
+    → errorCode = ERROR_MOTOR_STALL
+    → wait for a Pi command (reset, presumably)
+```
+`wait 400ms` above is 4×100ms `SAMPLERATE` rpm-calc windows, matching
+the threshold already decided 2026-08-26 (see `analysis/grid_search_log
+.md`) — not necessarily final, may change (e.g. to 3×100ms) if further
+testing suggests otherwise; check that log for the current reasoning
+before assuming 400ms is settled.
+
+**Pulse magnitude — decided, then revised down after a hardware
+failure.** Real-hardware measurements 2026-08-28
+(`characterize_hall_positions.py`, manual `pulse` testing) found actual
+breakaway thresholds mostly in the 750-1100+ range — the old
+`KICKSTART_SPEED=16` barely moved the rotor at all (an audible tick, no
+measurable movement). `KICKSTART_SPEED=800` was tried next — this is
+what led directly to the two-MOSFET burnout described in the Known
+Hardware Issue section above (~63% duty into a stalled, zero-back-EMF
+winding is a large overcurrent relative to the original 5A-target
+derivation just above). **Now `const int16_t KICKSTART_SPEED =
+GLOBALRATE/10;`** (~127, ~10% duty) — confirmed working since on real
+hardware, no further hardware damage, but explicitly **not** treated as
+settled: the user wants to revisit raising it again later, more
+cautiously. See `analysis/grid_search_log.md`'s 2026-08-28
+"KICKSTART_SPEED reconsidered" entry for the original breakaway-
+threshold numbers this was checked against.
+
+**Hall-sensor chattering (2026-08-28 finding) is a real, unresolved
+risk this design only partially addresses.** Repeated `hal` reads with
+the rotor stationary, right at a Tiefrast/Mittelrast sector boundary,
+flickered between two adjacent electrical states — almost certainly
+insufficient sensor hysteresis at the switching threshold (see
+`analysis/grid_search_log.md`'s full writeup, including an observed
+case of a commanded-CW pulse visibly driving the rotor CCW at such a
+boundary). The 3-pulse (n-1/n/n+1) spread above is a genuine, sound
+mitigation for the **commutation-targeting** side of this — since the
+window covers both candidate states regardless of which one a single
+ambiguous `hal` read returns, at least one of the three pulses should
+apply correct-direction torque. **It does *not* address the
+measurement side**: `hallCounter`/`rpm` are edge-counted via GPIO
+interrupts, and chattering could inject spurious edges into that count
+while the rotor is genuinely stationary — the failure mode already
+suspected (not confirmed) as the root cause of the `rpm` "blip" bugs
+found in `_detect_stiction()` (2026-08-26) and the original
+`driveKickStart()` reset logic (2026-08-27). Whether this needs a
+firmware-level debounce (e.g. require N consecutive identical Hall
+readings before counting a transition) or is a hardware/mounting
+limitation not fixable in software is not yet decided.
+
+**CW(+1)/CCW(+2) state-table asymmetry — empirically investigated
+2026-09-08, inconclusive, then set aside rather than resolved.** The
+user tried to directly verify the correct CCW physical neighbor state
+by hand (read Hall state, manually turn the rotor into the next
+detent, read again), but got **contradictory results between two
+separate measurement attempts** (first: `current+1`; second, after the
+user doubted the first: `current-1`, i.e. the exact reverse) — chased
+partly by real Hall-chattering risk at the measurement points
+themselves (see above), never resolved to a single trusted answer.
+Rather than keep chasing it, the user fell back to the one thing that
+*is* solidly validated: `driveStep()`'s own long-running real-hardware
+behavior (`speed`, weeks of use, both directions) — and reasoned that
+if `driveStep()` itself is trusted, its CCW `current+2` must be
+accepted as correct too, asymmetry or not, rather than assumed to need
+fixing. Practical consequence: `driveStepKickStartMinus()` was removed
+from the manual `pulse` path entirely (see the Status section's `burst`
+entry above) rather than have its CCW formula resolved — the open
+question about *why* CW and CCW aren't simple mirror images of each
+other is still genuinely unanswered, but no longer blocking anything,
+since nothing in the current manual-pulse design depends on it anymore.
+`driveKickStart()`'s automatic path still uses
+`driveStepKickStartMinus()`/`Null()` internally, so this question is
+still live there specifically, if it's ever revisited.
+
 ## RPM Measurement Resolution
 
 **`rpm` is quantized in steps of 25 — this is a real resolution limit
@@ -441,6 +573,28 @@ has been observed above a certain control value — possibly that supply
 limit, not the motor or firmware. See `STM32/notes.md`
 ("Betriebsbedingungen"). Switching to battery power (see root
 `CLAUDE.md`'s Battery section) removes this implicit current limiting.
+
+**Two MOSFETs burned out (2026-09-08), replaced along with the
+socket.** Happened while testing the kickstart redesign (see Planned
+Redesign section above) at the old `KICKSTART_SPEED=800` (~63% duty,
+~260A theoretical average current into a stalled/zero-back-EMF winding
+— see the Planned Redesign section's `KICKSTART_SPEED` entry below for
+the underlying 5A-target derivation this was already far above).
+**Failure signature: the two "opposite/facing" MOSFETs of one
+half-bridge** — the classic shoot-through pattern (high-side and
+low-side of the same phase conducting simultaneously). Investigated
+`driveState()`/`driveMOSFET()` closely for a same-phase-overlap or
+missing-dead-time bug; found none introduced by the kickstart
+refactoring — the far simpler, better-supported explanation is plain
+overcurrent from the stalled-rotor pulse magnitude itself (no back-EMF
+to limit current, only the ~65mΩ winding resistance), not a firmware
+timing defect. User replaced both MOSFETs and the socket; before
+retesting, `KICKSTART_SPEED` was reduced to `GLOBALRATE/10` (~127,
+~10% duty, ~41A theoretical) and stayed there — see the Commutation &
+Control section. Confirmed working since on the reduced value, no
+further hardware damage. **Still open:** whether `KICKSTART_SPEED` can
+safely go back up, and by how much — the user explicitly said this is
+revisited later, not decided now.
 
 ## Stall Detection (Planned, Deprioritized)
 
@@ -667,6 +821,113 @@ just reading main.c in isolation:
   previous run this week — no regression from the cleanup.
 
 
+**UART receive-error found and fixed (2026-09-08) — a second, distinct
+permanent-hang bug, different from the 2026-08-11 one above.** That
+earlier bug was a foreign-PID body that never fully arrived; this one
+is a genuine hardware UART overrun on the STM32's own reception.
+
+Root cause: `cntl1mot` (`pulse`)'s handler was extended (2026-09-07/08,
+see the Planned Redesign section above) to chain several `driveStep()`
+calls per LIN message (a reverse-then-forward "rock back" pulse
+sequence) — roughly ~5ms of blocking per `pulse` call, instead of the
+~1275µs any other simple dispatch handler takes. `HAL_UART_Receive_IT()`
+for the next header is only re-armed once per `for(;;)` loop iteration,
+after the whole dispatch finishes — a pre-existing, previously
+negligible gap that this redesign widened ~4x. If a byte arrives during
+that gap — in practice, the Raspi watchdog's own independent background
+`poll_rpm()`/`poll_current()` thread (runs every ~1s, has no knowledge
+of what the STM32 is doing at any given instant) — the UART sets an
+Overrun (ORE) error, and with no code clearing it, **the peripheral
+stops receiving anything at all, permanently, until physically reset.**
+Confirmed via `watchdog.log`: a `[poll] -> read st2mot` landing 19ms
+after a `[client] -> write cntl1mot` produced a full 2s pyserial
+timeout, and every subsequent poll for the rest of that session (>15s)
+timed out identically — not a one-off missed poll, a permanent hang.
+
+**Fix: `HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)` override**,
+added next to the existing `HAL_UART_RxCpltCallback` in `main.c`
+(previously relied on the HAL's default no-op weak implementation, so
+nothing ever ran on this path). Clears `ORE`/`FE`/`NE` flags, resets
+`headerrecvd`/`bodyrecvd`/`bodysent` (mirrors what
+`HAL_UART_RxCpltCallback` itself maintains), sets `sysError =
+LIN_RCV_ERR` (`errors.h` — the value was already reserved, just unused
+until now) so the event is visible via the new `status` command below,
+then `HAL_UART_AbortReceive(&huart4)` followed by
+`HAL_UART_Receive_IT(&huart4, rx_header, 2)` to force reception back
+on. **The explicit `AbortReceive` call turned out to be load-bearing**
+— a first version without it (flag-clear + re-arm only) still left the
+STM32 permanently deaf after a collision; only after adding it did the
+STM32 visibly recover. Confirmed on real hardware the same day: a
+~1.3s-delayed `pulse` reply (the collision happening), immediately
+followed by `status` reading back `sys_error=-8` (`LIN_RCV_ERR`), then
+every subsequent command for the rest of that session responding
+normally again — no further `ret=-5` at all.
+
+**Two new commands, built the same day as part of this investigation:**
+- **`status`** (`watchdog.py`/`motorcontrol.py`, standalone): a plain
+  on-demand read of `st3mot` via `linbus.get_motor_status()` — the same
+  data `selftest`'s reset_test part already reads before/after a
+  reset, now directly callable for diagnostics like this one without
+  running the whole `selftest` sequence.
+- **`burst <value1> <pause1_ms> <value2> <pause2_ms>`**: the Pi-side
+  replacement for `cntl1mot`'s STM32-internal multi-`driveStep()` pulse
+  sequence that caused this bug in the first place. Sends two separate,
+  single-pulse `cntl1mot` writes (`linbus.set_pulse()`) with Python-side
+  `time.sleep()` pauses in between and after, instead of chaining
+  several `driveStep()` calls inside one LIN dispatch. This (a) shrinks
+  the STM32-side blocking window per message back to ~1275µs (matching
+  every other simple dispatch handler — the same order of magnitude
+  that ran fine for weeks before this redesign), and (b) makes the
+  pause between the reverse and forward pulse tunable per-call from the
+  Pi, no firmware rebuild needed. Runs entirely under `watchdog.py`'s
+  own `self.lock`, so the background poll thread can't interleave a
+  request during a `burst` call either — the collision class this
+  section describes can now only happen from `poll_rpm()`/
+  `poll_current()` colliding with a single, ordinary ~1275µs-blocking
+  dispatch handler (the same low background risk level that predates
+  this whole investigation and was never observed as a problem before),
+  not from `burst`'s own two writes racing each other.
+- **`main.c`'s `cntl1mot` handler reverted to a single, plain
+  `driveStep(speedlocal)` call** (matching `speed`'s handler shape),
+  replacing both the old throwaway UART-bug-reproduction test code (a
+  bare ~55ms `delay_us()` chain) and the multi-`driveStep()` "rock
+  back" sequencing that caused this bug in the first place — that
+  sequencing now lives in the Pi's `burst` command instead. **Confirmed
+  working well on real hardware the same day** (`burst` reliably
+  overcoming Mittelrast sticking points, no further UART hangs
+  observed).
+- **Residual scope note:** `driveKickStart()` (the *automatic*
+  background stall-recovery in the main loop, distinct from the
+  *manual* `pulse`/`cntl1mot` command above) still calls
+  `driveStepKickStartMinus()`/`driveStepKickStartNull()` internally
+  (`Plus` commented out) — it was **not** migrated to a `burst`-style
+  Pi-side sequence, since it has no Pi round-trip in its loop at all
+  (it fires autonomously from `main()`'s loop, not from a LIN command).
+  It therefore still has the same multi-`driveStep()` blocking-window
+  shape that caused this whole investigation, just triggered
+  automatically rather than by a manual `pulse`. The
+  `HAL_UART_ErrorCallback` fix above covers this path too (it's a
+  general recovery, not `cntl1mot`-specific) — but if collisions turn
+  out to still happen here in practice, this is the other place to
+  look, not just `cntl1mot`.
+
+**Deferred: a deterministic `selftest` provocation for this specific
+UART receive-error path (2026-09-08).** Unlike the checksum/bus-hang
+`selftest` provocations above (content-based — a specific bad byte
+pattern, deterministically reproducible on demand), this bug is a
+**timing race** between two independently-clocked things (STM32-side
+blocking duration vs. the Pi's ~1s poll interval) — no LIN payload
+reliably triggers it by itself. A reliable test would need either
+fragile Python-side timing (OS scheduling jitter) or a dedicated,
+permanent firmware test hook (an artificial "don't listen for N ms"
+command, similar in spirit to today's throwaway test code) purely to
+exercise recovery. Deferred rather than built: `burst` above is
+expected to shrink the STM32-side blocking window back to normal-
+dispatch-handler size, reducing how often this race can even occur in
+real use — revisit whether a dedicated test hook is still worth its
+permanent complexity once real-world `burst` usage shows how residual
+the risk actually is.
+
 ## Motor Information
 Produktinformationen "BLDC-Motor 1000W, Bosch, 1.607.022.68B, 36 V-, 35 A -brushless"
 BLDC-Motor, Bosch, 36V-/16A 1000W
@@ -703,5 +964,30 @@ Leerlauf Stromverbrauch: bei 5V: ca.: 0,5A,  bei 48V ca.: 1,4A
   yet chosen, needs tuning against real startup behavior (torque needed
   to overcome static friction before the first Hall transition must not
   trigger a false stall trip).
+- **From the 2026-09-07 high-priority list — status update:**
+  - `reset` command: **done** (built and confirmed 2026-09-07, see the
+    Status section above).
+  - `status` reply restructure (6-byte `st3mot`, `sysError` field):
+    **done** (built 2026-09-07, extended with the UART-error fix's
+    `LIN_RCV_ERR` value 2026-09-08, see the Status section above).
+  - The `pulse` command's multi-pulse sequence: **built, then
+    redesigned again.** The original 3-pulse (n-1/n/n+1) idea became a
+    `driveStepKickStartMinus/Null/Plus` implementation, then (after the
+    2026-09-08 UART-hang investigation, see Status section above) that
+    sequencing logic moved to the Pi's new `burst` command instead —
+    **done**, `cntl1mot` is back to a single, plain
+    `driveStep(speedlocal)` call, confirmed working well on real
+    hardware (2026-09-08). `driveKickStart()`'s own internal
+    Minus/Null sequencing is unaffected by this — see the Status
+    section's "Residual scope note" for why that one's a separate,
+    still-open question.
+  - Systematically pulse-test all 24 mechanical positions (Tiefrast +
+    Mittelrast): still not started — extends, not replaces, the manual/
+    semi-automatic characterization already done 2026-08-28
+    (`characterize_hall_positions.py`, see `analysis/grid_search_log.md`).
+    Blocked on the `pulse`/`burst` design actually settling first.
+- **Deferred (2026-09-08):** a deterministic `selftest` provocation for
+  the UART receive-error path — see the Status section above for why
+  (timing race, not content-based) and what would revisit this.
 
 Fill these in here once fixed, not in the root `CLAUDE.md`.

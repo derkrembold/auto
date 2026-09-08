@@ -434,6 +434,47 @@ def get_kick_start_count(lin):
     return ret, data[3]
 
 
+def reset_motor(lin):
+    # cntl2mot, repurposed 2026-09-07 (was a raw per-MOSFET debug write,
+    # driveMOSFET() directly -- never actually sent from the Raspi side,
+    # see STM32/CLAUDE.md's Planned Redesign section) into a full state
+    # reset: the firmware clears controlvariableinput, integral,
+    # bodyTimeoutCount, checksumErrorCount, kickStartCount,
+    # stuckwindowcount, and sysError (back to MOT_OK) -- see main.c's
+    # cntl2mot dispatch. The handler ignores the body content entirely
+    # (reset fires purely off the checksum-gated PID match), but the
+    # wire format still requires exactly messagebytes[cntl2mot] (6,
+    # unchanged from the old MOSFET-control layout -- deliberately left
+    # at 6 rather than shrunk, for headroom towards a possible future
+    # selective-reset bitmask, see analysis/grid_search_log.md's
+    # 2026-09-07 discussion) body bytes + checksum, so 6 zero bytes go
+    # out as a harmless placeholder payload.
+    return lin.write(constants.cntl2mot, bytes(6), instance=MOTOR_INSTANCE_ID)
+
+
+def get_motor_status(lin):
+    # Full 6-byte st3mot reply (extended 2026-09-07 from 4 bytes, see
+    # STM32/CLAUDE.md's Planned Redesign section) in one LIN round-trip
+    # -- use this instead of separate get_motor_counters()/
+    # get_kick_start_count() calls when the full picture is wanted (e.g.
+    # confirming reset_motor() actually cleared everything). Those two
+    # functions are left as-is for their existing callers (selftest()'s
+    # provocation checks only ever cared about the timeout/checksum
+    # counts). data[4] = sysError (main.c's MOT_OK=0/STALL_TIM_ERR=-65/
+    # etc., from errors.h -- signed, two's-complement, unlike the plain
+    # unsigned counters), data[5] = reserved, always 0.
+    ret, data = lin.read(constants.st3mot, instance=MOTOR_INSTANCE_ID)
+    if ret < 0:
+        return ret, None, None, None, None
+    timeout_count = data[0] | (data[1] << 8)
+    checksum_error_count = data[2]
+    kickstart_count = data[3]
+    sys_error = data[4]
+    if sys_error >= 0x80:
+        sys_error -= 0x100
+    return ret, timeout_count, checksum_error_count, kickstart_count, sys_error
+
+
 # currentsensor/firmware/main.cpp's storeerror() ring buffer (see
 # errors.hpp) -- names for st1cur's raw codes, purely for human-readable
 # display (motorcontrol.py's `errors` command). 0 = unused slot/no error.

@@ -33,7 +33,7 @@ const uint8_t cntl0lig = 0x30;
 const uint8_t st0lig = 0x34;
 
 const uint8_t pids[] = {cntl0mot, cntl1mot, cntl2mot, cntl3mot, st0mot, st1mot, st2mot, st3mot, cntl0cur, st0cur, st1cur, cntl0lig, st0lig};
-const uint8_t messagebytes[] = {2, 2, 6, 2, 3, 2, 2, 4, 2, 4, 8, 2, 4};
+const uint8_t messagebytes[] = {2, 2, 6, 2, 3, 2, 2, 6, 2, 4, 8, 2, 4};
 
 const uint8_t sources[] = {master, master, master, master, motor, motor, motor, motor, master, current, current, master, light};
 const uint8_t destinations[] = {motor, motor, motor, motor, master, master, master, master, current, master, master, light, master};

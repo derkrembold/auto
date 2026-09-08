@@ -19,7 +19,7 @@ LOG_PATH = "watchdog.log"
 logger = logging.getLogger("watchdog")
 
 KNOWN_COMMANDS = {"speed", "pi", "hal", "rpm", "temp", "current", "errors", "selftest",
-                   "kickcount", "pulse"}
+                   "kickcount", "pulse", "reset", "status", "burst"}
 
 # Business/safety speed limit — separate from the protocol-level int16
 # range linbus.set_speed() clamps to. Deliberately below the motor's
@@ -109,6 +109,23 @@ def validate(command):
             return False, "pulse value must be an integer"
         if not (PULSE_SPEED_MIN <= value <= PULSE_SPEED_MAX):
             return False, f"pulse value out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})"
+    elif verb == "burst":
+        if len(parts) != 5:
+            return False, "usage: burst <value1> <pause1_ms> <value2> <pause2_ms>"
+        try:
+            value1 = int(parts[1])
+            pause1_ms = float(parts[2])
+            value2 = int(parts[3])
+            pause2_ms = float(parts[4])
+        except ValueError:
+            return False, ("burst usage: value1/value2 must be integers, "
+                            "pause1_ms/pause2_ms must be numbers")
+        if not (PULSE_SPEED_MIN <= value1 <= PULSE_SPEED_MAX):
+            return False, f"value1 out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})"
+        if not (PULSE_SPEED_MIN <= value2 <= PULSE_SPEED_MAX):
+            return False, f"value2 out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})"
+        if pause1_ms < 0 or pause2_ms < 0:
+            return False, "pause1_ms/pause2_ms must be non-negative"
     elif verb == "pi":
         if len(parts) != 3:
             return False, "usage: pi <p_delta> <i_delta>"
@@ -209,6 +226,34 @@ class Watchdog:
             value = int(parts[1])
             linbus.set_pulse(self.lin, value)
             return "OK"
+        if verb == "burst":
+            # Two pulse() writes with a Python-side pause in between and
+            # after -- the Pi-side replacement for the old STM32-internal
+            # multi-driveStep() pulse sequence (main.c's cntl1mot used to
+            # chain several driveStep() calls in one dispatch, which was
+            # the root cause of the 2026-09-08 UART receive-error/hang --
+            # see STM32/CLAUDE.md's Status section). Each pulse() here is
+            # a single, fast (~1275us) STM32-side call again, same as any
+            # other command; the pause itself lives here instead, so it's
+            # tunable per-call without a firmware rebuild+reflash.
+            #
+            # Runs entirely under self.lock (execute() holds it around
+            # this whole call) -- the background monitor() thread's
+            # poll_rpm()/poll_current() can't send anything until burst()
+            # returns, so a long pause1_ms/pause2_ms also pauses the
+            # self-polled stall check for that long. Keep both pauses
+            # short (single-digit to low double-digit ms, matching the
+            # rock-back maneuver this is for) -- this is not enforced in
+            # code, just don't use "burst" for anything long-running.
+            value1 = int(parts[1])
+            pause1_ms = float(parts[2])
+            value2 = int(parts[3])
+            pause2_ms = float(parts[4])
+            linbus.set_pulse(self.lin, value1)
+            time.sleep(pause1_ms / 1000.0)
+            linbus.set_pulse(self.lin, value2)
+            time.sleep(pause2_ms / 1000.0)
+            return "OK"
         if verb == "pi":
             p_delta = float(parts[1])
             i_delta = float(parts[2])
@@ -225,6 +270,20 @@ class Watchdog:
             ret, value = linbus.get_temp(self.lin)
             hex_value = linbus.hexword(value) if value is not None else None
             return f"OK ret={ret} temp={value} (hex={hex_value})"
+        if verb == "reset":
+            # cntl2mot, repurposed 2026-09-07 -- clears the firmware's
+            # own controlvariableinput/integral/counters/sysError (see
+            # linbus.reset_motor()'s docstring). controlvariableinput
+            # going to 0 firmware-side is the same real-world effect as
+            # "speed 0", so the watchdog's own stall-check bookkeeping
+            # is updated the same way _dispatch()'s "speed" case does
+            # for a zero value -- otherwise last_commanded_speed would
+            # stay stale (nonzero) here while the motor's actually
+            # stopped, and a later poll could misjudge stall state.
+            linbus.reset_motor(self.lin)
+            self.last_commanded_speed = 0
+            self.speed_became_nonzero_at = None
+            return "OK"
         if verb == "kickcount":
             # Experimental/throwaway diagnostic for the firmware
             # kick-start mechanism (main.c's driveKickStart()) -- see
@@ -233,6 +292,18 @@ class Watchdog:
             # run, not a reliable whole-session total.
             ret, value = linbus.get_kick_start_count(self.lin)
             return f"OK ret={ret} kickcount={value}"
+        if verb == "status":
+            # st3mot, 6 bytes -- see linbus.get_motor_status()'s
+            # docstring. Standalone read of the same data selftest's
+            # reset_test part already reads before/after a reset; this
+            # is the plain, on-demand version for manual diagnostics
+            # (e.g. checking sysError after deliberately provoking
+            # something, without running the whole selftest sequence).
+            ret, timeout_count, checksum_error_count, kickstart_count, sys_error = \
+                linbus.get_motor_status(self.lin)
+            return (f"OK ret={ret} timeout={timeout_count} "
+                    f"checksum={checksum_error_count} kickstart={kickstart_count} "
+                    f"sys_error={sys_error}")
         if verb == "current":
             ret, val1, val2 = linbus.get_current(self.lin)
             val1_str = f"{val1:.2f}" if val1 is not None else None
@@ -298,6 +369,21 @@ class Watchdog:
             ret_bad_write = linbus.provoke_checksum_error(self.lin)
             ret_counters_after2, timeout_after2, checksum_after2 = linbus.get_motor_counters(self.lin)
 
+            # Part 4: exercise the new reset command (added 2026-09-07,
+            # see linbus.reset_motor()'s docstring) using the state parts
+            # 2/3 above just deliberately dirtied -- no separate
+            # provocation needed. Expect status_before to show the
+            # accumulated bodyTimeoutCount/checksumErrorCount from this
+            # same selftest run (nonzero), status_after to show
+            # everything back to 0/MOT_OK.
+            status_before = linbus.get_motor_status(self.lin)
+            ret_reset_cmd = linbus.reset_motor(self.lin)
+            status_after = linbus.get_motor_status(self.lin)
+            (ret_status_before, timeout_before3, checksum_before3,
+             kickstart_before3, sys_error_before3) = status_before
+            (ret_status_after, timeout_after3, checksum_after3,
+             kickstart_after3, sys_error_after3) = status_after
+
             return (f"OK inject_ret={ret_inject} "
                     f"injected(ret={ret_injected} codes={codes_injected} names={names_injected}) "
                     f"reset_ret={ret_reset} "
@@ -314,7 +400,13 @@ class Watchdog:
                     f"names={names_after_provoke})) "
                     f"checksum_test(before(ret={ret_counters_before2} timeout={timeout_before2} checksum={checksum_before2}) "
                     f"bad_write_ret={ret_bad_write} "
-                    f"after(ret={ret_counters_after2} timeout={timeout_after2} checksum={checksum_after2}))")
+                    f"after(ret={ret_counters_after2} timeout={timeout_after2} checksum={checksum_after2})) "
+                    f"reset_test("
+                    f"before(ret={ret_status_before} timeout={timeout_before3} checksum={checksum_before3} "
+                    f"kickstart={kickstart_before3} sys_error={sys_error_before3}) "
+                    f"reset_ret={ret_reset_cmd} "
+                    f"after(ret={ret_status_after} timeout={timeout_after3} checksum={checksum_after3} "
+                    f"kickstart={kickstart_after3} sys_error={sys_error_after3}))")
         return f"ERR unhandled command: {verb}"  # unreachable if validate() is correct
 
     def execute(self, command):

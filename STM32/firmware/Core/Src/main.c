@@ -81,7 +81,10 @@ void allOff();                 // Schaltet alle MOSFET-Ausgaenge aus (Motor stro
 void driveMOSFET(int, GPIO_PinState);
 void driveState(uint16_t speed, int);
 uint8_t driveStep(int16_t);
-uint8_t driveStepKickStart(int16_t);
+uint8_t driveStepKickStartMinus(int16_t, uint8_t);
+uint8_t driveStepKickStartNull(int16_t, uint8_t);
+uint8_t driveStepKickStartPlus(int16_t, uint8_t);
+
 void driveKickStart(int16_t, int16_t);
 int16_t picontrol(int16_t setpoint, int16_t processvalue);
 
@@ -106,6 +109,9 @@ volatile bool bodyTimedOut = false;
 volatile uint16_t bodyTimeoutCount = 0;
 volatile uint16_t checksumErrorCount = 0;
 volatile uint16_t kickStartCount = 0;
+
+volatile int8_t sysError = 0;
+
 
 #define LIN_BODY_TIMEOUT_MS 50
 /* Anzahl aufeinanderfolgender 100ms-rpm-Fenster mit rpm==0 (bei
@@ -145,7 +151,7 @@ float KI = KIDEFAULT;
 // I_max = 5A Ziel:
 // Duty_max = I_max * R / V_batt_max = 5A * 0,065 Ohm / 27V = 0,01204 (~1,20%)
 // speed = Duty_max * GLOBALRATE = 0,01204 * 1275us = 15,36us  =>  GLOBALRATE/83
-const int16_t KICKSTART_SPEED = GLOBALRATE/80;  // ~5A bei voller Batterie, R=65mOhm
+const int16_t KICKSTART_SPEED = GLOBALRATE/10; // Empirisch ermittelt wurde 800.
 
 
 // RPMFACTOR: 60*speedcount/(24*0.1); 60sec/min; 24steps/Umdrehung; 0.1s==100ms;
@@ -356,17 +362,32 @@ int main(void)
 		  driveStep(speedlocal);
 		  driveStep(0);
 		  driveStep(0);*/
+
+		  //uint8_t st = getState();
+		  
 		  driveStep(speedlocal);
-		  driveStep(0);
-		  driveStep(0);
+		 
+		  //driveStepKickStartPlus(speedlocal, st);
+		  
 	  }
 	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl2mot | hwbits)) {
+	    /*
 		  driveMOSFET(AL, rx_body[0] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(AH, rx_body[1] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(BL, rx_body[2] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(BH, rx_body[3] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(CL, rx_body[4] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
 		  driveMOSFET(CH, rx_body[5] == 1 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+	    */
+	    controlvariableinput = 0;
+	    integral = 0;
+
+	    bodyTimeoutCount = 0;
+	    checksumErrorCount = 0;
+	    kickStartCount = 0;
+	    stuckwindowcount = 0;
+	    sysError = MOT_OK;
+
 	  }
 	  if (checksum_ok && (rx_header[1]&0x3f) == (cntl3mot | hwbits)) {
 		  controlvariableinput = (int16_t)((rx_body[0] << 8) | rx_body[1]);
@@ -773,6 +794,21 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 }
 
 
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+      __HAL_UART_CLEAR_OREFLAG(huart);
+      __HAL_UART_CLEAR_FEFLAG(huart);
+      __HAL_UART_CLEAR_NEFLAG(huart);
+
+      headerrecvd = false;
+      bodyrecvd = false;
+      bodysent = false;
+      sysError = LIN_RCV_ERR;
+
+      HAL_UART_AbortReceive(&huart4);
+      HAL_UART_Receive_IT(&huart4, rx_header, 2);
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_9);
 }
@@ -932,6 +968,8 @@ void fillbody(uint8_t addr, uint8_t *data, uint8_t len) {
     data[1] = (uint8_t)((bodyTimeoutCount >> 8) & 0xFF);
     data[2] = (uint8_t)(checksumErrorCount & 0xFF);
     data[3] = (uint8_t)(kickStartCount & 0xFF);
+    data[4] = (uint8_t)(sysError & 0xFF);
+    data[5] = 0;
   }
 }
 
@@ -1048,7 +1086,8 @@ void driveState(uint16_t speed, int st)
 
 	allOff();
 	if (speed == 0) {
-		return;
+	  delay_us(GLOBALRATE);
+	  return;
 	}
 	uint32_t chargetime = 10;//50
 	uint32_t rate = GLOBALRATE; //1275;//2550
@@ -1204,64 +1243,177 @@ uint8_t driveStep(int16_t speed)
 }
 
 
-uint8_t driveStepKickStart(int16_t speed)
+
+uint8_t driveStepKickStartMinus(int16_t speed, uint8_t state)
 {
 
-	GPIO_PinState high = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_0); //gelb
-	GPIO_PinState middle = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_1); //rot
-	GPIO_PinState low = HAL_GPIO_ReadPin (GPIOC, GPIO_PIN_2); //blau
-	uint8_t first = (high == GPIO_PIN_RESET) ? 0x00 : 0x01; //gelb
-	uint8_t second  = (middle == GPIO_PIN_RESET) ? 0x00 : 0x01; //rot
-	uint8_t third = (low == GPIO_PIN_RESET) ? 0x00 : 0x01;//blau
 
 	if (speed >= 0) { // CW -> stated ascending
-		if (first == 0x01 && second == 0x0 && third == 0x0) { // state 4 100
+		if (state == 4) { // state 4 100
+			driveState(abs(speed), 3); // 101
+			return 4;
+		}
+		if (state == 5) { // state 5 101
+			driveState(abs(speed), 4); // 001
+			return 5;
+		}
+		if (state == 0) { // state 0 001
+			driveState(abs(speed), 5); // 011
+			return 0;
+		}
+		if (state == 1) { // state 1 011
+			driveState(abs(speed), 0); // 020
+			return 1;
+		}
+		if (state == 2) { // state 2 010
+			driveState(abs(speed), 1); // 110
+			return 2;
+		}
+		if (state == 3) { //state 3 110
+			driveState(abs(speed), 2); // 110
+			return 3;
+		}
+	}
+	if (speed < 0) { // CCW -> states descending
+		if (state == 2) { // state 2 010
+			driveState(abs(speed), 1);
+			return 2;
+		}
+		if (state == 1) { // state 1 011
+			driveState(abs(speed), 0);
+			return 1;
+		}
+		if (state == 0) { // state 0 001
+			driveState(abs(speed), 5);
+			return 0;
+		}
+		if (state == 5) { // state 5 101
+			driveState(abs(speed), 4);
+			return 5;
+		}
+		if (state == 4) { // state 4 100
+			driveState(abs(speed), 3);
+			return 4;
+		}
+		if (state == 3) { // state 3 110
+			driveState(abs(speed), 2);
+			return 3;
+		}
+	}
+	return 6;
+}
+
+uint8_t driveStepKickStartNull(int16_t speed, uint8_t state)
+{
+
+	if (speed >= 0) { // CW -> stated ascending
+		if (state == 4) { // state 4 100
+			driveState(abs(speed), 5); // 101
+			return 4;
+		}
+		if (state == 5) { // state 5 101
+			driveState(abs(speed), 0); // 001
+			return 5;
+		}
+		if (state == 0) { // state 0 001
+			driveState(abs(speed), 1); // 011
+			return 0;
+		}
+		if (state == 1) { // state 1 011
+			driveState(abs(speed), 2); // 020
+			return 1;
+		}
+		if (state == 2) { // state 2 010
+			driveState(abs(speed), 3); // 110
+			return 2;
+		}
+		if (state == 3) { //state 3 110
+			driveState(abs(speed), 4); // 110
+			return 3;
+		}
+	}
+	if (speed < 0) { // CCW -> states descending
+		if (state == 2) { // state 2 010
+			driveState(abs(speed), 4);
+			return 2;
+		}
+		if (state == 1) { // state 1 011
+			driveState(abs(speed), 3);
+			return 1;
+		}
+		if (state == 0) { // state 0 001
+			driveState(abs(speed), 2);
+			return 0;
+		}
+		if (state == 5) { // state 5 101
+			driveState(abs(speed), 1);
+			return 5;
+		}
+		if (state == 4) { // state 4 100
+			driveState(abs(speed), 0);
+			return 4;
+		}
+		if (state == 3) { // state 3 110
+			driveState(abs(speed), 5);
+			return 3;
+		}
+	}
+	return 6;
+}
+
+
+uint8_t driveStepKickStartPlus(int16_t speed, uint8_t state)
+{
+
+
+	if (speed >= 0) { // CW -> stated ascending
+		if (state == 4) { // state 4 100
 			driveState(abs(speed), 0); // 101
 			return 4;
 		}
-		if (first == 0x01 && second == 0x0 && third == 0x01) { // state 5 101
+		if (state == 5) { // state 5 101
 			driveState(abs(speed), 1); // 001
 			return 5;
 		}
-		if (first == 0x0 && second == 0x0 && third == 0x01) { // state 0 001
+		if (state == 0) { // state 0 001
 			driveState(abs(speed), 2); // 011
 			return 0;
 		}
-		if (first == 0x0 && second == 0x1 && third == 0x1) { // state 1 011
+		if (state == 1) { // state 1 011
 			driveState(abs(speed), 3); // 020
 			return 1;
 		}
-		if (first == 0x0 && second == 0x01 && third == 0x0) { // state 2 010
+		if (state == 2) { // state 2 010
 			driveState(abs(speed), 4); // 110
 			return 2;
 		}
-		if (first == 0x01 && second == 0x1 && third == 0x0) { //state 3 110
+		if (state == 3) { //state 3 110
 			driveState(abs(speed), 5); // 110
 			return 3;
 		}
 	}
 	if (speed < 0) { // CCW -> states descending
-		if (first == 0x0 && second == 0x1 && third == 0x0) { // state 2 010
+		if (state == 2) { // state 2 010
 			driveState(abs(speed), 0);
 			return 2;
 		}
-		if (first == 0x0 && second == 0x01 && third == 0x01) { // state 1 011
+		if (state == 1) { // state 1 011
 			driveState(abs(speed), 5);
 			return 1;
 		}
-		if (first == 0x0 && second == 0x0 && third == 0x01) { // state 0 001
+		if (state == 0) { // state 0 001
 			driveState(abs(speed), 4);
 			return 0;
 		}
-		if (first == 0x01 && second == 0x0 && third == 0x1) { // state 5 101
+		if (state == 5) { // state 5 101
 			driveState(abs(speed), 3);
 			return 5;
 		}
-		if (first == 0x01 && second == 0x0 && third == 0x0) { // state 4 100
+		if (state == 4) { // state 4 100
 			driveState(abs(speed), 2);
 			return 4;
 		}
-		if (first == 0x01 && second == 0x1 && third == 0x0) { // state 3 110
+		if (state == 3) { // state 3 110
 			driveState(abs(speed), 1);
 			return 3;
 		}
@@ -1287,13 +1439,23 @@ void driveKickStart(int16_t speed, int16_t measuredrpm)
     uint16_t i = 0;
 
     kickStartCount++;
-    kickStartCount %= 16;
+    kickStartCount %= 256;
     
     while (i < (stuckwindowcount + 1 - KICKSTART_STUCK_LOWER_WINDOWS)) {
-      driveStepKickStart(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED);
-      driveStep(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED);
+
+      uint8_t st = getState();
+      driveStepKickStartMinus(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED, st);
+      driveStep(0);
+      driveStepKickStartNull(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED, st);
+      driveStep(0);
+      //driveStepKickStartPlus(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED, st);
+     
       i++;
     }
+  } else if(stuckwindowcount > KICKSTART_STUCK_UPPER_WINDOWS) {
+    controlvariableinput = 0;
+    integral = 0;
+    sysError = STALL_TIM_ERR;
   }
 }
 

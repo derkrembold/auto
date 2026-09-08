@@ -138,6 +138,190 @@ One command per message (e.g. `"speed 300"`), one reply per message
 a whole `motorcontrol.py` session (see Connection Model above) rather
 than being reopened per command.
 
+## Planned Multi-Process Architecture (Two-Motor Vehicle)
+
+**Everything in this section is planned, not built — captured
+2026-09-07 from the user's own design draft (originally a standalone
+`BLDC_System_Specification.md`, folded into this file and deleted the
+same day — see git history for the original wording). Subject to
+change; the actual redesign happens interactively between the user and
+Claude Code as it's built, not by following this plan mechanically.
+Explicitly **not** a from-scratch redesign** — the user wants to keep
+as much of the existing, proven architecture (persistent IPC
+connection, dry-run default, self-polled rpm stall check, etc.) as
+possible and build additively on top of it, specifically *because* it's
+already known to work. See root `CLAUDE.md`'s Two-Motor Vehicle
+Architecture section for the vehicle-level context this sits under.
+
+**Four planned processes** (today: one `watchdog.py` process + one
+interactive `motorcontrol.py` client):
+```
+Prozess 1: Joystick
+→ reads a Logitech controller over Bluetooth
+→ computes speed left/right (differential drive: vorwaerts ± lenkung)
+→ sends over IPC to the Watchdog (replaces motorcontrol.py's role for
+  driving, which stays available for manual/diagnostic commands)
+→ logs
+
+Prozess 2: Watchdog (extends today's watchdog.py, not a rewrite)
+→ receives speed from the Joystick process over IPC
+→ relays speed to both STM32 controllers, low lag between the two
+  (steering correctness depends on this — a lag between left/right
+  speed commands would show up as unintended veering)
+→ monitors rpm and lag (speed vs. rpm) per motor
+→ monitors current over LIN (once the external current-sensor module
+  exists, see root CLAUDE.md's Two-Motor Vehicle Architecture)
+→ monitors the IFM sensors (MQTT or direct IP — TBD)
+→ runs the Stall/Stiction Response (see below) — or possibly Process 1,
+  not yet decided
+→ logs
+
+Prozess 3: Learning Algorithm (Decision Tree)
+→ runs in the background, reads the logging database
+→ improves the Stall/Stiction Response over time (see below)
+
+Prozess 4: Webserver
+→ shows status/rpm/current/IFM sensor data
+→ reachable over the Pi's own WiFi access point, phone browser
+```
+
+**Joystick control mapping (planned):**
+```
+vorwaerts = joystick Y axis  (-1.0..+1.0)
+lenkung   = joystick X axis  (-1.0..+1.0)
+
+motor_links  = clamp(vorwaerts + lenkung, -1.0, +1.0)
+motor_rechts = clamp(vorwaerts - lenkung, -1.0, +1.0)
+speed_links  = motor_links  × MAX_RPM
+speed_rechts = motor_rechts × MAX_RPM
+```
+
+**Watchdog extensions (planned) — important emphasis from the user
+(2026-09-07): when the STM32's own kickstart mechanism (see
+`STM32/CLAUDE.md`'s Planned Redesign section) fails to break a stall,
+the Pi-side watchdog should stop the motor and wait for the user to
+physically intervene ("anschieben"), not keep retrying on its own —
+if the firmware's own kickstart couldn't do it, further automated
+retries from the Pi side aren't expected to help either.** Once a
+second motor exists, this should stop **both** motors, not just the
+stuck one — an uncontrolled single-motor-only state on a differential-
+drive vehicle isn't a safe/predictable state to keep running in. The
+user's own words: "das kann in den Watchdog rein... gerne können wir
+aber auch zu einem späteren Zeitpunkt darüber diskutieren, wenn es
+soweit ist" — a real design intent, not yet detailed, revisit when the
+second motor is actually being built.
+
+Other planned watchdog extensions, same design draft:
+```
+Lag monitoring per motor:
+  (speed - rpm) too large for too long → motor is fighting → trigger
+  Stall/Stiction Response
+
+Overcurrent monitoring (once the external current-sensor module
+exists):
+  current > WARNUNG_CURRENT (e.g. 25A) → log a warning
+  current > MAX_CURRENT (e.g. 30A) → immediate speed=0, ERROR_OVERCURRENT
+
+IFM sensor monitoring:
+  O3D (front): obstacle closer than MIN_ABSTAND → immediate speed=0
+  LiDAR (side): obstacle closer than MIN_ABSTAND → steering correction
+  Ultrasonic (side/rear): obstacle closer than MIN_ABSTAND → warning +
+    steering correction; also the O3D's fallback in direct sunlight
+
+Normal operation: speed != 0 and rpm approaches speed → ok; speed == 0
+and rpm == 0 → ok. Problem, per motor: speed != 0 and rpm stays 0 →
+Stall/Stiction Response.
+
+Note: rpm_left != rpm_right is normal during steering — each motor is
+only ever compared against its own commanded speed, never against the
+other motor's.
+```
+
+## Planned Stall/Stiction Response (Building Blocks + Learning)
+
+**Same status as the section above — planned, not built, 2026-09-07,
+subject to change. Grouped with the Planned Multi-Process Architecture
+above per the user's own framing ("§7 ist mit §6 verwandt, die
+gehören zusammen behandelt") — this is what Process 2 (or 1, TBD) runs
+when it detects a stall.**
+
+**Design idea: small composable "building block" commands, combined
+into sequences, rather than one fixed hardcoded recovery routine:**
+```
+pulse:      the STM32's own kickstart pulse sequence (see
+            STM32/CLAUDE.md's Planned Redesign section)
+neg_pulse:  the same sequence, reversed direction
+neg_speed:  briefly command a negative speed
+pos_speed:  briefly command a positive speed, higher than the setpoint
+speed_null: briefly command speed=0, let the motor relax
+```
+Every sequence ends the same way: send the original setpoint, then
+read `rpm`. Optionally, `hal` and/or `current` can be read before and
+after any block (always in pairs) for extra context — `hal` costs LIN
+round-trip time, so use deliberately, not on every block; `current`
+tells whether the motor is fighting a load (high) or spinning free
+(low). Blocks combine freely, e.g. `neg_speed → pulse`,
+`neg_speed → pos_speed` (repeated, this is a "vibrate" pattern — see
+Learning Algorithm below), `speed_null → pos_speed`.
+
+**Sequence** (per motor, once `rpm == 0` is detected):
+```
+1. Wait: the STM32 already attempts its own 6x kickstart (up to 1s,
+   see STM32/CLAUDE.md's Planned Kickstart Algorithm)
+2. Read status: kickstartCounter, errorCode
+3. Combine building blocks (per the Learning Algorithm below)
+   → optionally read hal before the sequence
+   → run the sequence
+   → at the end: send the original setpoint, read rpm
+   → optionally read hal after the sequence
+4. rpm != 0? → closed loop, done
+5. rpm == 0? → try a new sequence
+6. No strategy succeeds → hard stop (see the Watchdog extensions above)
+```
+
+## Planned Learning Algorithm (Decision Tree)
+
+**Same planned/not-built/subject-to-change status. Mid-term priority
+— sequenced after the Multi-Process Architecture and Stall/Stiction
+Response above are actually built.**
+
+A decision tree over the 5 building blocks above, max depth 4 (5→25→
+125→625 possibilities per depth level — bounded, doesn't explode).
+`hal` is not itself a building block but a togglable context source,
+three modes (always read in vor/nach pairs): no `hal`, `hal` once
+before+after the whole sequence, or `hal` between every block. Each
+tree node (path) tracks its success rate, overall and per `hal` mode;
+the algorithm picks the highest-success-rate path, adapting to the
+current `hal` state where available. Runs as its own background
+process, online learning, doesn't block normal operation — see
+Process 3 above. **The point of the building-block approach**: a
+sequence like `neg_speed → pos_speed → neg_speed → pos_speed` (a
+"vibrate" pattern) doesn't need to be hardcoded — the learner can
+discover it on its own once repeated data shows it works, from
+`pos_speed`/`neg_speed` alone.
+
+## Planned Logging Database
+
+**Same planned/not-built/subject-to-change status. Important for
+debugging** (the user's own framing, 2026-09-07) — both the Joystick
+and Watchdog processes write into a shared SQLite database; the
+Learning Algorithm reads from it. Planned fields: timestamps, joystick
+input, computed/sent speed per motor, `rpm`/lag/current per motor, IFM
+sensor readings, Hall states, status (error code, kickstart counter),
+and — per Stall/Stiction Response invocation — which block sequence
+ran, whether it succeeded, and how long it took. This is the training
+data the Learning Algorithm above depends on.
+
+## Planned Web UI
+
+**Same planned/not-built/subject-to-change status. Sequenced after the
+Learning Algorithm above** (the user's own ranking, 2026-09-07) — a
+page served from the Pi's own WiFi access point (`http://192.168.4.1`),
+phone-browser accessible: `rpm`/setpoint/current per motor, IFM sensor
+readings, error/status, kickstart counter, GPS position (once that
+exists, see root `CLAUDE.md`'s Long-Term Roadmap). Optional: a
+touchscreen joystick and an emergency-stop button in the page itself.
+
 ## STM32-Local Stall Detection (Planned, Deprioritized)
 
 **Not the current approach — see Two-Layer Safety Check above for
@@ -405,6 +589,13 @@ coverage for the same reason documented in `raspi/tests/test_linbus.py`
   above), and poll-loop cadence gaps. Read-only, no motor
   interaction — see `raspi/analyze_logs.py`'s own docstring for exact
   check definitions rather than duplicating them here.
+
+- **Blocked on STM32/CLAUDE.md's Planned Redesign section (see there
+  for detail):** once the firmware gets a `reset` command and a
+  restructured 4-byte `status` reply, `watchdog.py` needs a matching
+  `reset` verb and `linbus.py`/`get_motor_counters()`-equivalent needs
+  updating for the new field layout (including the new `errorCode`).
+  Not started.
 
 Fill these in here once fixed, not in the root `CLAUDE.md` or
 `raspi/CLAUDE.md`.

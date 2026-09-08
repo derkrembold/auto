@@ -1,0 +1,13 @@
+16:31:12.596  INFO    connected to watchdog
+16:31:13.801  INFO    -> hal
+16:31:13.813  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+16:31:24.699  INFO    -> pulse 1000
+16:31:24.704  INFO    <- OK
+16:31:27.179  INFO    -> pulse 1000
+16:31:27.185  INFO    <- OK
+16:31:30.988  INFO    -> pulse 1000
+16:31:30.993  INFO    <- OK
+16:31:33.916  INFO    -> pulse 1000
+16:31:33.921  INFO    <- OK
+16:31:35.852  INFO    -> pulse 1000
+16:31:36.035  INFO    <- OK

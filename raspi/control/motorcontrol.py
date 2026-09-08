@@ -31,6 +31,9 @@ HELP_TEXT = """Commands:
   speed <value>            set speed, 0 = stop
   pulse <value>            single raw open-loop driveStep() pulse (cntl1mot, no PI/ramp),
                            +/- , must stay under GLOBALRATE (1274) -- see PULSE_SPEED_MIN/MAX
+  burst <v1> <p1> <v2> <p2>  two pulse() calls with a Pi-side pause: pulse v1, wait p1 ms,
+                           pulse v2, wait p2 ms -- e.g. a reverse+forward "rock back" pair,
+                           tunable per-call without a firmware rebuild
   pi <p_delta> <i_delta>   set KP/KI as (firmware default + delta), each
                            in -1.28..1.27 -- not calling this leaves both
                            at their firmware defaults
@@ -40,12 +43,16 @@ HELP_TEXT = """Commands:
   current                  read current sensor (amps, val1/val2 = ACS712 #1/#2)
   errors                   read currentsensor's last 8 error codes (most recent first)
   kickcount                read the firmware kick-start counter (experimental/throwaway
-                           diagnostic, mod-16, only useful as a before/after delta)
+                           diagnostic, mod-256, only useful as a before/after delta)
+  status                   read st3mot (timeout/checksum/kickstart counters + sysError)
+  reset                    clear firmware state (controlvariableinput, integral,
+                           bodyTimeoutCount, checksumErrorCount, kickStartCount,
+                           stuckwindowcount, sysError) -- cntl2mot, repurposed 2026-09-07
   selftest                 currentsensor errorstorage roundtrip + deliberately send a
                            bad-checksum cntl0cur write and confirm currentsensor logged it
                            but skipped the action + deliberately provoke a currentsensor/
                            STM32 bus-hang timeout + deliberately send a bad-checksum
-                           speed-0 write and confirm all were caught
+                           speed-0 write + exercise reset and confirm status clears
                            (real hardware, ~2s, deliberately disrupts the bus for a moment)
   help                     show this again
   exit                     quit (Ctrl+C also works)

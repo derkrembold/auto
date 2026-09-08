@@ -21,7 +21,7 @@ class constants:
     st0lig = 0x34
 
     pids = [cntl0mot, cntl1mot, cntl2mot, cntl3mot, st0mot, st1mot, st2mot, st3mot, cntl0cur, st0cur, st1cur, cntl0lig, st0lig]
-    messagebytes = [2, 2, 6, 2, 3, 2, 2, 4, 2, 4, 8, 2, 4]
+    messagebytes = [2, 2, 6, 2, 3, 2, 2, 6, 2, 4, 8, 2, 4]
 
     # pid value -> its own message name, for human-readable logging
     # (e.g. watchdog/linbus.py's --debug bus-call tracing).
