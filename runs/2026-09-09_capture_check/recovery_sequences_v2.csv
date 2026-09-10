@@ -1,0 +1,2 @@
+timestamp,target_speed,starting_hal,sequence,outcome,status
+2026-09-09T16:49:04,500,"OK ret=0 data=['0x00', '0x01', '0x00']",burst -500 10 1000 5;pulse 1000,failure,OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65

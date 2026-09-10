@@ -118,7 +118,7 @@ volatile int8_t sysError = 0;
  * ungleich-0-Kommando), bevor ein Kick versucht wird.
  * 4 * 100ms = 400ms, siehe analysis/grid_search_log.md, 2026-08-26. */
 #define KICKSTART_STUCK_LOWER_WINDOWS   4
-#define KICKSTART_STUCK_UPPER_WINDOWS   8
+#define KICKSTART_STUCK_UPPER_WINDOWS   6
 
 // eine konstante mit 8-Bit-Ganzzahl, Ã¤ndert sich nie
 // hier die drei hallsensoren des bdlc's motors
@@ -804,7 +804,9 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
       bodyrecvd = false;
       bodysent = false;
       sysError = LIN_RCV_ERR;
-
+      controlvariableinput = 0;
+      integral = 0;
+      
       HAL_UART_AbortReceive(&huart4);
       HAL_UART_Receive_IT(&huart4, rx_header, 2);
 }
@@ -1436,22 +1438,11 @@ void driveKickStart(int16_t speed, int16_t measuredrpm)
 
   if (stuckwindowcount >= KICKSTART_STUCK_LOWER_WINDOWS && stuckwindowcount <= KICKSTART_STUCK_UPPER_WINDOWS) {
 
-    uint16_t i = 0;
-
     kickStartCount++;
     kickStartCount %= 256;
-    
-    while (i < (stuckwindowcount + 1 - KICKSTART_STUCK_LOWER_WINDOWS)) {
+   
+    driveStep(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED);
 
-      uint8_t st = getState();
-      driveStepKickStartMinus(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED, st);
-      driveStep(0);
-      driveStepKickStartNull(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED, st);
-      driveStep(0);
-      //driveStepKickStartPlus(speed >= 0 ? KICKSTART_SPEED : -KICKSTART_SPEED, st);
-     
-      i++;
-    }
   } else if(stuckwindowcount > KICKSTART_STUCK_UPPER_WINDOWS) {
     controlvariableinput = 0;
     integral = 0;

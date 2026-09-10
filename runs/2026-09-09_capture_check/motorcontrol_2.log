@@ -1,0 +1,5 @@
+14:51:56.716  INFO    connected to watchdog
+14:51:58.557  INFO    -> hal
+14:51:58.563  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+14:52:02.941  INFO    -> hal
+14:52:02.947  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']

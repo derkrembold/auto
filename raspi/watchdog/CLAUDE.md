@@ -245,6 +245,29 @@ above per the user's own framing ("§7 ist mit §6 verwandt, die
 gehören zusammen behandelt") — this is what Process 2 (or 1, TBD) runs
 when it detects a stall.**
 
+**A first real, working precursor of this idea exists as of 2026-09-09
+— in `raspi/control/capture_step_response.py`, not here yet.** Built
+after `watchdog.py`'s new `burst` verb was confirmed on real hardware
+to reliably escape a specific, reproducible Mittelrast stall (see
+`STM32/CLAUDE.md`). Same spirit as the building-block idea below
+(small composable moves, combined into sequences, logged with outcome)
+but scoped to today's single-motor bench, not the planned multi-process
+vehicle architecture: a fixed catalog of 7 strategies (`speed0`/
+`speed_plus`/`speed_minus`/`pulse_plus`/`pulse_minus`/`burst_cw`/
+`burst_ccw`), 2-3 random picks per sequence with hand-picked
+constraints (max 1 `burst`/2 `pulse`, no immediate repeat, ≥100ms
+between steps), one recovery attempt + one retry-as-verification, and
+every outcome appended to `recovery_sequences.csv` (never rotated,
+meant to keep growing as real training data). See
+`raspi/CLAUDE.md`'s `capture_step_response.py` entry and the script's
+own module docstring for the full design. **Confirmed live the same
+day to generalize beyond the one specifically-known stuck position**
+(recovered a different, previously-uncharacterized Mittelrast) —
+real evidence this general approach works, not just the one hand-tuned
+recipe. Whether/how this precursor folds into the planned Process 2/
+Learning Algorithm below, once the multi-process architecture actually
+gets built, is not yet decided.
+
 **Design idea: small composable "building block" commands, combined
 into sequences, rather than one fixed hardcoded recovery routine:**
 ```
@@ -283,7 +306,11 @@ Learning Algorithm below), `speed_null → pos_speed`.
 
 **Same planned/not-built/subject-to-change status. Mid-term priority
 — sequenced after the Multi-Process Architecture and Stall/Stiction
-Response above are actually built.**
+Response above are actually built.** The Stall/Stiction Response
+section's 2026-09-09 precursor is already producing real
+`recovery_sequences.csv` rows (sequence + outcome, one per recovery
+attempt) — genuine, if early, training data for whatever this decision
+tree eventually looks like, not just a hypothetical future format.
 
 A decision tree over the 5 building blocks above, max depth 4 (5→25→
 125→625 possibilities per depth level — bounded, doesn't explode).

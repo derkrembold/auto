@@ -483,6 +483,18 @@ firmware-level debounce (e.g. require N consecutive identical Hall
 readings before counting a transition) or is a hardware/mounting
 limitation not fixable in software is not yet decided.
 
+**A specific, reliably reproducible Mittelrast stall location found
+(2026-09-09): between states 2 (`010`) and 3 (`110`), with `hal`
+reading `010` (state 2, `data=['0x00','0x01','0x00']`) while stuck.**
+Manually pushing the rotor into this exact Mittelrast reproduces the
+stall on demand — confirmed multiple times, including through the
+`capture_step_response.py` fixes above (`kickstart=3`/`sys_error=-65`
+every time). Useful as a known, deliberate test position for kickstart/
+pulse experiments going forward, instead of waiting for a stall to
+happen at a random position. Not yet checked whether other
+state-boundary Mittelrasten (e.g. 0↔1, 4↔5) are equally reproducible or
+whether 2↔3 is special somehow — this is the only one confirmed so far.
+
 **CW(+1)/CCW(+2) state-table asymmetry — empirically investigated
 2026-09-08, inconclusive, then set aside rather than resolved.** The
 user tried to directly verify the correct CCW physical neighbor state
@@ -896,20 +908,30 @@ normally again — no further `ret=-5` at all.
   working well on real hardware the same day** (`burst` reliably
   overcoming Mittelrast sticking points, no further UART hangs
   observed).
-- **Residual scope note:** `driveKickStart()` (the *automatic*
-  background stall-recovery in the main loop, distinct from the
-  *manual* `pulse`/`cntl1mot` command above) still calls
-  `driveStepKickStartMinus()`/`driveStepKickStartNull()` internally
-  (`Plus` commented out) — it was **not** migrated to a `burst`-style
-  Pi-side sequence, since it has no Pi round-trip in its loop at all
-  (it fires autonomously from `main()`'s loop, not from a LIN command).
-  It therefore still has the same multi-`driveStep()` blocking-window
-  shape that caused this whole investigation, just triggered
-  automatically rather than by a manual `pulse`. The
-  `HAL_UART_ErrorCallback` fix above covers this path too (it's a
-  general recovery, not `cntl1mot`-specific) — but if collisions turn
-  out to still happen here in practice, this is the other place to
-  look, not just `cntl1mot`.
+- **Correction (2026-09-09): `driveKickStart()` was never actually
+  vulnerable to the UART collision above, unlike originally documented
+  here.** `driveKickStart()` is called from *inside* the main loop's
+  `while (bodyrecvd == false)` loop, where `HAL_UART_Receive_IT()` for
+  the next header is already armed (from `for(;;)`'s top, before the
+  while loop) — an incoming header byte is caught by interrupt
+  regardless of what the foreground code is doing in a `delay_us()`
+  busy-wait, since that only polls a timer register and never disables
+  interrupts. The actual vulnerable gap was specifically the *dispatch*
+  section (`cntl0mot`-`cntl3mot` checks, after the while loop exits) —
+  header reception isn't re-armed there until the next `for(;;)`
+  iteration, which is what made the old multi-`driveStep()` `cntl1mot`
+  blocking dangerous. `driveKickStart()`'s own blocking was never in
+  that gap.
+- **`driveKickStart()` also simplified (2026-09-09):** dropped the
+  escalating-repeat-count `while` loop and the
+  `driveStepKickStartMinus()`/`Null()`/`getState()` calls entirely — it
+  now fires a single `driveStep(speed >= 0 ? KICKSTART_SPEED :
+  -KICKSTART_SPEED)` per triggering 100ms window, same simple pattern
+  as `cntl1mot`. This also removes the escalation-×-future-
+  `KICKSTART_SPEED`-increase current-stress concern raised in an
+  earlier review — total pulses per stall event is now capped at
+  `KICKSTART_STUCK_UPPER_WINDOWS - KICKSTART_STUCK_LOWER_WINDOWS + 1`
+  (5), not the old up-to-30.
 
 **Deferred: a deterministic `selftest` provocation for this specific
 UART receive-error path (2026-09-08).** Unlike the checksum/bus-hang
@@ -978,9 +1000,12 @@ Leerlauf Stromverbrauch: bei 5V: ca.: 0,5A,  bei 48V ca.: 1,4A
     **done**, `cntl1mot` is back to a single, plain
     `driveStep(speedlocal)` call, confirmed working well on real
     hardware (2026-09-08). `driveKickStart()`'s own internal
-    Minus/Null sequencing is unaffected by this — see the Status
-    section's "Residual scope note" for why that one's a separate,
-    still-open question.
+    sequencing was also simplified the next day (2026-09-09): dropped
+    the escalating-repeat-count loop and
+    `driveStepKickStartMinus/Null/Plus` entirely, now a single
+    `driveStep()` per triggering window — see the Status section's
+    2026-09-09 entries (including a correction: this path was never
+    actually vulnerable to the UART collision, unlike first assumed).
   - Systematically pulse-test all 24 mechanical positions (Tiefrast +
     Mittelrast): still not started — extends, not replaces, the manual/
     semi-automatic characterization already done 2026-08-28

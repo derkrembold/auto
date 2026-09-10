@@ -1,0 +1,2 @@
+timestamp,target_speed,starting_hal,sequence,outcome
+2026-09-09T16:40:53,500,"OK ret=0 data=['0x00', '0x00', '0x01']",speed0;speed_plus;burst_ccw,success

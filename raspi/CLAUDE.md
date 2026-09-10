@@ -212,10 +212,8 @@ other. Same caution applies to any future same-named files across
   persistent-connection and Motor Execution Consent reasoning as
   `validate_speed.py` above.
 - `control/capture_step_response.py` — standalone script: `speed 0` →
-  `speed 1000` (`TARGET_SPEED` — no `--target-speed` CLI flag exists,
-  only overridable by calling `run()` directly in Python, not through
-  the SSH/CLI path `run_grid.py`/`run_experiment.py` use; if this ever
-  changes, see root `CLAUDE.md`'s Grid Search section for why
+  `speed 1000` (`TARGET_SPEED`, overridable via `--target-speed`, +/-,
+  added 2026-08-27 — see root `CLAUDE.md`'s Grid Search section for why
   `run_grid.py`'s own separate, duplicated `TARGET_SPEED` constant
   would also need updating, silently, or its ISE scoring breaks) (step
   input), then samples `rpm` every 200ms for 7s
@@ -282,6 +280,58 @@ other. Same caution applies to any future same-named files across
   touched at all. This is what `run_experiment.py` (repo root) uses to
   set a grid/gradient-search point before capturing its step response
   — see that script's own docstring.
+
+  **`reset`/`hal` now bracket every run (added 2026-09-09):** `reset`
+  fires as the very first command (clean firmware baseline — no
+  inherited stale `sysError`/counters from whatever ran before), `hal`
+  right after (records the starting rotor position). The soft-stop
+  ramp is now **conditional**, not unconditional: only runs if `rpm`
+  reached at least half of `target_speed` *and* `status`'s `sys_error`
+  isn't `STALL_TIM_ERR` — found live that on a genuinely stuck rotor,
+  the ramp's own descending nonzero `speed` commands re-armed
+  `controlvariableinput` and re-triggered the firmware's stuck-
+  detection from scratch. Full reasoning in the script's own docstring
+  and `STM32/CLAUDE.md`'s Status section.
+
+  **Mid-run stall detection + one recovery attempt (also 2026-09-09),
+  built after `raspi/watchdog/watchdog.py`'s new `burst` verb was
+  confirmed (real hardware) to reliably escape a specific, reproducible
+  Mittelrast stall (Hall state 2/`010`, between states 2 and 3 — see
+  `STM32/CLAUDE.md`).** 1.0s into the step, if `rpm` is still 0 and
+  `status` confirms a latched `STALL_TIM_ERR`, sampling stops and a
+  random *recovery sequence* runs (`STRATEGIES` catalog: `speed0`/
+  `speed_plus`/`speed_minus`/`pulse_plus`/`pulse_minus`/`burst_cw`/
+  `burst_ccw`, 2-3 steps, max 1 `burst`/2 `pulse` per sequence, never
+  the same strategy twice in a row, ≥100ms between every step —
+  deliberately conservative given this is what the 2026-09-08 MOSFET
+  failure was about). The **entire step is then retried from scratch**
+  — that retry *is* the sequence's success/failure test, not a separate
+  check. A second stall on the retry aborts (`sys.exit()`, no second
+  sequence); success uses the retry's rows as the CSV. Confirmed live
+  the same day: recovered from a *different*, previously-uncharacterized
+  Mittelrast (Hall state 0/`001`) via `burst_ccw` (until then untested)
+  — the mechanism generalizes beyond the one specifically-known stuck
+  position. Also confirmed live that the known 010/110 Mittelrast is
+  **not always** recoverable even by its previously-successful exact
+  `burst_cw` recipe — real variability, not a guaranteed fix. Full
+  design discussion and every constraint's reasoning are in the
+  script's own module docstring, not duplicated here.
+
+  **`recovery_sequences.csv`** (repo-adjacent on the Pi, deliberately
+  *not* using `logsetup`'s rotation — meant to keep growing forever as
+  training data for the planned learning/decision-tree work, see
+  `raspi/watchdog/CLAUDE.md`'s "Planned Learning Algorithm" section):
+  one row per recovery attempt (`timestamp,target_speed,starting_hal,
+  sequence,outcome,status`). `sequence` logs the *exact commands sent*
+  (e.g. `"speed 500;speed 0;burst 500 10 -1000 5"`), not the catalog's
+  abstract strategy names — those names' underlying parameter values
+  may change later, and the log needs to capture what was actually
+  tried regardless. **Caveat found live the same day:** the *detailed*
+  per-command LIN trace for a given recovery attempt lives only in
+  `capture_step_response.log`, which rotates (one generation kept) —
+  after ~2 more runs, that trace is gone even though the CSV's outcome
+  row survives forever. Not yet resolved; no decision made on whether
+  to extend rotation or otherwise preserve more detail per attempt.
 - `analyze_logs.py` — read-only static analysis over the four `.log`
   files above (built 2026-08-12, together with the `/analyze-logs`
   skill): flags unmatched `->` calls (the 2026-08-11 bus-hang

@@ -1,7 +1,13 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from capture_step_response import run, _soft_stop
+import capture_step_response
+from capture_step_response import (
+    run, _soft_stop, _generate_recovery_sequence, _execute_strategy,
+    _log_recovery_outcome, STRATEGIES,
+    SEQUENCE_MIN_LEN, SEQUENCE_MAX_LEN, SEQUENCE_MAX_BURST, SEQUENCE_MAX_PULSE,
+    SEQUENCE_STEP_PAUSE_S,
+)
 
 
 class _FakeClock:
@@ -20,10 +26,17 @@ class _FakeClock:
         self.now += seconds
 
 
-def _fake_conn(rpm_values, current_values=(), pi_reply="OK"):
+def _fake_conn(rpm_values, current_values=(), pi_reply="OK",
+               status_reply="OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0"):
     # Replies based on the command actually sent, not just call order --
     # needed since rpm and current are now interleaved on a different
     # schedule (see run()'s current_sample_interval handling).
+    # rpm_values must include one extra value beyond the CSV samples --
+    # run() now does one more "rpm" read after the sampling loop, to
+    # decide whether the soft-stop ramp should run at all (2026-09-09).
+    # Default status_reply's sys_error=0 (MOT_OK) keeps that decision's
+    # "no_stall_latched" check true, matching pre-2026-09-09 tests that
+    # assume the soft stop always runs.
     conn = MagicMock()
     conn.__enter__.return_value = conn
     rpm_iter = iter(rpm_values)
@@ -42,7 +55,9 @@ def _fake_conn(rpm_values, current_values=(), pi_reply="OK"):
             return f"OK ret=0 val1={val1} val2={val2}"
         if command.startswith("pi "):
             return pi_reply
-        return "OK"  # speed 0 / speed <target>
+        if command == "status":
+            return status_reply
+        return "OK"  # speed 0 / speed <target> / reset / hal
 
     conn.send.side_effect = fake_send
     conn.recv.side_effect = fake_recv
@@ -59,17 +74,30 @@ def _run_with_fake_clock(conn, **kwargs):
 
 
 def test_run_sends_zero_then_target_speed_first():
-    conn = _fake_conn([100, 200], [("1.00", "0.50")])
+    # Third rpm value (600) is the post-loop decision-point read --
+    # >= 50% of target_speed=1000, so the soft stop runs (see the new
+    # "Decision point" test class below for the skip case).
+    conn = _fake_conn([100, 200, 600], [("1.00", "0.50")])
     _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
                           duration=0.4)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert sent[0] == "speed 0"
-    assert sent[1] == "speed 1000"
-    # Staged soft stop (2026-08-20), not a single abrupt "speed 0" --
-    # see _soft_stop()'s own tests below for the exact staging.
+    # "reset" + "hal" (2026-09-09) are always the first two commands,
+    # for a clean firmware baseline + starting rotor position -- see
+    # run()'s own comment.
+    assert sent[0] == "reset"
+    assert sent[1] == "hal"
+    assert sent[2] == "speed 0"
+    assert sent[3] == "speed 1000"
+    # Decision point (2026-09-09): hal/rpm/status read again after the
+    # sampling loop, then the soft stop (2026-08-20, see _soft_stop()'s
+    # own tests below for the exact staging) since rpm/sys_error both
+    # look fine.
+    assert sent[-8] == "hal"
+    assert sent[-7] == "rpm"
+    assert sent[-6] == "status"
+    assert sent[-5] == "speed 800"
     assert sent[-1] == "speed 0"
-    assert sent[-2] != "speed 0"
 
 
 # --- soft stop (added 2026-08-20) ---
@@ -104,18 +132,20 @@ def test_soft_stop_scales_with_target_speed():
 
 
 def test_run_samples_rpm_expected_number_of_times():
-    conn = _fake_conn([100, 200, 300, 400], [("0.00", "0.00")])
+    # 5th value is the post-loop decision-point "rpm" read (2026-09-09)
+    # -- not one of the 4 CSV samples this test is actually about.
+    conn = _fake_conn([100, 200, 300, 400, 600], [("0.00", "0.00")])
     _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
                           duration=0.8)
 
     rpm_reads = [
         call.args[0] for call in conn.send.call_args_list if call.args[0] == "rpm"
     ]
-    assert len(rpm_reads) == 4  # 0.8s / 0.2s
+    assert len(rpm_reads) == 5  # 4 CSV samples (0.8s / 0.2s) + 1 decision-point read
 
 
 def test_run_uses_one_persistent_connection_not_one_shot():
-    conn = _fake_conn([100], [("0.00", "0.00")])
+    conn = _fake_conn([100, 600], [("0.00", "0.00")])
     with patch("capture_step_response.Client", return_value=conn) as fake_client, \
          patch("capture_step_response.logsetup.configure"), \
          patch("capture_step_response.time.sleep", _FakeClock().sleep), \
@@ -127,7 +157,7 @@ def test_run_uses_one_persistent_connection_not_one_shot():
 
 
 def test_run_prints_csv_rows(capsys):
-    conn = _fake_conn([425, -50], [("1.00", "0.50")])
+    conn = _fake_conn([425, -50, 600], [("1.00", "0.50")])
     _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
                           duration=0.4)
 
@@ -144,9 +174,10 @@ def test_current_sampled_only_once_per_current_interval(capsys):
     # be read every 5th rpm sample (i=0, i=5, ...), not every row.
     # duration=1.6 (not 1.2) deliberately -- 1.2/0.2 is 5.999... in
     # float64, int() truncates to 5 rows instead of 6; 1.6/0.2 is a
-    # clean 8.0.
+    # clean 8.0. 9th rpm value is the post-loop decision-point read
+    # (2026-09-09).
     conn = _fake_conn(
-        rpm_values=[0, 1, 2, 3, 4, 5, 6, 7],
+        rpm_values=[0, 1, 2, 3, 4, 5, 6, 7, 600],
         current_values=[("1.00", "0.50"), ("1.20", "0.60")],
     )
     _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
@@ -160,7 +191,7 @@ def test_current_sampled_only_once_per_current_interval(capsys):
 
 def test_current_columns_blank_when_not_sampled_this_row(capsys):
     conn = _fake_conn(
-        rpm_values=[0, 1, 2, 3, 4, 5, 6, 7],
+        rpm_values=[0, 1, 2, 3, 4, 5, 6, 7, 600],
         current_values=[("1.00", "0.50"), ("1.20", "0.60")],
     )
     _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
@@ -180,24 +211,74 @@ def test_current_columns_blank_when_not_sampled_this_row(capsys):
 # --- optional --p-delta/--i-delta (added 2026-08-19) ---
 
 def test_run_sends_pi_first_when_deltas_given():
-    conn = _fake_conn([100], [("0.00", "0.00")])
+    conn = _fake_conn([100, 600], [("0.00", "0.00")])
     _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
                           duration=0.2, p_delta=0.1, i_delta=-0.05)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert sent[0] == "pi 0.1 -0.05"
-    assert sent[1] == "speed 0"
-    assert sent[2] == "speed 1000"
+    assert sent[0] == "reset"
+    assert sent[1] == "hal"
+    assert sent[2] == "pi 0.1 -0.05"
+    assert sent[3] == "speed 0"
+    assert sent[4] == "speed 1000"
 
 
 def test_run_omits_pi_when_deltas_not_given():
-    conn = _fake_conn([100], [("0.00", "0.00")])
+    conn = _fake_conn([100, 600], [("0.00", "0.00")])
     _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
                           duration=0.2)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert sent[0] == "speed 0"
+    assert sent[0] == "reset"
+    assert sent[1] == "hal"
+    assert sent[2] == "speed 0"
     assert not any(c.startswith("pi ") for c in sent)
+
+
+# --- conditional soft-stop ramp (added 2026-09-09) ---
+# Found live: on a genuinely stuck rotor (e.g. parked in a Mittelrast),
+# the soft stop's own descending nonzero speed commands re-armed
+# controlvariableinput and triggered a brand new stuck-detection/
+# kickstart cycle -- confirmed via a real "status" showing kickstart=6
+# instead of the 3 the stuck-window range alone explains. See run()'s
+# own "Decision point" comment.
+
+def test_soft_stop_skipped_when_rpm_below_half_of_target():
+    # rpm=50 at the decision point, target_speed=1000 -- well under the
+    # 50% (STOP_RAMP_RPM_FRACTION) threshold, so the ramp must not run.
+    conn = _fake_conn([0, 50], [("0.00", "0.00")])
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.2)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert "speed 800" not in sent  # first soft-stop step never sent
+    assert sent[-1] == "speed 0"    # still stops, just not via the ramp
+
+
+def test_soft_stop_skipped_when_stall_tim_err_latched():
+    # rpm=900 alone would pass the 50% threshold, but a latched
+    # STALL_TIM_ERR (-65) means the firmware itself confirmed it never
+    # really got going -- that alone must also skip the ramp.
+    conn = _fake_conn(
+        [0, 900], [("0.00", "0.00")],
+        status_reply="OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
+    )
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.2)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert "speed 800" not in sent
+    assert sent[-1] == "speed 0"
+
+
+def test_soft_stop_runs_when_rpm_and_status_both_look_fine():
+    conn = _fake_conn([0, 900], [("0.00", "0.00")])
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.2)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert "speed 800" in sent  # first soft-stop step did run
+    assert sent[-1] == "speed 0"
 
 
 def test_run_aborts_before_speed_when_pi_rejected():
@@ -207,4 +288,164 @@ def test_run_aborts_before_speed_when_pi_rejected():
                               duration=0.2, p_delta=5.0, i_delta=0.0)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert sent == ["pi 5.0 0.0"]  # never reached speed 0 / speed <target>
+    # "reset" then "hal" always fire first; pi's rejection still aborts
+    # before ever reaching speed 0 / speed <target>.
+    assert sent == ["reset", "hal", "pi 5.0 0.0"]
+
+
+# --- mid-run stall detection + recovery (added 2026-09-09) ---
+# STALL_CHECK_DELAY_S=1.0s / SAMPLE_INTERVAL=0.2s -> the check happens
+# at sample index 5 (the 6th rpm read, elapsed_ms first reaching 1000).
+# duration=1.2 gives exactly 6 samples (indices 0-5) per attempt, no
+# more -- keeps the fake rpm/current lists minimal.
+
+def test_run_recovers_after_confirmed_stall_and_uses_retry_rows(capsys):
+    # Attempt 1: rpm=0 for all 6 samples -> stall confirmed via status
+    # (sys_error=-65, STALL_TIM_ERR) at sample 5 -> sampling stops
+    # immediately. Attempt 2 (after the recovery sequence): rpm=0 for
+    # the first 5 samples, then 600 at sample 5 -- so attempt 2's own
+    # stall check (rpm!=0) never queries "status" at all, and the
+    # attempt completes normally.
+    conn = _fake_conn(
+        rpm_values=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 600, 600],
+        current_values=[("0.00", "0.00")] * 4,
+        status_reply="OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
+    )
+    with patch("capture_step_response._generate_recovery_sequence",
+               return_value=["burst_cw", "speed_plus"]), \
+         patch("capture_step_response._log_recovery_outcome") as fake_log:
+        _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                              duration=1.25)
+
+    fake_log.assert_called_once_with(
+        1000, "OK", ["burst -500 10 1000 5", "speed 500", "speed 0"], "success",
+        "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65")
+
+    lines = capsys.readouterr().out.strip().splitlines()
+    rpm_column = [line.split(",")[1] for line in lines[1:]]  # skip header
+    # Only the retry's 6 rows are printed -- the failed first attempt's
+    # all-zero rows never reach stdout.
+    assert rpm_column == ["0", "0", "0", "0", "0", "600"]
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert "burst -500 10 1000 5" in sent  # burst_cw's exact recipe
+    assert "speed 500" in sent
+    # Second "reset"/"hal" pair before the retry attempt.
+    assert sent.count("reset") == 2
+    assert sent.count("hal") >= 2
+
+
+def test_run_aborts_after_stall_persists_through_retry():
+    # Both attempts stall (rpm=0 the whole time, status always confirms
+    # STALL_TIM_ERR) -- no second recovery sequence, just abort.
+    conn = _fake_conn(
+        rpm_values=[0] * 12,
+        current_values=[("0.00", "0.00")] * 4,
+        status_reply="OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
+    )
+    with patch("capture_step_response._generate_recovery_sequence",
+               return_value=["pulse_plus", "pulse_minus"]), \
+         patch("capture_step_response._log_recovery_outcome") as fake_log:
+        with pytest.raises(SystemExit, match="stall persisted"):
+            _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                                  duration=1.25)
+
+    fake_log.assert_called_once_with(
+        1000, "OK", ["pulse 1000", "pulse -1000"], "failure",
+        "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65")
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    # Exactly one recovery sequence ran (not a second one after the
+    # retry also stalled).
+    assert sent.count("pulse 1000") == 1
+    assert sent.count("pulse -1000") == 1
+
+
+# --- recovery sequence generation (_generate_recovery_sequence) ---
+
+def test_generate_recovery_sequence_respects_all_constraints():
+    rng_seeds = range(200)
+    import random as random_module
+    for seed in rng_seeds:
+        sequence = _generate_recovery_sequence(rng=random_module.Random(seed))
+
+        assert SEQUENCE_MIN_LEN <= len(sequence) <= SEQUENCE_MAX_LEN
+        assert all(name in STRATEGIES for name in sequence)
+
+        burst_count = sum(1 for name in sequence if STRATEGIES[name]["kind"] == "burst")
+        pulse_count = sum(1 for name in sequence if STRATEGIES[name]["kind"] == "pulse")
+        assert burst_count <= SEQUENCE_MAX_BURST
+        assert pulse_count <= SEQUENCE_MAX_PULSE
+
+        for a, b in zip(sequence, sequence[1:]):
+            assert a != b  # never the same strategy twice in a row
+
+
+def test_execute_strategy_pauses_at_least_step_pause_after_every_kind():
+    # Every kind (speed/pulse/burst) must leave at least
+    # SEQUENCE_STEP_PAUSE_S of (simulated) elapsed time behind it, so
+    # back-to-back _execute_strategy() calls in a sequence never run
+    # closer together than that -- the electronics-stress reason
+    # discussed with the user (2026-09-09).
+    for name in STRATEGIES:
+        conn = MagicMock()
+        clock = _FakeClock()
+        with patch("capture_step_response.time.sleep", clock.sleep):
+            _execute_strategy(conn, name)
+        assert clock.now >= SEQUENCE_STEP_PAUSE_S, (
+            f"{name} only paused {clock.now}s, expected >= {SEQUENCE_STEP_PAUSE_S}s")
+
+
+def test_execute_strategy_sequence_never_runs_closer_than_step_pause():
+    # A realistic multi-step sequence -- every step-to-step gap (the
+    # time between one strategy's last send-then-sleep and the next
+    # one's first send) must be >= SEQUENCE_STEP_PAUSE_S.
+    conn = MagicMock()
+    clock = _FakeClock()
+    sequence = ["burst_cw", "speed_plus", "pulse_minus"]
+    with patch("capture_step_response.time.sleep", clock.sleep):
+        checkpoints = []
+        for name in sequence:
+            _execute_strategy(conn, name)
+            checkpoints.append(clock.now)
+
+    gaps = [b - a for a, b in zip(checkpoints, checkpoints[1:])]
+    # float accumulation over several time.sleep() calls can land a
+    # hair under the exact target (e.g. 0.09999999999999998) -- a
+    # tiny tolerance avoids failing on that, not on a real gap.
+    assert all(gap >= SEQUENCE_STEP_PAUSE_S - 1e-9 for gap in gaps), gaps
+
+
+# --- recovery outcome logging (_log_recovery_outcome, added 2026-09-09) ---
+# Uses tmp_path (a real pytest-managed temp directory) instead of the
+# real repo -- RECOVERY_LOG_PATH is a plain relative filename, so it's
+# redirected via monkeypatch + chdir rather than ever touching the
+# actual recovery_sequences.csv in the repo root.
+
+def test_log_recovery_outcome_writes_header_only_on_first_call(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(capture_step_response, "RECOVERY_LOG_PATH", "recovery_sequences.csv")
+
+    _log_recovery_outcome(1000, "OK data=['0x00','0x01','0x00']", ["burst -500 10 1000 5"],
+                           "success", "OK ret=0 ... sys_error=0")
+    _log_recovery_outcome(500, "OK data=['0x01','0x01','0x00']", ["pulse 1000", "speed 0"],
+                           "failure", "OK ret=0 ... sys_error=-65")
+
+    content = (tmp_path / "recovery_sequences.csv").read_text().strip().splitlines()
+    assert content[0] == "timestamp,target_speed,starting_hal,sequence,outcome,status"
+    assert len(content) == 3  # header + 2 rows, no repeated header
+    assert content[1].endswith(
+        '1000,"OK data=[\'0x00\',\'0x01\',\'0x00\']",burst -500 10 1000 5,success,OK ret=0 ... sys_error=0')
+    assert content[2].endswith(
+        "500,\"OK data=['0x01','0x01','0x00']\",pulse 1000;speed 0,failure,OK ret=0 ... sys_error=-65")
+
+
+def test_log_recovery_outcome_appends_not_truncates(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(capture_step_response, "RECOVERY_LOG_PATH", "recovery_sequences.csv")
+
+    for _ in range(5):
+        _log_recovery_outcome(1000, "OK", ["pulse 1000"], "success", "OK ret=0 ... sys_error=0")
+
+    content = (tmp_path / "recovery_sequences.csv").read_text().strip().splitlines()
+    assert len(content) == 1 + 5  # header once, one row per call, nothing overwritten
