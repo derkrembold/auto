@@ -61,34 +61,45 @@ as a problem.
   conflated "is the motor stalled" with "is the supervisor alive," which
   are different questions needing different mechanisms; see Connection
   Model above for how "is the supervisor alive" is answered now.)
-- **Upper layer: the current sensor.** **Built, observe-only, 2026-08-11**
-  (`Watchdog.poll_current()`, called from `monitor()` alongside
-  `poll_rpm()` at the same `RPM_POLL_INTERVAL` — the current sensor's
-  own on-board averaging window is ~1s anyway, see
-  `currentsensor/CLAUDE.md`'s `countmax`/`OCR1A` tuning, so polling it
-  faster wouldn't get fresher data). Check: **current flowing
-  (`abs(val1) > CURRENT_STALL_THRESHOLD`, default 0.15A) while the last
-  known `rpm` reads 0** is the stall signature (motor commanded to move,
-  drawing current, but not actually turning) — more precise than a bare
-  "current too high" threshold, since it directly targets the dangerous
-  case (see `STM32/CLAUDE.md`'s Known Hardware Issue — current sensing
-  on the STM32 board itself is disabled, so this LIN-based current
-  sensor is the only current visibility that exists). Only `val1` — see
-  `currentsensor/CLAUDE.md`'s Hardware section: `val2` is reserved for a
-  second motor once one exists, not a redundant reading of this one.
-  **Deliberately observe-only for now** — logs a conspicuous message but
-  does **not** call `_stop_motor()`. The sensor (and its firmware) only
-  just started working reliably after several rounds of real-hardware
-  bugfixing (2026-08-06 through 2026-08-11, see `currentsensor/CLAUDE.md`'s
-  Status) — not yet trusted enough to autonomously cut power on. Promote
-  it to actually stopping the motor once it's proven itself over a real
-  observation period. `_check_stall()` (the lower, rpm-only layer)
-  remains the only layer that actually stops the motor today.
-  `CURRENT_STALL_THRESHOLD` needs real headroom above ACS712
-  chip-to-chip offset tolerance (~0.05-0.09A observed between the two
-  sensor chips on real hardware) — kept as its own named constant in
-  `watchdog.py` specifically so it's easy to retune once more real-world
-  data exists.
+- **Upper layer: the current sensor.** `Watchdog.poll_current()`,
+  called from `monitor()` alongside `poll_rpm()` at the same
+  `RPM_POLL_INTERVAL` (the current sensor's own on-board averaging
+  window is ~1s anyway, see `currentsensor/CLAUDE.md`'s `countmax`/
+  `OCR1A` tuning, so polling it faster wouldn't get fresher data).
+  **Two checks off the same current read:**
+  - **Overcurrent hard stop (added 2026-09-10, this one DOES act).**
+    `abs(val1) > OVERCURRENT_STOP_THRESHOLD` (15A) — or `val2`, checked
+    the same way for when a second motor is wired there — calls
+    `_stop_motor()` unconditionally, whether the rotor is turning or
+    not. 15A is inside the ACS712xLCTR-20A's linear range (saturates
+    ~20A, raw ADC tops ~25A) and above the motor's ~16-17A rated draw.
+    Backstop for *sustained* overcurrent (stalled-and-grinding);
+    reaction ~1-3s (sensor averaging + poll interval), NOT a fast
+    transient crowbar — a real catastrophic spike (a stalled winding
+    can pull hundreds of amps) just pegs the sensor. **`_stop_motor()`
+    currently stops the one addressable motor; once a second motor is
+    wired to `val2`, an overcurrent on either channel must stop BOTH
+    (see the §6.3 point in the planned Watchdog extensions below).**
+  - **Stall signature — still observe-only.** `abs(val1) >
+    CURRENT_STALL_THRESHOLD` (0.15A) **while the last known `rpm` reads
+    0** (motor commanded to move, drawing current, not turning). More
+    precise than a bare high-current threshold since it targets the
+    dangerous case directly. **Logs a conspicuous message but does
+    **not** call `_stop_motor()`** — the sensor only started working
+    reliably after several rounds of real-hardware bugfixing
+    (2026-08-06 → 08-11, see `currentsensor/CLAUDE.md`'s Status), not
+    yet trusted to autonomously cut power on *this* subtler signal;
+    promote it once it's proven itself over a real observation period.
+    Only `val1` here — `val2` is reserved for a second motor, not a
+    redundant reading (see `currentsensor/CLAUDE.md`'s Hardware
+    section). `_check_stall()` (the lower, rpm-only layer) plus this
+    new overcurrent stop are the layers that actually stop the motor
+    today.
+  Both thresholds (`OVERCURRENT_STOP_THRESHOLD`, `CURRENT_STALL_
+  THRESHOLD`) are named constants in `watchdog.py` so they're easy to
+  retune; `CURRENT_STALL_THRESHOLD` needs headroom above ACS712
+  chip-to-chip offset tolerance (~0.05-0.09A observed on real
+  hardware).
 
 At ~1×/second polling, this reacts on the order of a second, not
 milliseconds — acceptable for "sustained stall," not fast enough for a
@@ -545,8 +556,10 @@ sensor existing at all, see Two-Layer Safety Check above.
 Sole-LIN-master restructuring, dry-run mode, the test suite, and the
 watchdog's safety logic are all built (`Watchdog` class in `watchdog.py`
 — connection lifecycle, idle timeout, self-polled stall check). The
-current-sensor upper layer is also built now (`poll_current()`,
-2026-08-11) but observe-only — see "Two-Layer Safety Check" above.
+current-sensor upper layer is also built (`poll_current()`,
+2026-08-11): the overcurrent hard stop (15A, added 2026-09-10) acts,
+the subtler stall-signature check is still observe-only — see
+"Two-Layer Safety Check" above.
 
 **Live-hardware status (2026-08-03):** confirmed working — both the
 earlier plain-relay version (`hal` read, `speed` write actually turning

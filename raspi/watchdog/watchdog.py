@@ -79,6 +79,25 @@ STALL_GRACE_PERIOD = 3.0
 # real-world data exists.
 CURRENT_STALL_THRESHOLD = 0.15
 
+# Overcurrent HARD STOP (added 2026-09-10). Unlike CURRENT_STALL_THRESHOLD
+# above -- a stall *signature*, only meaningful with rpm==0, observe-only
+# -- this is an unconditional "the motor is drawing dangerous current,
+# stop it" line: it acts whether the rotor is turning or not, and it
+# does call _stop_motor(). 15A is well inside the ACS712xLCTR-20A's
+# linear range (it saturates around 20A; the raw 10-bit ADC tops out
+# near 25A) and clearly above the motor's ~16-17A rated-power draw.
+# This is a backstop for *sustained* overcurrent (a stalled, grinding
+# rotor): reaction is ~1-3s -- the current sensor's own ~1s on-board
+# averaging plus this RPM_POLL_INTERVAL. It is NOT a fast transient
+# crowbar: a real catastrophic spike (a stalled winding can pull
+# hundreds of amps) just pegs the sensor and cannot be caught this way
+# -- that stays a design-limits problem (magnitude caps, conservative
+# sequence constraints). See raspi/watchdog/CLAUDE.md's Two-Layer
+# Safety Check. NOTE: _stop_motor() currently stops the one addressable
+# motor; once a second motor is wired to val2, an overcurrent on either
+# channel must stop BOTH motors (see the §6.3 point in that CLAUDE.md).
+OVERCURRENT_STOP_THRESHOLD = 15.0  # amps, abs value, either sensor channel
+
 SPINNER_CHARS = "-\\|/"
 
 
@@ -446,18 +465,33 @@ class Watchdog:
             self._check_stall(value)
 
     def poll_current(self):
-        # Upper-layer stall *signature* check (see "Two-Layer Safety
-        # Check" in raspi/watchdog/CLAUDE.md): current flowing while rpm
-        # reads 0. Observe-only — logs conspicuously, does NOT call
-        # _stop_motor() yet. Only val1 (val2 is reserved for a second
-        # motor once one exists on the bus, not a redundant reading of
-        # this one — see currentsensor/CLAUDE.md's Hardware section).
-        # Uses the rpm value poll_rpm() already cached this same tick
-        # rather than issuing a second rpm read.
+        # Two things off the same current read (see "Two-Layer Safety
+        # Check" in raspi/watchdog/CLAUDE.md):
+        #  1. Overcurrent hard stop (added 2026-09-10) -- unconditional,
+        #     acts via _stop_motor(), both channels, see
+        #     OVERCURRENT_STOP_THRESHOLD.
+        #  2. Stall *signature* -- current flowing while rpm reads 0.
+        #     Still observe-only (logs, does NOT stop). Only val1 here
+        #     (val2 is reserved for a second motor once one exists on
+        #     the bus, not a redundant reading of this one -- see
+        #     currentsensor/CLAUDE.md's Hardware section). Uses the rpm
+        #     value poll_rpm() already cached this same tick.
         with self.lock:
             ret, val1, val2 = linbus.get_current(self.lin)
         if ret != 0 or val1 is None:
             return
+
+        # Unconditional overcurrent hard stop (see OVERCURRENT_STOP_THRESHOLD).
+        # Runs regardless of rpm. Checks both channels: once a second motor
+        # is wired to val2 this covers it automatically; until then val2 is
+        # either motor 1's return leg (same current, still a valid signal)
+        # or near-zero (never trips).
+        for chan, amps in (("val1", val1), ("val2", val2)):
+            if amps is not None and abs(amps) > OVERCURRENT_STOP_THRESHOLD:
+                self._stop_motor(f"OVERCURRENT — {chan}={amps:.1f}A "
+                                  f"> {OVERCURRENT_STOP_THRESHOLD:.0f}A")
+                return
+
         if self.last_known_rpm == 0 and abs(val1) > CURRENT_STALL_THRESHOLD:
             logger.warning(f"*** OBSERVED STALL SIGNATURE (not acted on "
                             f"yet) — current={val1:.2f}A while rpm=0 ***")

@@ -6,7 +6,7 @@ from capture_step_response import (
     run, _soft_stop, _generate_recovery_sequence, _execute_strategy,
     _append_recovery_row, RECOVERY_LOG_FIELDS, STRATEGIES,
     SEQUENCE_MIN_LEN, SEQUENCE_MAX_LEN, SEQUENCE_MAX_BURST, SEQUENCE_MAX_PULSE,
-    SEQUENCE_STEP_PAUSE_S,
+    SEQUENCE_MAX_FULLSPEED, FULLSPEED_STRATEGIES, SEQUENCE_STEP_PAUSE_S,
 )
 
 
@@ -331,6 +331,10 @@ def test_run_recovers_after_confirmed_stall_and_uses_retry_rows(capsys):
     assert retry_row["phase"] == "retry"
     assert retry_row["rpm_1s"] == 600
     assert retry_row["rpm_1p5s"] == 600
+    # Full `status` reply captured right after the retry sampling (2026-09-10)
+    # -- lets the analysis tool spot a "recovered" retry whose nonzero rpm
+    # is really Hall chatter (latched STALL_TIM_ERR despite rpm != 0).
+    assert retry_row["status_after_retry"] == "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65"
     # Both rows share the same join key.
     assert seq_row["timestamp"] == retry_row["timestamp"]
 
@@ -366,6 +370,7 @@ def test_run_aborts_after_stall_persists_through_retry():
     assert rows[1]["phase"] == "retry"
     assert rows[1]["rpm_1s"] == 0
     assert rows[1]["rpm_1p5s"] == 0
+    assert rows[1]["status_after_retry"] == "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65"
 
     sent = [call.args[0] for call in conn.send.call_args_list]
     # Exactly one recovery sequence ran (not a second one after the
@@ -387,11 +392,36 @@ def test_generate_recovery_sequence_respects_all_constraints():
 
         burst_count = sum(1 for name in sequence if STRATEGIES[name]["kind"] == "burst")
         pulse_count = sum(1 for name in sequence if STRATEGIES[name]["kind"] == "pulse")
+        fullspeed_count = sum(1 for name in sequence if name in FULLSPEED_STRATEGIES)
         assert burst_count <= SEQUENCE_MAX_BURST
         assert pulse_count <= SEQUENCE_MAX_PULSE
+        # speed_max_plus + speed_max_minus COMBINED -- forward-then-reverse
+        # at full power is the shape closest to the 2026-09-08 MOSFET failure.
+        assert fullspeed_count <= SEQUENCE_MAX_FULLSPEED
 
         for a, b in zip(sequence, sequence[1:]):
             assert a != b  # never the same strategy twice in a row
+
+
+def test_generate_recovery_sequence_still_reaches_full_speed_strategies():
+    # The SEQUENCE_MAX_FULLSPEED cap must limit, not exclude -- over
+    # enough seeds both speed_max_plus and speed_max_minus should still
+    # turn up somewhere.
+    import random as random_module
+    seen = set()
+    for seed in range(200):
+        seen.update(_generate_recovery_sequence(rng=random_module.Random(seed)))
+    assert "speed_max_plus" in seen
+    assert "speed_max_minus" in seen
+
+
+def test_execute_strategy_full_speed_emits_speed_target_then_zero():
+    for name, value in (("speed_max_plus", 1000), ("speed_max_minus", -1000)):
+        conn = MagicMock()
+        clock = _FakeClock()
+        with patch("capture_step_response.time.sleep", clock.sleep):
+            commands = _execute_strategy(conn, name)
+        assert commands == [f"speed {value}", "speed 0"]
 
 
 def test_execute_strategy_pauses_at_least_step_pause_after_every_kind():
@@ -452,6 +482,7 @@ def test_append_recovery_row_writes_header_only_on_first_call(tmp_path, monkeypa
     _append_recovery_row({
         "timestamp": "2026-09-10T12:00:00.000001", "phase": "retry",
         "rpm_1s": 600, "rpm_1p5s": 625,
+        "status_after_retry": "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=0",
     })
 
     import csv as _csv
@@ -462,8 +493,10 @@ def test_append_recovery_row_writes_header_only_on_first_call(tmp_path, monkeypa
     assert parsed[0]["sequence"] == "burst -500 10 1000 5;speed 500;speed 0"
     assert parsed[0]["hal_before_sequence"] == "OK data=['0x00', '0x01', '0x00']"
     assert parsed[0]["rpm_1s"] == ""  # blank in a "sequence" row
+    assert parsed[0]["status_after_retry"] == ""  # blank in a "sequence" row
     assert parsed[1]["phase"] == "retry"
     assert parsed[1]["rpm_1s"] == "600"
+    assert parsed[1]["status_after_retry"] == "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=0"
     assert parsed[1]["timestamp"] == parsed[0]["timestamp"]  # join key
     assert parsed[1]["sequence"] == ""  # blank in a "retry" row
 

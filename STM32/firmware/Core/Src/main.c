@@ -140,8 +140,8 @@ const uint8_t CL = 5;
 const uint32_t GLOBALRATE = 1275; // in mikrosekunden
 const uint32_t RAMPSTEP = 1;
 const float CONTROLLIMIT = GLOBALRATE - 100;
-const float KPDEFAULT = 0.15f;
-const float KIDEFAULT = 0.4f;
+const float KPDEFAULT = 0.19f;
+const float KIDEFAULT = 0.44f;
 float KP = KPDEFAULT;
 float KI = KIDEFAULT;
 // Kick-Geschwindigkeit aus Strombegrenzung hergeleitet, nicht willkuerlich gewaehlt:

@@ -224,6 +224,22 @@ a bare connect+`close_manager()` cycle now exits promptly on its own.
 
 ## Grid Search (`run_grid.py`)
 
+**The P/I search is concluded (2026-09-10).** `KPDEFAULT`/`KIDEFAULT`
+in `main.c` were moved `0.15`→`0.19` / `0.4`→`0.44` (the heatmap's
+`P+0.04 / I+0.04` point), flashed, and validated (~27% better ISE than
+the old default, no audible roughness, repeatability confirmed). No big
+jumps — the honest outcome, since run-to-run noise is comparable to the
+effect and nothing has been tested under the eventual ~50kg vehicle
+load. **The far more valuable results of that 2026-09-07 → 09-10 arc
+were elsewhere** — a permanent-hang LIN/UART bug found and fixed,
+end-to-end stall detection + recovery, a reproducible Mittelrast test
+case, the `reset`/`status`/`burst` protocol additions, and a MOSFET
+failure turned into a documented safety envelope. **See
+`analysis/grid_search_log.md`'s "2026-09-10 — P/I search concluded"
+entry and its "Fazit" for the full picture.** `run_grid.py`/
+`run_grid_row.py` themselves stay available for any future sweep (e.g.
+once real load testing is possible).
+
 Design/mechanics only — this section is stable and rarely changes.
 **Real-hardware results (every sweep run so far, matrices, findings,
 outliers, reproducibility checks) live in `analysis/grid_search_log.md`
@@ -825,11 +841,16 @@ Cross-cutting — applies regardless of concept/architecture changes.
   stops the motor on its own if, e.g., no heartbeat/command arrives for
   too long. Limits (max speed, etc.) belong in the code, not in prompts
   or Claude-side discipline.
-- **Current sensing is currently physically disabled** on the STM32
-  board — the current-sense shunt blew and was bridged with a copper
-  wire (see `STM32/CLAUDE.md`). Any safety limit that assumes current
-  measurement is available does not work right now; only time/speed-based
-  limits are actually enforceable.
+- **The STM32's own on-board current sensing is physically disabled** —
+  the current-sense shunt blew and was bridged with a copper wire (see
+  `STM32/CLAUDE.md`). The **separate LIN current-sensor board**
+  (`currentsensor/`) does work, and as of 2026-09-10 the watchdog acts
+  on it: an overcurrent hard stop at 15A (see
+  `raspi/watchdog/CLAUDE.md`'s Two-Layer Safety Check). That's a
+  *sustained*-overcurrent backstop with ~1-3s reaction, not a fast
+  transient crowbar — a millisecond-scale spike still isn't catchable,
+  so magnitude/design limits still matter. The subtler
+  current-while-rpm-0 stall signature is still observe-only.
 - A manual emergency-stop path must be triggerable at any time,
   independent of the loop.
 

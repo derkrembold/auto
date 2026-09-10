@@ -295,8 +295,11 @@ instead of baked into the firmware source).
   control.
 - **`KP`/`KI` settable live over LIN (2026-08-18), replacing the old
   on/off status-LED toggle on the same `cntl0mot` PID.** `main.c`
-  declares `const float KPDEFAULT = 0.15f;`/`KIDEFAULT = 0.4f;` and
-  mutable `float KP = KPDEFAULT;`/`KI = KIDEFAULT;`; the `cntl0mot`
+  declares `const float KPDEFAULT`/`KIDEFAULT` (**`0.19f`/`0.44f` since
+  2026-09-10** — the concluded grid-search result, see
+  `analysis/grid_search_log.md`'s "P/I search concluded" entry; was
+  `0.15f`/`0.4f` before that) and mutable `float KP = KPDEFAULT;`/
+  `KI = KIDEFAULT;`; the `cntl0mot`
   dispatch does `KP = KPDEFAULT + (int8_t)rx_body[0]/100.0;` and the
   same for `KI`/`rx_body[1]` (both under the existing `checksum_ok`
   gate). **Deliberately absolute-from-default, not cumulative** — each
@@ -503,6 +506,17 @@ pulse experiments going forward, instead of waiting for a stall to
 happen at a random position. Not yet checked whether other
 state-boundary Mittelrasten (e.g. 0↔1, 4↔5) are equally reproducible or
 whether 2↔3 is special somehow — this is the only one confirmed so far.
+
+**Empirical note (2026-09-10): from this exact 010/110 Mittelrast, a
+`speed 1000` start usually breaks the rotor free, while `speed 500`
+usually does not** — higher commanded speed = more duty/current/torque
+against the cogging/dead-zone. Prompted adding `speed_max_plus`/
+`speed_max_minus` (±1000) to `capture_step_response.py`'s recovery
+`STRATEGIES` catalog (capped at 1 full-speed per sequence — see
+`raspi/CLAUDE.md`). The firmware's own `driveKickStart()` value
+(`KICKSTART_SPEED` ~127) is far too weak to be the escape mechanism
+here (see the 2026-08-28 characterization above), so it's the sustained
+closed-loop drive at the higher setpoint doing the work.
 
 **CW(+1)/CCW(+2) state-table asymmetry — empirically investigated
 2026-09-08, inconclusive, then set aside rather than resolved.** The

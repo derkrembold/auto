@@ -103,22 +103,32 @@ also agreed step by step, not guessed:**
   every value has already been real-hardware-tested (`burst_cw` is the
   exact `-500 10 1000 5` combo confirmed twice against the Mittelrast
   above; `burst_ccw` is its direction-mirrored counterpart, values
-  sign-flipped, untested but symmetric).
+  sign-flipped, untested but symmetric). `speed_max_plus`/
+  `speed_max_minus` (±1000) added 2026-09-10: from the 010/110
+  Mittelrast a `speed 1000` start usually breaks free where `speed 500`
+  does not (more duty/current/torque against the dead-zone).
 - 2-3 strategies per sequence (`SEQUENCE_MIN/MAX_LEN`) -- long enough
   to combine building blocks, short enough to stay analyzable (which
   step mattered) and to bound total motor/electronics stress.
-- At most 1 `burst` and 2 `pulse` total per sequence (not just
-  non-adjacent -- a straight count cap), and never the same strategy
-  twice in a row -- both explicitly to avoid repeating the kind of
-  rapid multi-pulse stress implicated in the 2026-09-08 MOSFET failure
-  (see `STM32/CLAUDE.md`'s Known Hardware Issue section).
+- At most 1 `burst`, 2 `pulse`, and 1 full-speed (`speed_max_plus` and
+  `speed_max_minus` COMBINED -- `SEQUENCE_MAX_FULLSPEED`,
+  `FULLSPEED_STRATEGIES`) total per sequence (not just non-adjacent --
+  straight count caps), and never the same strategy twice in a row --
+  all explicitly to avoid repeating the kind of rapid multi-pulse /
+  full-power-reversal stress implicated in the 2026-09-08 MOSFET
+  failure (see `STM32/CLAUDE.md`'s Known Hardware Issue section).
 - At least `SEQUENCE_STEP_PAUSE_S` (0.1s) between every step regardless
   of kind, for the same electronics-stress reason. A `speed` strategy
   additionally holds for `SPEED_STRATEGY_HOLD_S` (0.5s -- deliberately
   under the firmware's own `STALL_TIM_ERR` give-up point, ~700ms, so a
   `speed` step itself never latches a stall) then sends `speed 0`
   before the inter-step pause, so a `pulse`/`burst` step never follows
-  a still-active nonzero closed-loop command.
+  a still-active nonzero closed-loop command. The full-speed strategies
+  use this same 0.5s hold: the firmware zeroes its drive at the ~700ms
+  give-up anyway, so a longer hold would add the stall flag without
+  adding hard-drive time. If real `recovery_sequences.csv` data later
+  shows 0.5s of `speed ±1000` doesn't clear the 010/110 Mittelrast,
+  revisit -- with data, not a guess.
 
 Every recovery attempt is appended to `RECOVERY_LOG_PATH`
 (`recovery_sequences.csv`) as **two rows** (schema reworked 2026-09-10,
@@ -133,9 +143,16 @@ step by step with the user), both plain appends, joined by `timestamp`
     self-contained "sequence X, from state Y to state Z" training
     example on its own.
   - phase `"retry"`: `rpm_1s` / `rpm_1p5s` -- the retry's rpm at ~1.0s
-    and ~1.5s in. Raw numbers, *no success/fail label* -- the analysis
-    tool picks the threshold, and can re-pick it later without old rows
-    being stuck at today's definition.
+    and ~1.5s in -- plus `status_after_retry`, the full `status` reply
+    read once right after the retry's sampling ends (added 2026-09-10).
+    Raw values, *no success/fail label* -- the analysis tool picks the
+    threshold, and can re-pick it later without old rows being stuck at
+    today's definition. `status_after_retry` exists to catch a real
+    2026-09-10 case: a retry logged `rpm_1s`/`rpm_1p5s` = 475 with the
+    motor visibly not turning -- spurious Hall-chatter edges (see
+    `STM32/CLAUDE.md`) counting as movement. A latched `STALL_TIM_ERR`
+    in `status_after_retry` despite a nonzero `rpm_1s`/`rpm_1p5s` is
+    the tell that the "recovery" didn't actually recover anything.
 A `"sequence"` row with no matching `"retry"` row means the retry broke
 or was interrupted before measurement -- that absence is itself a
 signal, not a hole. Deliberately a separate, never-rotated file from
@@ -176,7 +193,11 @@ logger = logging.getLogger("capture_step_response")
 #    state Z" record, a usable training example on its own.
 #  - phase "retry": written after the retry's rpm measurement -- did the
 #    motor actually run afterward (rpm_1s / rpm_1p5s, raw, no
-#    success/fail label -- the analysis tool decides the threshold).
+#    success/fail label -- the analysis tool decides the threshold),
+#    plus status_after_retry: the full `status` reply just after the
+#    retry sampling ends. A latched STALL_TIM_ERR there despite a
+#    nonzero rpm means spurious Hall-chatter edges, not real rotation
+#    (see the module docstring / STM32/CLAUDE.md).
 # A "sequence" row with no matching "retry" row = the retry broke or
 # was interrupted before measurement. That absence is itself a signal.
 RECOVERY_LOG_PATH = "recovery_sequences.csv"
@@ -184,7 +205,7 @@ RECOVERY_LOG_FIELDS = [
     "timestamp", "phase", "target_speed",
     "hal_before_sequence", "status_before_sequence", "sequence",
     "hal_after_sequence", "status_after_sequence",
-    "rpm_1s", "rpm_1p5s",
+    "rpm_1s", "rpm_1p5s", "status_after_retry",
 ]
 
 TARGET_SPEED = 1000
@@ -215,9 +236,25 @@ RPM_SAMPLE_2_S = 1.5  # second rpm capture point into the retry, for recovery_se
 SEQUENCE_MIN_LEN = 2
 SEQUENCE_MAX_LEN = 3
 SEQUENCE_STEP_PAUSE_S = 0.1  # minimum pause between any two sequence steps
-SPEED_STRATEGY_HOLD_S = 0.5  # how long a "speed" strategy holds before its speed-0 cleanup
+SPEED_STRATEGY_HOLD_S = 0.5  # how long any "speed" strategy holds before its speed-0 cleanup
 SEQUENCE_MAX_BURST = 1  # per sequence, total, not just non-adjacent
 SEQUENCE_MAX_PULSE = 2  # per sequence, total
+SEQUENCE_MAX_FULLSPEED = 1  # speed_max_plus + speed_max_minus COMBINED, per sequence, total
+
+# The two full-speed (|value| == TARGET_SPEED) "speed" strategies. Added
+# 2026-09-10 after a real observation: from the reproducible 010/110
+# Mittelrast, a `speed 1000` start usually breaks the rotor free where
+# `speed 500` does not -- higher commanded speed means more duty/current/
+# torque against the cogging/dead-zone. Capped hard at SEQUENCE_MAX_
+# FULLSPEED per sequence (forward-then-reverse at full power is the shape
+# closest to the 2026-09-08 MOSFET failure -- see STM32/CLAUDE.md's Known
+# Hardware Issue). Same 0.5s SPEED_STRATEGY_HOLD_S as the ±500 ones:
+# still under the firmware's ~700ms STALL_TIM_ERR give-up, so the
+# strategy never latches a stall itself; the useful hard-drive window
+# ends at that give-up anyway (the firmware zeroes controlvariableinput/
+# integral there), so a longer hold would add the stall flag without
+# adding drive time.
+FULLSPEED_STRATEGIES = ("speed_max_plus", "speed_max_minus")
 
 # Fixed, hand-picked catalog -- every value already real-hardware-tested
 # (see module docstring), not continuously-random parameters.
@@ -225,6 +262,8 @@ STRATEGIES = {
     "speed0": {"kind": "speed", "value": 0},
     "speed_plus": {"kind": "speed", "value": 500},
     "speed_minus": {"kind": "speed", "value": -500},
+    "speed_max_plus": {"kind": "speed", "value": 1000},
+    "speed_max_minus": {"kind": "speed", "value": -1000},
     "pulse_plus": {"kind": "pulse", "value": 1000},
     "pulse_minus": {"kind": "pulse", "value": -1000},
     "burst_cw": {"kind": "burst", "value1": -500, "pause1_ms": 10, "value2": 1000, "pause2_ms": 5},
@@ -260,6 +299,7 @@ def _generate_recovery_sequence(rng=random):
         sequence = []
         burst_count = 0
         pulse_count = 0
+        fullspeed_count = 0
         for _ in range(length):
             candidates = names[:]
             rng.shuffle(candidates)
@@ -272,6 +312,8 @@ def _generate_recovery_sequence(rng=random):
                     continue
                 if kind == "pulse" and pulse_count >= SEQUENCE_MAX_PULSE:
                     continue
+                if name in FULLSPEED_STRATEGIES and fullspeed_count >= SEQUENCE_MAX_FULLSPEED:
+                    continue
                 picked = name
                 break
             if picked is None:
@@ -281,6 +323,8 @@ def _generate_recovery_sequence(rng=random):
                 burst_count += 1
             elif STRATEGIES[picked]["kind"] == "pulse":
                 pulse_count += 1
+            if picked in FULLSPEED_STRATEGIES:
+                fullspeed_count += 1
         if len(sequence) == length:
             return sequence
 
@@ -469,11 +513,24 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
             _send(conn, "hal")
             rows, stalled_again, rpm_1s, rpm_1p5s = _run_one_attempt(
                 conn, target_speed, sample_interval, current_sample_interval, duration)
+            # Full `status` reply once, right after the retry's sampling
+            # ends (2026-09-10). Catches the case where the retry's `rpm`
+            # reads nonzero on a rotor that never actually turned --
+            # spurious Hall-chatter edges accumulating in hallCounter
+            # while stationary (see STM32/CLAUDE.md's Hall-chattering
+            # finding; a real 2026-09-10 recovery retry logged rpm_1s /
+            # rpm_1p5s = 475 with the motor visibly still). A latched
+            # STALL_TIM_ERR in this field despite a nonzero rpm_1s /
+            # rpm_1p5s is the tell the analysis tool needs -- raw reply,
+            # no script-side interpretation, same reasoning as the raw
+            # rpm values.
+            status_after_retry = _send(conn, "status")
             _append_recovery_row({
                 "timestamp": seq_timestamp,
                 "phase": "retry",
                 "rpm_1s": "" if rpm_1s is None else rpm_1s,
                 "rpm_1p5s": "" if rpm_1p5s is None else rpm_1p5s,
+                "status_after_retry": status_after_retry,
             })
             if stalled_again:
                 logger.info(f"recovery sequence did not recover: {sequence} "

@@ -532,6 +532,60 @@ def test_poll_current_silent_when_last_known_rpm_unset(caplog):
     assert "STALL SIGNATURE" not in caplog.text
 
 
+# --- Overcurrent hard stop (added 2026-09-10) -- unlike the stall
+# signature above, this one DOES stop the motor, and acts regardless of
+# rpm. st0cur raw encoding: val1 = data[0] | ((data[1] & 3) << 8),
+# val2 = data[2] | ((data[3] & 3) << 8); _adc_to_amps(901) ~= 19.0A
+# (over the 15A threshold), _adc_to_amps(696) ~= 9.0A (under it).
+
+def test_poll_current_hard_stops_on_overcurrent_val1(caplog):
+    wd = Watchdog(DryRunLin())
+    wd.lin.read_responses[constants.st0cur] = [133, 3, 0, 2]  # val1 ~19A, val2 ~0A
+    wd.poll_current()
+    assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]  # speed 0 sent
+    assert "OVERCURRENT" in caplog.text and "val1" in caplog.text
+    assert wd.last_commanded_speed == 0
+
+
+def test_poll_current_hard_stops_on_overcurrent_val2(caplog):
+    wd = Watchdog(DryRunLin())
+    wd.lin.read_responses[constants.st0cur] = [10, 2, 133, 3]  # val1 ~0.5A, val2 ~19A
+    wd.poll_current()
+    assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
+    assert "OVERCURRENT" in caplog.text and "val2" in caplog.text
+
+
+def test_poll_current_overcurrent_stops_even_when_rpm_nonzero(caplog):
+    # Contrast with the stall-signature check, which only fires at rpm==0.
+    # A jammed wheel while the vehicle is moving is still an overcurrent.
+    wd = Watchdog(DryRunLin())
+    wd.last_known_rpm = 1000
+    wd.lin.read_responses[constants.st0cur] = [133, 3, 0, 2]  # val1 ~19A
+    wd.poll_current()
+    assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
+    assert "OVERCURRENT" in caplog.text
+
+
+def test_poll_current_no_hard_stop_below_overcurrent(caplog):
+    wd = Watchdog(DryRunLin())
+    wd.last_known_rpm = 300
+    wd.lin.read_responses[constants.st0cur] = [184, 2, 184, 2]  # both ~9A, under 15A
+    wd.poll_current()
+    assert wd.lin.writes == []
+    assert "OVERCURRENT" not in caplog.text
+
+
+def test_poll_current_hard_stops_on_negative_overcurrent(caplog):
+    # Motor wiring polarity is unknown -- an overcurrent shows up as
+    # either sign. _adc_to_amps(123) ~= -19.0A, past the 15A magnitude.
+    wd = Watchdog(DryRunLin())
+    wd.last_known_rpm = 300
+    wd.lin.read_responses[constants.st0cur] = [123, 0, 0, 2]  # val1 ~-19A
+    wd.poll_current()
+    assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
+    assert "OVERCURRENT" in caplog.text
+
+
 # Note: --debug tracing (timestamped ->/<- bus-call logging) moved to
 # linbus.Lin itself (see raspi/tests/test_linbus.py's _log_source()/
 # _log_pid_name() tests) -- Watchdog no longer has its own debug flag or

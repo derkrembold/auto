@@ -1577,3 +1577,107 @@ instrumentation — would need close visual/physical observation during
 a `pulse 16` event specifically to check for any sub-sector shift.
 Not investigated further this session, captured for next week.
 
+
+## 2026-09-10 - P/I search concluded
+
+**The manual P/I grid/row search is done.** `KPDEFAULT`/`KIDEFAULT` in
+`main.c` were changed `0.15`->`0.19` / `0.4`->`0.44` (the old-delta-space
+point `P+0.04 / I+0.04`) and flashed -- the firmware default now *is*
+that point, no `pi` delta needed to reach it. Chosen pragmatically by
+the user: roughly halfway between the old firmware default `(0,0)` and
+the heatmap's best point `P+0.04 / I+0.08`, leaning toward the default
+for safety, and consistent with root `CLAUDE.md`'s Candidate Selection
+Philosophy -- `I` deliberately pulled back from the ISE optimum for
+future-load margin; `P` a touch below the best-looking value (could
+have gone higher, `P` is protective under load, not risky, but the
+user preferred to stay near the known-good).
+
+**Validation:**
+- 3 repeatability runs at `pi 0.04 0.04` on the *old* firmware, then 3
+  at the *new* baked-in default (`runs/2026-09-10_pi_repeat/`,
+  `runs/2026-09-10_pi_repeat_newfw/`). Scored with `run_grid.py`'s exact
+  ISE/MSSD functions.
+- New-firmware default, n=3 mean: **ISE 1,558,542 / MSSD_2s 41,227 /
+  MSSD_full 11,734.** Old heatmap `+0.04/+0.04` cell (n=1): ISE
+  1,618,750 / MSSD_2s 55,069 / MSSD_full 14,853. **ISE agrees to ~4%**
+  -- the comparison holds. MSSD read a bit *lower* (smoother) on the new
+  runs, but that is within n=1-vs-n=3 run-to-run noise plus two small
+  method changes that favour the new runs (`capture_step_response.py`
+  now does a `reset` before the step, clearing integral windup;
+  manual vs. `run_grid.py`'s enforced 4s inter-run pause) -- not a
+  claimable improvement over the heatmap value, just consistency.
+- Old firmware default `(0,0)` was ISE ~2,133,125, so the new default
+  is **~27% better on ISE** and sits at the smooth end of the good
+  region. User-confirmed by ear: no roughness ("kein Ruppeln"); a mild
+  overshoot in the ~650-900 rpm band during the rise, present in the
+  LIN trace, clearest in one of three runs.
+
+**No big jumps -- and that is the honest outcome.** The measured
+improvement over the old default varied 7-30% across repeats
+(comparable to run-to-run noise); nothing has been tested under the
+eventual ~50kg vehicle load (which moves the optimum anyway); and
+finite-difference gradient search was already ruled out (noise at
+small steps). What the grid search *did* establish solidly: more `P`
+is better, `I` barely matters within the good region, do not go past
+`P` about +0.10 (audible-roughness boundary). A conservative,
+validated, documented point inside that region is the right place to
+stop.
+
+---
+
+### Fazit of the 2026-09-07 -> 09-10 arc
+
+**The P/I number was the minor part.** What got built alongside it
+matters far more:
+
+- **A LIN bug found and fixed.** `cntl1mot`'s multi-`driveStep()` pulse
+  handler blocked the STM32 main loop ~5ms per call -- long enough for
+  the Pi watchdog's independent background poll to land a byte in the
+  gap, a UART overrun that left the STM32 **permanently deaf until a
+  physical reset** (confirmed via `watchdog.log`). Fix: a
+  `HAL_UART_ErrorCallback` override (clear ORE/FE/NE, reset state, set
+  `sysError=LIN_RCV_ERR`, `HAL_UART_AbortReceive` then re-arm -- the
+  explicit abort was load-bearing). See `STM32/CLAUDE.md`'s Status
+  section.
+
+- **Stall handling, end to end.** `driveKickStart()` simplified (one
+  pulse per window, escalation loop gone). New `reset` command + 6-byte
+  `status` with `sysError` -- firmware-state visibility that did not
+  exist before, useful well beyond stalls. `burst` -- a new tunable
+  Pi-side reverse-then-forward pulse primitive. And the insight behind
+  it: `pulse` magnitude changes current/duration, *not* commutation
+  angle, so "try harder" cannot break a Mittelrast -- a *different*
+  torque vector is what is needed.
+
+- **A reproducible test case for a previously-random failure.** Pushing
+  the rotor into the 010/110 Mittelrast reproduces the stall on demand
+  -- the precondition for studying it at all.
+
+- **Automatic stall detection + recovery in `capture_step_response.py`.**
+  Mid-run: `rpm=0` at ~1s + `status` confirms `STALL_TIM_ERR` -> a
+  random recovery sequence from a fixed catalog (`speed`/`pulse`/
+  `burst`, 2-3 steps, deliberately conservative constraints after the
+  MOSFET failure) -> the whole step retried as the success test. Every
+  attempt logged two-phase to `recovery_sequences.csv` (raw values,
+  not success/fail labels -- the analysis tool decides, and can
+  re-decide later). Already producing real training data for the
+  planned decision-tree (see `raspi/watchdog/CLAUDE.md`).
+
+- **A hardware failure turned into understood constraints.** Two
+  MOSFETs burned (`KICKSTART_SPEED=800` overcurrent into a stalled
+  winding). Root-caused by close code reading (overcurrent, not a
+  shoot-through logic bug), then `KICKSTART_SPEED` cut to ~127, `Plus`
+  disabled, margins added -- a documented safety envelope, not just a
+  parts swap.
+
+- **Knowing when to stop.** The CW/CCW state-table asymmetry was dug
+  into, the hand-measurements contradicted each other, and it was set
+  aside -- trusting `driveStep()`'s years of validated behaviour over a
+  confusing bench measurement, and deciding the open question blocks
+  nothing. Same discipline that concluded the P/I search: stop at
+  "good enough, validated, documented" rather than chase noise.
+
+- **Cleared a second-motor prerequisite by checking, not building.**
+  The multi-instance `hwbits` LIN dispatch turned out already complete
+  in `main.c` -- a stale "not yet done" in the docs, now corrected in
+  both root `CLAUDE.md` and `STM32/CLAUDE.md`.

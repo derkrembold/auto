@@ -300,11 +300,15 @@ other. Same caution applies to any future same-named files across
   `STM32/CLAUDE.md`).** 1.0s into the step, if `rpm` is still 0 and
   `status` confirms a latched `STALL_TIM_ERR`, sampling stops and a
   random *recovery sequence* runs (`STRATEGIES` catalog: `speed0`/
-  `speed_plus`/`speed_minus`/`pulse_plus`/`pulse_minus`/`burst_cw`/
-  `burst_ccw`, 2-3 steps, max 1 `burst`/2 `pulse` per sequence, never
-  the same strategy twice in a row, ≥100ms between every step —
+  `speed_plus`/`speed_minus` (±500)/`speed_max_plus`/`speed_max_minus`
+  (±1000, added 2026-09-10 — from the 010/110 Mittelrast a `speed 1000`
+  start usually breaks free where `speed 500` doesn't)/`pulse_plus`/
+  `pulse_minus`/`burst_cw`/`burst_ccw`, 2-3 steps, max 1 `burst`/2
+  `pulse`/1 full-speed (`speed_max_*` combined) per sequence, never the
+  same strategy twice in a row, ≥100ms between every step —
   deliberately conservative given this is what the 2026-09-08 MOSFET
-  failure was about). The **entire step is then retried from scratch**;
+  failure was about; the full-speed cap is because forward-then-reverse
+  at full power is the shape closest to that failure). The **entire step is then retried from scratch**;
   the retry's rpm trajectory is the raw evidence of whether the
   sequence worked (no script-computed success/fail label — see the CSV
   below). A second stall on the retry aborts (`sys.exit()`, no second
@@ -334,14 +338,26 @@ other. Same caution applies to any future same-named files across
     not the catalog's abstract strategy names (their parameter values
     may change later).
   - phase `"retry"`: `rpm_1s`/`rpm_1p5s` — the retry's rpm at ~1.0s
-    and ~1.5s in. Raw numbers, no success/fail label — the analysis
-    tool picks (and can re-pick) the threshold. A `"sequence"` row
-    with no matching `"retry"` row = the retry broke/was interrupted
-    before measurement; that absence is itself a signal.
+    and ~1.5s in — plus `status_after_retry` (added 2026-09-10), the
+    full `status` reply read once right after the retry's sampling
+    ends. Raw values, no success/fail label — the analysis tool picks
+    (and can re-pick) the threshold. `status_after_retry` catches a
+    real 2026-09-10 case: a retry logged `rpm_1s`/`rpm_1p5s` = 475
+    with the motor not actually turning (spurious Hall-chatter edges,
+    see `STM32/CLAUDE.md`); a latched `STALL_TIM_ERR` there despite a
+    nonzero rpm is the tell. A `"sequence"` row with no matching
+    `"retry"` row = the retry broke/was interrupted before
+    measurement; that absence is itself a signal.
 
-  **The old single-row-schema CSV on the Pi must be cleared by hand
-  before the reworked script runs** — the column set and `sequence`'s
-  meaning both changed, old and new rows don't mix.
+  **Any pre-existing `recovery_sequences.csv` on the Pi must be cleared
+  by hand before a schema-changed script runs** — this happened twice:
+  2026-09-10 the single-row schema became the two-phase one (column set
+  and `sequence`'s meaning both changed), and again the same day
+  `status_after_retry` was appended to the field list. `csv.DictWriter`
+  appends rows against the new field order regardless of what header
+  the old file already has, so mixing generations misaligns columns.
+  Only ever ~2 real rows existed at each change, so clearing costs
+  nothing.
 
   **Caveat found live 2026-09-09, still open:** the *detailed*
   per-command LIN trace for a given recovery attempt lives only in
