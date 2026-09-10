@@ -732,8 +732,12 @@ was still being hand-reviewed; that phase ended 2026-08-06, confirmed
 by `generate_addresses.py`'s own docstring. Edit `addresses.json`, then
 re-run the generator — never hand-edit the generated files directly.
 
-**Not yet done — see Open Points below**: wiring the runtime
-jumper-read into actual firmware dispatch logic.
+**STM32 side done** (confirmed in `main.c` 2026-09-10): `hwbits` is
+read from `PB14`/`PB15` at boot and all four `cntl*mot` dispatch
+branches compare against `cntl*mot | hwbits`, with the index lookup
+masking `& 0x3c` (instance-agnostic message-type match) and a separate
+`& 0x03 == hwbits` instance check. Still open for `currentsensor`/
+`lightsensor` firmware — see Open Points below.
 
 
 ## Battery
@@ -839,13 +843,13 @@ Living tracker — remove items once resolved.
   built (2026-08-05), writes directly to every consuming file since
   2026-08-06 (no more `generated/` staging), see LIN Protocol "Address
   Table Single Source of Truth" section above. Remaining concrete step:
-  - Wire the actual runtime jumper-read (`PB14`/`PB15` → instance
-    number → `base_pid | id`) into STM32 `main.c`'s LIN dispatch logic
-    — the jumper *reading* itself is hardware-confirmed working
-    (2026-08-05), but the dispatch logic still uses the old flat,
-    single-motor constants.
-  - Same runtime treatment needed in `currentsensor`/`lightsensor`
-    firmware once they're built for multiple physical units.
+  - STM32 `main.c` LIN dispatch: **done** (confirmed 2026-09-10) —
+    `hwbits` read from `PB14`/`PB15` at boot, all four `cntl*mot`
+    dispatch branches compare `cntl*mot | hwbits`, index lookup masks
+    `& 0x3c`, separate `& 0x03 == hwbits` instance check.
+  - Same runtime treatment still needed in `currentsensor`/
+    `lightsensor` firmware once they're built for multiple physical
+    units.
 - Saleae-specific open points (pin mapping, sample rate) — see
   `saleae/CLAUDE.md`.
 - Analysis-specific open points (cost function/metric weighting) — see

@@ -304,11 +304,12 @@ other. Same caution applies to any future same-named files across
   `burst_ccw`, 2-3 steps, max 1 `burst`/2 `pulse` per sequence, never
   the same strategy twice in a row, ≥100ms between every step —
   deliberately conservative given this is what the 2026-09-08 MOSFET
-  failure was about). The **entire step is then retried from scratch**
-  — that retry *is* the sequence's success/failure test, not a separate
-  check. A second stall on the retry aborts (`sys.exit()`, no second
-  sequence); success uses the retry's rows as the CSV. Confirmed live
-  the same day: recovered from a *different*, previously-uncharacterized
+  failure was about). The **entire step is then retried from scratch**;
+  the retry's rpm trajectory is the raw evidence of whether the
+  sequence worked (no script-computed success/fail label — see the CSV
+  below). A second stall on the retry aborts (`sys.exit()`, no second
+  sequence); otherwise the retry's rows become the CSV. Confirmed live
+  2026-09-09: recovered from a *different*, previously-uncharacterized
   Mittelrast (Hall state 0/`001`) via `burst_ccw` (until then untested)
   — the mechanism generalizes beyond the one specifically-known stuck
   position. Also confirmed live that the known 010/110 Mittelrast is
@@ -320,18 +321,34 @@ other. Same caution applies to any future same-named files across
   **`recovery_sequences.csv`** (repo-adjacent on the Pi, deliberately
   *not* using `logsetup`'s rotation — meant to keep growing forever as
   training data for the planned learning/decision-tree work, see
-  `raspi/watchdog/CLAUDE.md`'s "Planned Learning Algorithm" section):
-  one row per recovery attempt (`timestamp,target_speed,starting_hal,
-  sequence,outcome,status`). `sequence` logs the *exact commands sent*
-  (e.g. `"speed 500;speed 0;burst 500 10 -1000 5"`), not the catalog's
-  abstract strategy names — those names' underlying parameter values
-  may change later, and the log needs to capture what was actually
-  tried regardless. **Caveat found live the same day:** the *detailed*
+  `raspi/watchdog/CLAUDE.md`'s "Planned Learning Algorithm" section).
+  **Schema reworked step by step with the user 2026-09-10 — two rows
+  per recovery attempt, both plain appends, joined by `timestamp`
+  (microsecond precision, a unique key):**
+  - phase `"sequence"`: `hal_before_sequence`/`status_before_sequence`
+    (state the sequence started from) + `sequence` + `hal_after_
+    sequence`/`status_after_sequence` (what it did). Written right
+    after the sequence runs — a self-contained "sequence X, from state
+    Y to state Z" example on its own. `sequence` logs the *exact
+    commands sent* (e.g. `"speed 500;speed 0;burst 500 10 -1000 5"`),
+    not the catalog's abstract strategy names (their parameter values
+    may change later).
+  - phase `"retry"`: `rpm_1s`/`rpm_1p5s` — the retry's rpm at ~1.0s
+    and ~1.5s in. Raw numbers, no success/fail label — the analysis
+    tool picks (and can re-pick) the threshold. A `"sequence"` row
+    with no matching `"retry"` row = the retry broke/was interrupted
+    before measurement; that absence is itself a signal.
+
+  **The old single-row-schema CSV on the Pi must be cleared by hand
+  before the reworked script runs** — the column set and `sequence`'s
+  meaning both changed, old and new rows don't mix.
+
+  **Caveat found live 2026-09-09, still open:** the *detailed*
   per-command LIN trace for a given recovery attempt lives only in
   `capture_step_response.log`, which rotates (one generation kept) —
-  after ~2 more runs, that trace is gone even though the CSV's outcome
-  row survives forever. Not yet resolved; no decision made on whether
-  to extend rotation or otherwise preserve more detail per attempt.
+  after ~2 more runs that trace is gone even though the CSV rows
+  survive forever. No decision made on whether to extend rotation or
+  otherwise preserve more detail per attempt.
 - `analyze_logs.py` — read-only static analysis over the four `.log`
   files above (built 2026-08-12, together with the `/analyze-logs`
   skill): flags unmatched `->` calls (the 2026-08-11 bus-hang

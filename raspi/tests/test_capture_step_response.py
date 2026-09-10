@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import capture_step_response
 from capture_step_response import (
     run, _soft_stop, _generate_recovery_sequence, _execute_strategy,
-    _log_recovery_outcome, STRATEGIES,
+    _append_recovery_row, RECOVERY_LOG_FIELDS, STRATEGIES,
     SEQUENCE_MIN_LEN, SEQUENCE_MAX_LEN, SEQUENCE_MAX_BURST, SEQUENCE_MAX_PULSE,
     SEQUENCE_STEP_PAUSE_S,
 )
@@ -293,66 +293,79 @@ def test_run_aborts_before_speed_when_pi_rejected():
     assert sent == ["reset", "hal", "pi 5.0 0.0"]
 
 
-# --- mid-run stall detection + recovery (added 2026-09-09) ---
-# STALL_CHECK_DELAY_S=1.0s / SAMPLE_INTERVAL=0.2s -> the check happens
-# at sample index 5 (the 6th rpm read, elapsed_ms first reaching 1000).
-# duration=1.2 gives exactly 6 samples (indices 0-5) per attempt, no
-# more -- keeps the fake rpm/current lists minimal.
+# --- mid-run stall detection + recovery (added 2026-09-09, schema
+# reworked 2026-09-10) ---
+# STALL_CHECK_DELAY_S=1.0s, RPM_SAMPLE_2_S=1.5s / SAMPLE_INTERVAL=0.2s.
+# duration=2.0 -> 10 samples (i=0..9, elapsed 0..1800ms) per attempt --
+# long enough that i=5 crosses 1000ms (stall check + rpm_1s) and i=8
+# crosses 1500ms (rpm_1p5s). A stalled attempt returns early at i=8.
+
+def _recovery_log_calls(fake_append):
+    return [c.args[0] for c in fake_append.call_args_list]
+
 
 def test_run_recovers_after_confirmed_stall_and_uses_retry_rows(capsys):
-    # Attempt 1: rpm=0 for all 6 samples -> stall confirmed via status
-    # (sys_error=-65, STALL_TIM_ERR) at sample 5 -> sampling stops
-    # immediately. Attempt 2 (after the recovery sequence): rpm=0 for
-    # the first 5 samples, then 600 at sample 5 -- so attempt 2's own
-    # stall check (rpm!=0) never queries "status" at all, and the
-    # attempt completes normally.
+    # Attempt 1: rpm=0 throughout -> stall confirmed (sys_error=-65) at
+    # i=5, keeps sampling to i=8 for rpm_1p5s, then returns early.
+    # Retry (after the sequence): rpm nonzero from i=5 on, so its own
+    # stall check never fires and it runs the full window.
     conn = _fake_conn(
-        rpm_values=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 600, 600],
-        current_values=[("0.00", "0.00")] * 4,
+        rpm_values=[0] * 14 + [600] * 6,  # 9 (att1) + 10 (retry) + 1 (decision point)
+        current_values=[("0.00", "0.00")] * 10,
         status_reply="OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
     )
     with patch("capture_step_response._generate_recovery_sequence",
                return_value=["burst_cw", "speed_plus"]), \
-         patch("capture_step_response._log_recovery_outcome") as fake_log:
+         patch("capture_step_response._append_recovery_row") as fake_append:
         _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
-                              duration=1.25)
+                              duration=2.0)
 
-    fake_log.assert_called_once_with(
-        1000, "OK", ["burst -500 10 1000 5", "speed 500", "speed 0"], "success",
-        "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65")
+    rows = _recovery_log_calls(fake_append)
+    assert len(rows) == 2
+    seq_row, retry_row = rows
+    assert seq_row["phase"] == "sequence"
+    assert seq_row["target_speed"] == 1000
+    assert seq_row["sequence"] == "burst -500 10 1000 5;speed 500;speed 0"
+    assert seq_row["status_before_sequence"] == "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65"
+    assert seq_row["status_after_sequence"] == "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65"
+    assert retry_row["phase"] == "retry"
+    assert retry_row["rpm_1s"] == 600
+    assert retry_row["rpm_1p5s"] == 600
+    # Both rows share the same join key.
+    assert seq_row["timestamp"] == retry_row["timestamp"]
 
     lines = capsys.readouterr().out.strip().splitlines()
     rpm_column = [line.split(",")[1] for line in lines[1:]]  # skip header
-    # Only the retry's 6 rows are printed -- the failed first attempt's
-    # all-zero rows never reach stdout.
-    assert rpm_column == ["0", "0", "0", "0", "0", "600"]
+    # Only the retry's 10 rows are printed, not the failed first attempt's.
+    assert rpm_column == ["0"] * 5 + ["600"] * 5
 
     sent = [call.args[0] for call in conn.send.call_args_list]
     assert "burst -500 10 1000 5" in sent  # burst_cw's exact recipe
     assert "speed 500" in sent
-    # Second "reset"/"hal" pair before the retry attempt.
-    assert sent.count("reset") == 2
-    assert sent.count("hal") >= 2
+    assert sent.count("reset") == 2  # initial + before the retry
 
 
 def test_run_aborts_after_stall_persists_through_retry():
-    # Both attempts stall (rpm=0 the whole time, status always confirms
-    # STALL_TIM_ERR) -- no second recovery sequence, just abort.
+    # Both attempts stall (rpm=0 throughout). Still writes both recovery
+    # rows (the "retry" one shows rpm_1s/rpm_1p5s = 0), then aborts.
     conn = _fake_conn(
-        rpm_values=[0] * 12,
-        current_values=[("0.00", "0.00")] * 4,
+        rpm_values=[0] * 18,  # 9 (att1) + 9 (retry, early return) -- no decision point
+        current_values=[("0.00", "0.00")] * 10,
         status_reply="OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
     )
     with patch("capture_step_response._generate_recovery_sequence",
                return_value=["pulse_plus", "pulse_minus"]), \
-         patch("capture_step_response._log_recovery_outcome") as fake_log:
+         patch("capture_step_response._append_recovery_row") as fake_append:
         with pytest.raises(SystemExit, match="stall persisted"):
             _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
-                                  duration=1.25)
+                                  duration=2.0)
 
-    fake_log.assert_called_once_with(
-        1000, "OK", ["pulse 1000", "pulse -1000"], "failure",
-        "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65")
+    rows = _recovery_log_calls(fake_append)
+    assert len(rows) == 2
+    assert rows[0]["phase"] == "sequence"
+    assert rows[1]["phase"] == "retry"
+    assert rows[1]["rpm_1s"] == 0
+    assert rows[1]["rpm_1p5s"] == 0
 
     sent = [call.args[0] for call in conn.send.call_args_list]
     # Exactly one recovery sequence ran (not a second one after the
@@ -416,36 +429,52 @@ def test_execute_strategy_sequence_never_runs_closer_than_step_pause():
     assert all(gap >= SEQUENCE_STEP_PAUSE_S - 1e-9 for gap in gaps), gaps
 
 
-# --- recovery outcome logging (_log_recovery_outcome, added 2026-09-09) ---
+# --- recovery-log appends (_append_recovery_row, added 2026-09-09,
+# schema reworked 2026-09-10) ---
 # Uses tmp_path (a real pytest-managed temp directory) instead of the
 # real repo -- RECOVERY_LOG_PATH is a plain relative filename, so it's
 # redirected via monkeypatch + chdir rather than ever touching the
 # actual recovery_sequences.csv in the repo root.
 
-def test_log_recovery_outcome_writes_header_only_on_first_call(tmp_path, monkeypatch):
+def test_append_recovery_row_writes_header_only_on_first_call(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(capture_step_response, "RECOVERY_LOG_PATH", "recovery_sequences.csv")
 
-    _log_recovery_outcome(1000, "OK data=['0x00','0x01','0x00']", ["burst -500 10 1000 5"],
-                           "success", "OK ret=0 ... sys_error=0")
-    _log_recovery_outcome(500, "OK data=['0x01','0x01','0x00']", ["pulse 1000", "speed 0"],
-                           "failure", "OK ret=0 ... sys_error=-65")
+    _append_recovery_row({
+        "timestamp": "2026-09-10T12:00:00.000001", "phase": "sequence",
+        "target_speed": 1000,
+        "hal_before_sequence": "OK data=['0x00', '0x01', '0x00']",
+        "status_before_sequence": "OK ret=0 sys_error=-65",
+        "sequence": "burst -500 10 1000 5;speed 500;speed 0",
+        "hal_after_sequence": "OK data=['0x00', '0x00', '0x01']",
+        "status_after_sequence": "OK ret=0 sys_error=-65",
+    })
+    _append_recovery_row({
+        "timestamp": "2026-09-10T12:00:00.000001", "phase": "retry",
+        "rpm_1s": 600, "rpm_1p5s": 625,
+    })
 
-    content = (tmp_path / "recovery_sequences.csv").read_text().strip().splitlines()
-    assert content[0] == "timestamp,target_speed,starting_hal,sequence,outcome,status"
-    assert len(content) == 3  # header + 2 rows, no repeated header
-    assert content[1].endswith(
-        '1000,"OK data=[\'0x00\',\'0x01\',\'0x00\']",burst -500 10 1000 5,success,OK ret=0 ... sys_error=0')
-    assert content[2].endswith(
-        "500,\"OK data=['0x01','0x01','0x00']\",pulse 1000;speed 0,failure,OK ret=0 ... sys_error=-65")
+    import csv as _csv
+    with open(tmp_path / "recovery_sequences.csv", newline="") as f:
+        parsed = list(_csv.DictReader(f))
+    assert len(parsed) == 2  # header once, one row per call
+    assert parsed[0]["phase"] == "sequence"
+    assert parsed[0]["sequence"] == "burst -500 10 1000 5;speed 500;speed 0"
+    assert parsed[0]["hal_before_sequence"] == "OK data=['0x00', '0x01', '0x00']"
+    assert parsed[0]["rpm_1s"] == ""  # blank in a "sequence" row
+    assert parsed[1]["phase"] == "retry"
+    assert parsed[1]["rpm_1s"] == "600"
+    assert parsed[1]["timestamp"] == parsed[0]["timestamp"]  # join key
+    assert parsed[1]["sequence"] == ""  # blank in a "retry" row
 
 
-def test_log_recovery_outcome_appends_not_truncates(tmp_path, monkeypatch):
+def test_append_recovery_row_appends_not_truncates(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(capture_step_response, "RECOVERY_LOG_PATH", "recovery_sequences.csv")
 
     for _ in range(5):
-        _log_recovery_outcome(1000, "OK", ["pulse 1000"], "success", "OK ret=0 ... sys_error=0")
+        _append_recovery_row({"timestamp": "t", "phase": "retry", "rpm_1s": 600, "rpm_1p5s": 625})
 
     content = (tmp_path / "recovery_sequences.csv").read_text().strip().splitlines()
     assert len(content) == 1 + 5  # header once, one row per call, nothing overwritten
+    assert content[0] == ",".join(RECOVERY_LOG_FIELDS)

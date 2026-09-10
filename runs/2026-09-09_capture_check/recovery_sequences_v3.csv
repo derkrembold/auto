@@ -1,0 +1,3 @@
+timestamp,phase,target_speed,hal_before_sequence,status_before_sequence,sequence,hal_after_sequence,status_after_sequence,rpm_1s,rpm_1p5s
+2026-09-10T14:21:39.984871,sequence,500,"OK ret=0 data=['0x01', '0x01', '0x00']",OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65,pulse 1000;burst 500 10 -1000 5;speed -500;speed 0,"OK ret=0 data=['0x01', '0x00', '0x01']",OK ret=0 timeout=0 checksum=0 kickstart=4 sys_error=-65,,
+2026-09-10T14:21:39.984871,retry,,,,,,,500,500

@@ -81,19 +81,21 @@ user step by step before writing any of it:
   real stall (matches the firmware's own give-up point, ~700ms in --
   comfortably before the 1.0s check). A transient `rpm=0` alone isn't
   trusted, same reasoning as the soft-stop decision above.
-- On a confirmed stall: sampling stops immediately (no point continuing
-  to sample a rotor that's already given up), a random *recovery
-  sequence* runs (see `STRATEGIES`/`_generate_recovery_sequence()`
-  below), then the **entire step is retried from scratch** (`reset`,
-  `hal`, `speed 0`, `speed <target>`, fresh sampling) -- this retry
-  *is* the success/failure test for the sequence, not a separate check.
+- On a confirmed stall: a random *recovery sequence* runs (see
+  `STRATEGIES`/`_generate_recovery_sequence()` below), then the
+  **entire step is retried from scratch** (`reset`, `hal`, `speed 0`,
+  `speed <target>`, fresh sampling) -- this retry's rpm trajectory is
+  the raw evidence of whether the sequence worked, *not* a
+  script-computed success/fail label (that call is left to the
+  analysis tool -- see the recovery-log section below).
 - If the retry also confirms a stall: **stop -- no second recovery
-  sequence, no third attempt.** Logged as a failed sequence; the run
-  aborts (`sys.exit()`) since there's no usable capture to report.
-- If the retry succeeds: logged as a successful sequence, and *that*
-  attempt's rows (not the failed first attempt's) become the CSV
-  printed to stdout -- callers (`run_grid.py` etc.) see one normal,
-  clean step response either way, never a truncated stalled one.
+  sequence, no third attempt.** The run aborts (`sys.exit()`) since
+  there's no usable capture to report; the recovery-log rows are
+  written first.
+- If the retry doesn't re-stall: *that* attempt's rows (not the failed
+  first attempt's) become the CSV printed to stdout -- callers
+  (`run_grid.py` etc.) see one normal, clean step response either way,
+  never a truncated stalled one.
 
 **Recovery sequence design (`STRATEGIES`, `_generate_recovery_sequence()`),
 also agreed step by step, not guessed:**
@@ -118,20 +120,27 @@ also agreed step by step, not guessed:**
   before the inter-step pause, so a `pulse`/`burst` step never follows
   a still-active nonzero closed-loop command.
 
-Every recovery sequence's outcome is appended to `RECOVERY_LOG_PATH`
-(`recovery_sequences.csv`, timestamp/target_speed/starting `hal`/
-sequence/outcome/final `status`) via `_log_recovery_outcome()` --
-deliberately a separate, never-rotated file from `LOG_PATH` above,
-since it's meant to keep growing across every run as training data for
-the planned learning/decision-tree work, not just this run's own debug
-trace. `sequence` logs the *exact commands sent* (e.g. `"speed
-500;speed 0;burst 500 10 -1000 5"`), not the abstract strategy names
-(`STRATEGIES`' own keys) -- the catalog's parameter values may change
-later, and the log needs to capture what was actually tried regardless
-(2026-09-09, explicit user request). `status` is read explicitly right
-after the retry attempt, regardless of outcome -- `_run_one_attempt()`
-only queries `status` internally when *it* detects a stall, so a
-successful retry would otherwise leave the log with no status at all.
+Every recovery attempt is appended to `RECOVERY_LOG_PATH`
+(`recovery_sequences.csv`) as **two rows** (schema reworked 2026-09-10,
+step by step with the user), both plain appends, joined by `timestamp`
+(microsecond precision -- a unique key):
+  - phase `"sequence"`: `hal_before_sequence`/`status_before_sequence`
+    (state the sequence started from) + `sequence` (the *exact commands
+    sent*, e.g. `"speed 500;speed 0;burst 500 10 -1000 5"`, not the
+    abstract `STRATEGIES` keys -- the catalog's values may change
+    later) + `hal_after_sequence`/`status_after_sequence` (what the
+    sequence did). Written right after the sequence completes -- a
+    self-contained "sequence X, from state Y to state Z" training
+    example on its own.
+  - phase `"retry"`: `rpm_1s` / `rpm_1p5s` -- the retry's rpm at ~1.0s
+    and ~1.5s in. Raw numbers, *no success/fail label* -- the analysis
+    tool picks the threshold, and can re-pick it later without old rows
+    being stuck at today's definition.
+A `"sequence"` row with no matching `"retry"` row means the retry broke
+or was interrupted before measurement -- that absence is itself a
+signal, not a hole. Deliberately a separate, never-rotated file from
+`LOG_PATH` above, meant to keep growing forever as training data for
+the planned learning/decision-tree work.
 """
 import argparse
 import csv
@@ -150,17 +159,33 @@ from motorcontrol import SOCKET_ADDRESS
 LOG_PATH = "capture_step_response.log"
 logger = logging.getLogger("capture_step_response")
 
-# Append-only record of every recovery sequence + its outcome (added
-# 2026-09-09) -- deliberately separate from LOG_PATH above, which
-# rotates (one generation kept, see logsetup.rotate_log()) and would
-# lose sequence history after just two runs. This file is never
-# rotated or truncated -- it's meant to keep growing across every run,
-# forever, as the training data for the planned learning/decision-tree
-# analysis (see raspi/watchdog/CLAUDE.md's "Planned Logging Database"
-# section -- this is a small, single-motor-bench-scoped precursor to
-# that, not the full planned system).
+# Append-only record of every recovery sequence (added 2026-09-09,
+# schema reworked 2026-09-10) -- deliberately separate from LOG_PATH
+# above, which rotates (one generation kept, see logsetup.rotate_log())
+# and would lose sequence history after just two runs. This file is
+# never rotated or truncated -- it keeps growing forever, as training
+# data for the planned learning/decision-tree analysis (see
+# raspi/watchdog/CLAUDE.md's "Planned Logging Database" section -- this
+# is a small, single-motor-bench-scoped precursor to that).
+#
+# Two rows per recovery attempt, both plain appends, joined by
+# `timestamp` (microsecond precision -- a guaranteed-unique key, two
+# attempts can't share a microsecond):
+#  - phase "sequence": written right after the sequence runs and its
+#    after-state is read -- the complete "sequence X, from state Y to
+#    state Z" record, a usable training example on its own.
+#  - phase "retry": written after the retry's rpm measurement -- did the
+#    motor actually run afterward (rpm_1s / rpm_1p5s, raw, no
+#    success/fail label -- the analysis tool decides the threshold).
+# A "sequence" row with no matching "retry" row = the retry broke or
+# was interrupted before measurement. That absence is itself a signal.
 RECOVERY_LOG_PATH = "recovery_sequences.csv"
-RECOVERY_LOG_FIELDS = ["timestamp", "target_speed", "starting_hal", "sequence", "outcome", "status"]
+RECOVERY_LOG_FIELDS = [
+    "timestamp", "phase", "target_speed",
+    "hal_before_sequence", "status_before_sequence", "sequence",
+    "hal_after_sequence", "status_after_sequence",
+    "rpm_1s", "rpm_1p5s",
+]
 
 TARGET_SPEED = 1000
 SAMPLE_INTERVAL = 0.2  # seconds, rpm sampling
@@ -184,7 +209,8 @@ SYS_ERROR_RE = re.compile(r"sys_error=(-?\d+)")
 # --- mid-run stall recovery (added 2026-09-09, see the module docstring
 # for the full design discussion) ---
 
-STALL_CHECK_DELAY_S = 1.0  # how far into a step to check for a stall
+STALL_CHECK_DELAY_S = 1.0  # how far into a step to check for a stall (also the rpm_1s capture point)
+RPM_SAMPLE_2_S = 1.5  # second rpm capture point into the retry, for recovery_sequences.csv
 
 SEQUENCE_MIN_LEN = 2
 SEQUENCE_MAX_LEN = 3
@@ -297,36 +323,37 @@ def _run_recovery_sequence(conn):
     return commands
 
 
-def _log_recovery_outcome(target_speed, starting_hal, sequence, outcome, status):
-    # Appends one row -- writes the header first only if the file is
-    # new, never truncates an existing one. See RECOVERY_LOG_PATH's own
-    # comment for why this is a separate, never-rotated file.
+def _append_recovery_row(row):
+    # One plain append -- writes the header first only if the file is
+    # new, never truncates an existing one. `row` is a dict of any
+    # subset of RECOVERY_LOG_FIELDS; missing fields are written blank.
+    # See RECOVERY_LOG_PATH's own comment for the two-phase layout.
     file_is_new = not os.path.exists(RECOVERY_LOG_PATH)
     with open(RECOVERY_LOG_PATH, "a", newline="") as f:
-        writer = csv.writer(f)
+        writer = csv.DictWriter(f, fieldnames=RECOVERY_LOG_FIELDS)
         if file_is_new:
-            writer.writerow(RECOVERY_LOG_FIELDS)
-        writer.writerow([
-            datetime.datetime.now().isoformat(timespec="seconds"),
-            target_speed,
-            starting_hal,
-            ";".join(sequence),
-            outcome,
-            status,
-        ])
+            writer.writeheader()
+        writer.writerow({k: row.get(k, "") for k in RECOVERY_LOG_FIELDS})
 
 
 def _run_one_attempt(conn, target_speed, sample_interval, current_sample_interval, duration):
     # One full step attempt: speed 0 -> speed <target> -> sample until
     # `duration` or until a stall is confirmed (see module docstring).
-    # Returns (rows, stalled); on a confirmed stall, sampling stops
-    # immediately and the remaining `duration` is never sampled -- the
-    # caller decides whether to recover+retry or report failure.
+    # Returns (rows, stalled, rpm_1s, rpm_1p5s). rpm_1s / rpm_1p5s are
+    # the first rpm sample at/after STALL_CHECK_DELAY_S / RPM_SAMPLE_2_S
+    # (None if `duration` is too short to reach them) -- only the retry
+    # call's values get logged, attempt 1 ignores them. On a confirmed
+    # stall, sampling still runs long enough to capture rpm_1p5s, then
+    # stops early -- no point sampling the full window for a hopeless
+    # retry, but both rpm data points must exist for the log.
     _send(conn, "speed 0")
     _send(conn, f"speed {target_speed}")
     start = time.monotonic()
     next_current_sample = start
     stall_checked = False
+    stalled = False
+    rpm_1s = None
+    rpm_1p5s = None
 
     rows = []
     sample_count = int(duration / sample_interval)
@@ -350,14 +377,19 @@ def _run_one_attempt(conn, target_speed, sample_interval, current_sample_interva
 
         if not stall_checked and elapsed_ms >= STALL_CHECK_DELAY_S * 1000:
             stall_checked = True
+            rpm_1s = rpm
             if rpm == 0:
                 status_reply = _send(conn, "status")
                 sys_error_match = SYS_ERROR_RE.search(status_reply)
                 sys_error = int(sys_error_match.group(1)) if sys_error_match else None
-                if sys_error == STALL_TIM_ERR:
-                    return rows, True
+                stalled = sys_error == STALL_TIM_ERR
 
-    return rows, False
+        if rpm_1p5s is None and elapsed_ms >= RPM_SAMPLE_2_S * 1000:
+            rpm_1p5s = rpm
+            if stalled:
+                return rows, True, rpm_1s, rpm_1p5s
+
+    return rows, stalled, rpm_1s, rpm_1p5s
 
 
 def _soft_stop(conn, target_speed, steps=STOP_RAMP_STEPS, duration=STOP_RAMP_DURATION):
@@ -401,33 +433,55 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
         # where the rotor started (e.g. a known-bad Mittelrast, see
         # STM32/CLAUDE.md's Hall-chattering finding), not just guessed
         # at after the fact.
-        starting_hal = _send(conn, "hal")
+        _send(conn, "hal")
         if p_delta is not None or i_delta is not None:
             reply = _send(conn, f"pi {p_delta} {i_delta}")
             if not reply.startswith("OK"):
                 sys.exit(f"pi command rejected, aborting before touching the motor: {reply}")
 
-        rows, stalled = _run_one_attempt(conn, target_speed, sample_interval,
-                                          current_sample_interval, duration)
+        rows, stalled, _, _ = _run_one_attempt(conn, target_speed, sample_interval,
+                                                current_sample_interval, duration)
 
         if stalled:
+            # phase "sequence": everything about what state the sequence
+            # started from and what it did -- read the before-state, run
+            # the sequence, read the after-state, then append one row.
+            # The retry's rpm result is phase "retry" below, joined on
+            # the same timestamp. See RECOVERY_LOG_PATH's comment.
+            seq_timestamp = datetime.datetime.now().isoformat()
+            hal_before = _send(conn, "hal")
+            status_before = _send(conn, "status")
             sequence = _run_recovery_sequence(conn)
+            hal_after = _send(conn, "hal")
+            status_after = _send(conn, "status")
+            _append_recovery_row({
+                "timestamp": seq_timestamp,
+                "phase": "sequence",
+                "target_speed": target_speed,
+                "hal_before_sequence": hal_before,
+                "status_before_sequence": status_before,
+                "sequence": ";".join(sequence),
+                "hal_after_sequence": hal_after,
+                "status_after_sequence": status_after,
+            })
+
             _send(conn, "reset")
             _send(conn, "hal")
-            rows, stalled_again = _run_one_attempt(conn, target_speed, sample_interval,
-                                                    current_sample_interval, duration)
-            # Explicit status read for the log regardless of outcome --
-            # _run_one_attempt() only queries "status" internally when
-            # *it* detects a stall, so a successful retry would
-            # otherwise leave this run's outcome with no status at all.
-            final_status = _send(conn, "status")
+            rows, stalled_again, rpm_1s, rpm_1p5s = _run_one_attempt(
+                conn, target_speed, sample_interval, current_sample_interval, duration)
+            _append_recovery_row({
+                "timestamp": seq_timestamp,
+                "phase": "retry",
+                "rpm_1s": "" if rpm_1s is None else rpm_1s,
+                "rpm_1p5s": "" if rpm_1p5s is None else rpm_1p5s,
+            })
             if stalled_again:
-                logger.info(f"recovery sequence FAILED: {sequence}")
-                _log_recovery_outcome(target_speed, starting_hal, sequence, "failure", final_status)
+                logger.info(f"recovery sequence did not recover: {sequence} "
+                            f"(rpm_1s={rpm_1s} rpm_1p5s={rpm_1p5s})")
                 sys.exit(f"stall persisted after recovery sequence {sequence} "
                          "-- giving up, no usable capture")
-            logger.info(f"recovery sequence SUCCEEDED: {sequence}")
-            _log_recovery_outcome(target_speed, starting_hal, sequence, "success", final_status)
+            logger.info(f"recovery sequence recovered: {sequence} "
+                        f"(rpm_1s={rpm_1s} rpm_1p5s={rpm_1p5s})")
 
         print("elapsed_ms,rpm,current_val1,current_val2")
         for elapsed_ms, rpm, current_val1, current_val2 in rows:

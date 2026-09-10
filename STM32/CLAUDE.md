@@ -243,10 +243,19 @@ instead of baked into the firmware source).
   accordingly). Root-caused an initial "doesn't do anything" failure to
   **two cold solder joints on `J1`** — see `STM32/notes.md`'s
   Fehlerliste, Issue #2. Not a firmware or schematic problem.
-- **Not yet done:** the actual LIN dispatch logic in `main.c` doesn't
-  read these pins or compute `base_pid | instance_id` yet — only the
-  raw pin-read-drives-LED test exists so far. See root `CLAUDE.md`'s
-  Open Points for this as a concrete remaining step.
+- **Wired into LIN dispatch — done** (confirmed in `main.c` 2026-09-10;
+  an earlier version of this note said "not yet done", which was
+  stale). `hwbits` (`uint8_t`, `main.c:172`) is OR-ed from `PB14`
+  (bit 0) / `PB15` (bit 1) at boot (`main.c:252-257`). All four
+  `cntl0mot`/`cntl1mot`/`cntl2mot`/`cntl3mot` dispatch branches — and
+  the `is_our_write` foreign-vs-ours check — compare
+  `(rx_header[1] & 0x3f) == (cntl*mot | hwbits)`; the PID-index lookup
+  in `HAL_UART_RxCpltCallback` masks `rx_header[1] & 0x3c` (instance-
+  agnostic message-type match) and the RxCplt `motor`-source branch
+  does its own `(rx_header[1] & 0x03) == hwbits` instance check. So
+  byte-identical firmware across up to 4 physical motor boards works
+  today, instance selected purely by the strap jumper. `iam()`
+  (`main.c:916`) just returns `hwbits`.
 
 ## Hardware
 
