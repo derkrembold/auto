@@ -48,16 +48,16 @@ def _fake_conn(rpm_values, current_values=(), pi_reply="OK",
 
     def fake_recv():
         command = sent_commands[-1]
-        if command == "rpm":
+        if command == "rpm 0":
             return f"OK ret=0 rpm={next(rpm_iter)} (hex=0x0000)"
-        if command == "current":
+        if command == "current 0":
             val1, val2 = next(current_iter)
             return f"OK ret=0 val1={val1} val2={val2}"
         if command.startswith("pi "):
             return pi_reply
-        if command == "status":
+        if command == "status 0":
             return status_reply
-        return "OK"  # speed 0 / speed <target> / reset / hal
+        return "OK"  # speed 0 <value> / reset 0 / hal 0
 
     conn.send.side_effect = fake_send
     conn.recv.side_effect = fake_recv
@@ -82,22 +82,22 @@ def test_run_sends_zero_then_target_speed_first():
                           duration=0.4)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    # "reset" + "hal" (2026-09-09) are always the first two commands,
+    # "reset 0" + "hal 0" (2026-09-09) are always the first two commands,
     # for a clean firmware baseline + starting rotor position -- see
-    # run()'s own comment.
-    assert sent[0] == "reset"
-    assert sent[1] == "hal"
-    assert sent[2] == "speed 0"
-    assert sent[3] == "speed 1000"
+    # run()'s own comment. Instance 0 = the default `motor` param.
+    assert sent[0] == "reset 0"
+    assert sent[1] == "hal 0"
+    assert sent[2] == "speed 0 0"
+    assert sent[3] == "speed 0 1000"
     # Decision point (2026-09-09): hal/rpm/status read again after the
     # sampling loop, then the soft stop (2026-08-20, see _soft_stop()'s
     # own tests below for the exact staging) since rpm/sys_error both
     # look fine.
-    assert sent[-8] == "hal"
-    assert sent[-7] == "rpm"
-    assert sent[-6] == "status"
-    assert sent[-5] == "speed 800"
-    assert sent[-1] == "speed 0"
+    assert sent[-8] == "hal 0"
+    assert sent[-7] == "rpm 0"
+    assert sent[-6] == "status 0"
+    assert sent[-5] == "speed 0 800"
+    assert sent[-1] == "speed 0 0"
 
 
 # --- soft stop (added 2026-08-20) ---
@@ -106,17 +106,17 @@ def test_soft_stop_stages_speed_down_to_zero():
     conn = _fake_conn([])
     clock = _FakeClock()
     with patch("capture_step_response.time.sleep", clock.sleep):
-        _soft_stop(conn, target_speed=1000, steps=5, duration=1.0)
+        _soft_stop(conn, 0, target_speed=1000, steps=5, duration=1.0)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert sent == ["speed 800", "speed 600", "speed 400", "speed 200", "speed 0"]
+    assert sent == ["speed 0 800", "speed 0 600", "speed 0 400", "speed 0 200", "speed 0 0"]
 
 
 def test_soft_stop_spans_the_requested_duration():
     conn = _fake_conn([])
     clock = _FakeClock()
     with patch("capture_step_response.time.sleep", clock.sleep):
-        _soft_stop(conn, target_speed=1000, steps=5, duration=1.0)
+        _soft_stop(conn, 0, target_speed=1000, steps=5, duration=1.0)
 
     assert clock.now == pytest.approx(1.0)
 
@@ -125,10 +125,20 @@ def test_soft_stop_scales_with_target_speed():
     conn = _fake_conn([])
     clock = _FakeClock()
     with patch("capture_step_response.time.sleep", clock.sleep):
-        _soft_stop(conn, target_speed=500, steps=5, duration=1.0)
+        _soft_stop(conn, 0, target_speed=500, steps=5, duration=1.0)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert sent == ["speed 400", "speed 300", "speed 200", "speed 100", "speed 0"]
+    assert sent == ["speed 0 400", "speed 0 300", "speed 0 200", "speed 0 100", "speed 0 0"]
+
+
+def test_soft_stop_uses_the_given_motor_instance():
+    conn = _fake_conn([])
+    clock = _FakeClock()
+    with patch("capture_step_response.time.sleep", clock.sleep):
+        _soft_stop(conn, 1, target_speed=1000, steps=5, duration=1.0)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent == ["speed 1 800", "speed 1 600", "speed 1 400", "speed 1 200", "speed 1 0"]
 
 
 def test_run_samples_rpm_expected_number_of_times():
@@ -139,7 +149,7 @@ def test_run_samples_rpm_expected_number_of_times():
                           duration=0.8)
 
     rpm_reads = [
-        call.args[0] for call in conn.send.call_args_list if call.args[0] == "rpm"
+        call.args[0] for call in conn.send.call_args_list if call.args[0] == "rpm 0"
     ]
     assert len(rpm_reads) == 5  # 4 CSV samples (0.8s / 0.2s) + 1 decision-point read
 
@@ -184,7 +194,7 @@ def test_current_sampled_only_once_per_current_interval(capsys):
                           current_sample_interval=1.0, duration=1.6)
 
     current_reads = [
-        call.args[0] for call in conn.send.call_args_list if call.args[0] == "current"
+        call.args[0] for call in conn.send.call_args_list if call.args[0] == "current 0"
     ]
     assert len(current_reads) == 2  # rows 0 and 5 out of 8 rows
 
@@ -216,11 +226,11 @@ def test_run_sends_pi_first_when_deltas_given():
                           duration=0.2, p_delta=0.1, i_delta=-0.05)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert sent[0] == "reset"
-    assert sent[1] == "hal"
-    assert sent[2] == "pi 0.1 -0.05"
-    assert sent[3] == "speed 0"
-    assert sent[4] == "speed 1000"
+    assert sent[0] == "reset 0"
+    assert sent[1] == "hal 0"
+    assert sent[2] == "pi 0 0.1 -0.05"
+    assert sent[3] == "speed 0 0"
+    assert sent[4] == "speed 0 1000"
 
 
 def test_run_omits_pi_when_deltas_not_given():
@@ -229,9 +239,9 @@ def test_run_omits_pi_when_deltas_not_given():
                           duration=0.2)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert sent[0] == "reset"
-    assert sent[1] == "hal"
-    assert sent[2] == "speed 0"
+    assert sent[0] == "reset 0"
+    assert sent[1] == "hal 0"
+    assert sent[2] == "speed 0 0"
     assert not any(c.startswith("pi ") for c in sent)
 
 
@@ -251,8 +261,8 @@ def test_soft_stop_skipped_when_rpm_below_half_of_target():
                           duration=0.2)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert "speed 800" not in sent  # first soft-stop step never sent
-    assert sent[-1] == "speed 0"    # still stops, just not via the ramp
+    assert "speed 0 800" not in sent  # first soft-stop step never sent
+    assert sent[-1] == "speed 0 0"    # still stops, just not via the ramp
 
 
 def test_soft_stop_skipped_when_stall_tim_err_latched():
@@ -267,8 +277,8 @@ def test_soft_stop_skipped_when_stall_tim_err_latched():
                           duration=0.2)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert "speed 800" not in sent
-    assert sent[-1] == "speed 0"
+    assert "speed 0 800" not in sent
+    assert sent[-1] == "speed 0 0"
 
 
 def test_soft_stop_runs_when_rpm_and_status_both_look_fine():
@@ -277,8 +287,8 @@ def test_soft_stop_runs_when_rpm_and_status_both_look_fine():
                           duration=0.2)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert "speed 800" in sent  # first soft-stop step did run
-    assert sent[-1] == "speed 0"
+    assert "speed 0 800" in sent  # first soft-stop step did run
+    assert sent[-1] == "speed 0 0"
 
 
 def test_run_aborts_before_speed_when_pi_rejected():
@@ -288,9 +298,26 @@ def test_run_aborts_before_speed_when_pi_rejected():
                               duration=0.2, p_delta=5.0, i_delta=0.0)
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    # "reset" then "hal" always fire first; pi's rejection still aborts
-    # before ever reaching speed 0 / speed <target>.
-    assert sent == ["reset", "hal", "pi 5.0 0.0"]
+    # "reset 0" then "hal 0" always fire first; pi's rejection still
+    # aborts before ever reaching speed 0 0 / speed 0 <target>.
+    assert sent == ["reset 0", "hal 0", "pi 0 5.0 0.0"]
+
+
+def test_run_uses_the_given_motor_and_current_instance():
+    # Multi-instance sanity check (2026-09-11): every command carries the
+    # given motor/current_instance, not the default 0.
+    conn = _fake_conn([100, 600], [("0.00", "0.00")])
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.2, motor=1, current_instance=1)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent[0] == "reset 1"
+    assert sent[1] == "hal 1"
+    assert sent[2] == "speed 1 0"
+    assert sent[3] == "speed 1 1000"
+    assert "rpm 1" in sent
+    assert "current 1" in sent
+    assert "status 1" in sent
 
 
 # --- mid-run stall detection + recovery (added 2026-09-09, schema
@@ -325,7 +352,7 @@ def test_run_recovers_after_confirmed_stall_and_uses_retry_rows(capsys):
     seq_row, retry_row = rows
     assert seq_row["phase"] == "sequence"
     assert seq_row["target_speed"] == 1000
-    assert seq_row["sequence"] == "burst -500 10 1000 5;speed 500;speed 0"
+    assert seq_row["sequence"] == "burst 0 -500 10 1000 5;speed 0 500;speed 0 0"
     assert seq_row["status_before_sequence"] == "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65"
     assert seq_row["status_after_sequence"] == "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65"
     assert retry_row["phase"] == "retry"
@@ -344,9 +371,9 @@ def test_run_recovers_after_confirmed_stall_and_uses_retry_rows(capsys):
     assert rpm_column == ["0"] * 5 + ["600"] * 5
 
     sent = [call.args[0] for call in conn.send.call_args_list]
-    assert "burst -500 10 1000 5" in sent  # burst_cw's exact recipe
-    assert "speed 500" in sent
-    assert sent.count("reset") == 2  # initial + before the retry
+    assert "burst 0 -500 10 1000 5" in sent  # burst_cw's exact recipe
+    assert "speed 0 500" in sent
+    assert sent.count("reset 0") == 2  # initial + before the retry
 
 
 def test_run_aborts_after_stall_persists_through_retry():
@@ -375,8 +402,8 @@ def test_run_aborts_after_stall_persists_through_retry():
     sent = [call.args[0] for call in conn.send.call_args_list]
     # Exactly one recovery sequence ran (not a second one after the
     # retry also stalled).
-    assert sent.count("pulse 1000") == 1
-    assert sent.count("pulse -1000") == 1
+    assert sent.count("pulse 0 1000") == 1
+    assert sent.count("pulse 0 -1000") == 1
 
 
 # --- recovery sequence generation (_generate_recovery_sequence) ---
@@ -420,8 +447,16 @@ def test_execute_strategy_full_speed_emits_speed_target_then_zero():
         conn = MagicMock()
         clock = _FakeClock()
         with patch("capture_step_response.time.sleep", clock.sleep):
-            commands = _execute_strategy(conn, name)
-        assert commands == [f"speed {value}", "speed 0"]
+            commands = _execute_strategy(conn, name, 0)
+        assert commands == [f"speed 0 {value}", "speed 0 0"]
+
+
+def test_execute_strategy_includes_the_given_motor_instance():
+    conn = MagicMock()
+    clock = _FakeClock()
+    with patch("capture_step_response.time.sleep", clock.sleep):
+        commands = _execute_strategy(conn, "speed_max_plus", 1)
+    assert commands == ["speed 1 1000", "speed 1 0"]
 
 
 def test_execute_strategy_pauses_at_least_step_pause_after_every_kind():
@@ -434,7 +469,7 @@ def test_execute_strategy_pauses_at_least_step_pause_after_every_kind():
         conn = MagicMock()
         clock = _FakeClock()
         with patch("capture_step_response.time.sleep", clock.sleep):
-            _execute_strategy(conn, name)
+            _execute_strategy(conn, name, 0)
         assert clock.now >= SEQUENCE_STEP_PAUSE_S, (
             f"{name} only paused {clock.now}s, expected >= {SEQUENCE_STEP_PAUSE_S}s")
 
@@ -449,7 +484,7 @@ def test_execute_strategy_sequence_never_runs_closer_than_step_pause():
     with patch("capture_step_response.time.sleep", clock.sleep):
         checkpoints = []
         for name in sequence:
-            _execute_strategy(conn, name)
+            _execute_strategy(conn, name, 0)
             checkpoints.append(clock.now)
 
     gaps = [b - a for a, b in zip(checkpoints, checkpoints[1:])]
@@ -475,7 +510,7 @@ def test_append_recovery_row_writes_header_only_on_first_call(tmp_path, monkeypa
         "target_speed": 1000,
         "hal_before_sequence": "OK data=['0x00', '0x01', '0x00']",
         "status_before_sequence": "OK ret=0 sys_error=-65",
-        "sequence": "burst -500 10 1000 5;speed 500;speed 0",
+        "sequence": "burst 0 -500 10 1000 5;speed 0 500;speed 0 0",
         "hal_after_sequence": "OK data=['0x00', '0x00', '0x01']",
         "status_after_sequence": "OK ret=0 sys_error=-65",
     })
@@ -490,7 +525,7 @@ def test_append_recovery_row_writes_header_only_on_first_call(tmp_path, monkeypa
         parsed = list(_csv.DictReader(f))
     assert len(parsed) == 2  # header once, one row per call
     assert parsed[0]["phase"] == "sequence"
-    assert parsed[0]["sequence"] == "burst -500 10 1000 5;speed 500;speed 0"
+    assert parsed[0]["sequence"] == "burst 0 -500 10 1000 5;speed 0 500;speed 0 0"
     assert parsed[0]["hal_before_sequence"] == "OK data=['0x00', '0x01', '0x00']"
     assert parsed[0]["rpm_1s"] == ""  # blank in a "sequence" row
     assert parsed[0]["status_after_retry"] == ""  # blank in a "sequence" row

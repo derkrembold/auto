@@ -14,8 +14,8 @@ def test_run_sends_speed_then_checks_for_each_step():
             checks=["current", "hal"], settle_time=0)
 
     assert fake_conn.send.call_args_list == [
-        (("speed 0",),), (("current",),), (("hal",),),
-        (("speed 500",),), (("current",),), (("hal",),),
+        (("speed 0 0",),), (("current 0",),), (("hal 0",),),
+        (("speed 0 500",),), (("current 0",),), (("hal 0",),),
     ]
 
 
@@ -57,7 +57,7 @@ def test_run_defaults_check_order_to_current_hal_rpm():
         run(address="/tmp/fake.sock", speed_sequence=[0], settle_time=0)
 
     assert fake_conn.send.call_args_list == [
-        (("speed 0",),), (("current",),), (("hal",),), (("rpm",),),
+        (("speed 0 0",),), (("current 0",),), (("hal 0",),), (("rpm 0",),),
     ]
 
 
@@ -96,9 +96,9 @@ def test_run_stops_motor_and_aborts_on_out_of_range_current():
     fake_conn = MagicMock()
     fake_conn.__enter__.return_value = fake_conn
     fake_conn.recv.side_effect = [
-        "OK",                              # speed 0
-        "OK ret=0 val1=100.0 val2=0.0",    # current -- out of range
-        "OK",                              # speed 0 (abort stop)
+        "OK",                              # speed 0 0
+        "OK ret=0 val1=100.0 val2=0.0",    # current 0 -- out of range
+        "OK",                              # speed 0 0 (abort stop)
     ]
 
     with patch("validate_motor_currentsensor.Client", return_value=fake_conn), \
@@ -106,5 +106,5 @@ def test_run_stops_motor_and_aborts_on_out_of_range_current():
         run(address="/tmp/fake.sock", speed_sequence=[0, 500], settle_time=0)
 
     assert fake_conn.send.call_args_list == [
-        (("speed 0",),), (("current",),), (("speed 0",),),
+        (("speed 0 0",),), (("current 0",),), (("speed 0 0",),),
     ]

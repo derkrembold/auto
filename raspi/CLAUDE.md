@@ -53,7 +53,15 @@ other. Same caution applies to any future same-named files across
 
 - `control/motorcontrol.py` — small interactive CLI (`speed <value>`
   command, 0 = stop, plus `pi <p_delta> <i_delta>`/`hal`/`rpm`/`temp`/
-  `current`/`errors`, `help`, `exit` to quit). `pi` (replaced the
+  `current`/`errors`, `help`, `exit` to quit).
+  **Multi-instance addressing (2026-09-11):** every motor/current-sensor
+  command now takes a required instance number as its FIRST argument
+  (`speed <motor_instance> <value>`, `current <sensor_instance>`, ...) —
+  no default, an out-of-range or missing instance is rejected before
+  touching the bus. `selftest` is the one exception, not yet
+  instance-parameterized. Full design/reasoning in
+  `watchdog/CLAUDE.md`'s "Multi-Instance Addressing" section — not
+  duplicated here. `pi` (replaced the
   on/off status-LED toggle 2026-08-18, same `cntl0mot` PID and
   checksum-gate, see `STM32/CLAUDE.md`'s Motor Control section and
   `watchdog/CLAUDE.md`'s `linbus.set_pi()`) sets `KP`/`KI` for

@@ -10,7 +10,15 @@ exactly that scenario: motor speed steps interleaved with `current`/
 Run on the Pi with the watchdog already running (--live). Falls under
 raspi/CLAUDE.md's Motor Execution Consent rule like any other motor
 command, whether started manually on the Pi or triggered remotely.
+
+Optional --motor/--current-instance (added 2026-09-11, multi-instance
+addressing -- see raspi/watchdog/CLAUDE.md's "Multi-Instance Addressing"
+section): both default 0. Every watchdog command is instance-mandatory
+now; `speed`/`hal`/`rpm` use --motor, `current` uses --current-instance
+(a different device class, its own 0-1 range, independent of which
+motor is being exercised).
 """
+import argparse
 import re
 import time
 from multiprocessing.connection import Client
@@ -57,20 +65,25 @@ def _invalid_current_reason(reply):
 
 
 def run(address=SOCKET_ADDRESS, speed_sequence=SPEED_SEQUENCE, checks=CHECKS,
-        settle_time=SETTLE_TIME):
+        settle_time=SETTLE_TIME, motor=0, current_instance=0):
     # One persistent connection for the whole run, not one-shot
     # send_command() per step — see validate_speed.py's comment for why
     # (a one-shot connection's immediate disconnect would trigger the
     # watchdog's on_disconnect() stop after every single step).
+    #
+    # `checks` stays a list of bare verb names (current/hal/rpm) -- each
+    # one's instance is resolved here, not baked into the list, since
+    # `current` needs current_instance while `hal`/`rpm` need `motor`.
     with Client(address, family='AF_UNIX') as conn:
         for value in speed_sequence:
-            conn.send(f"speed {value}")
+            conn.send(f"speed {motor} {value}")
             print(f"speed {value} -> {conn.recv()}")
 
             time.sleep(settle_time)
 
             for check in checks:
-                conn.send(check)
+                instance = current_instance if check == "current" else motor
+                conn.send(f"{check} {instance}")
                 reply = conn.recv()
                 print(f"{check:8s}   -> {reply}")
 
@@ -78,10 +91,16 @@ def run(address=SOCKET_ADDRESS, speed_sequence=SPEED_SEQUENCE, checks=CHECKS,
                     reason = _invalid_current_reason(reply)
                     if reason:
                         print(f"ABORT: implausible current reading — {reason}")
-                        conn.send("speed 0")
+                        conn.send(f"speed {motor} 0")
                         print(f"speed 0  -> {conn.recv()}")
                         return
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--motor", type=int, default=0,
+                         help="motor instance to drive/read, 0-3 (default 0)")
+    parser.add_argument("--current-instance", type=int, default=0,
+                         help="currentsensor instance to read, 0-1 (default 0)")
+    args = parser.parse_args()
+    run(motor=args.motor, current_instance=args.current_instance)

@@ -1,8 +1,10 @@
 import pytest
 
 from watchdog import (validate, Watchdog, SPEED_MIN, SPEED_MAX, IDLE_TIMEOUT,
-                      PI_DELTA_MIN, PI_DELTA_MAX, PULSE_SPEED_MIN, PULSE_SPEED_MAX)
-from linbus import DryRunLin, MOTOR_INSTANCE_ID, CURRENT_INSTANCE_ID
+                      PI_DELTA_MIN, PI_DELTA_MAX, PULSE_SPEED_MIN, PULSE_SPEED_MAX,
+                      MOTOR_INSTANCE_MIN, MOTOR_INSTANCE_MAX,
+                      CURRENT_INSTANCE_MIN, CURRENT_INSTANCE_MAX)
+from linbus import DryRunLin
 from linaddresses import constants
 
 # Unit tests only — pure logic, no sockets, no hardware. Runs anywhere,
@@ -14,68 +16,94 @@ RANGE_ERROR = f"speed value out of range ({SPEED_MIN}..{SPEED_MAX})"
 PI_RANGE_ERROR_P = f"p_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
 PI_RANGE_ERROR_I = f"i_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
 PULSE_RANGE_ERROR = f"pulse value out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})"
+MOTOR_INSTANCE_ERROR = f"motor instance out of range ({MOTOR_INSTANCE_MIN}..{MOTOR_INSTANCE_MAX})"
+CURRENT_INSTANCE_ERROR = f"current sensor instance out of range ({CURRENT_INSTANCE_MIN}..{CURRENT_INSTANCE_MAX})"
 
-# Expected on-wire pid for motor commands: base pid combined with the one
-# motor currently on the bus's strap-pin instance id — see linbus.py's
-# TARGET_MOTOR_INSTANCE comment.
-CNTL0MOT_WIRE = constants.cntl0mot | MOTOR_INSTANCE_ID
-CNTL1MOT_WIRE = constants.cntl1mot | MOTOR_INSTANCE_ID
-CNTL2MOT_WIRE = constants.cntl2mot | MOTOR_INSTANCE_ID
-CNTL3MOT_WIRE = constants.cntl3mot | MOTOR_INSTANCE_ID
-CNTL0CUR_WIRE = constants.cntl0cur | CURRENT_INSTANCE_ID
+# Expected on-wire pid for every dry-run test below -- all target
+# MONITORED_MOTOR_INSTANCE/MONITORED_CURRENT_INSTANCE (0), i.e.
+# "motor 0"/"sensor 0" in every command string, which is also what
+# Watchdog's own self-polling/stall-check/overcurrent-stop act on (see
+# watchdog.py's MONITORED_MOTOR_INSTANCE comment). Multi-instance dry-run
+# coverage (e.g. does "speed 1 500" reach a *different* wire pid) is in
+# the dedicated multi-instance section further down.
+MOTOR0_ID = constants.motor_instances[0]
+CURRENT0_ID = constants.current_instances[0]
+CNTL0MOT_WIRE = constants.cntl0mot | MOTOR0_ID
+CNTL1MOT_WIRE = constants.cntl1mot | MOTOR0_ID
+CNTL2MOT_WIRE = constants.cntl2mot | MOTOR0_ID
+CNTL3MOT_WIRE = constants.cntl3mot | MOTOR0_ID
+CNTL0CUR_WIRE = constants.cntl0cur | CURRENT0_ID
 
 
 @pytest.mark.parametrize("command,expected", [
-    ("speed 300", (True, None)),
-    ("speed -300", (True, None)),
-    ("speed 0", (True, None)),
-    (f"speed {SPEED_MAX}", (True, None)),
-    (f"speed {SPEED_MIN}", (True, None)),
-    (f"speed {SPEED_MAX + 1}", (False, RANGE_ERROR)),
-    (f"speed {SPEED_MIN - 1}", (False, RANGE_ERROR)),
-    ("speed abc", (False, "speed value must be an integer")),
-    ("speed", (False, "usage: speed <value>")),
-    ("speed 1 2", (False, "usage: speed <value>")),
-    ("pi 0.1 -0.05", (True, None)),
-    (f"pi {PI_DELTA_MAX} {PI_DELTA_MIN}", (True, None)),
-    ("pi 0 0", (True, None)),
-    (f"pi {PI_DELTA_MAX + 0.01} 0", (False, PI_RANGE_ERROR_P)),
-    (f"pi {PI_DELTA_MIN - 0.01} 0", (False, PI_RANGE_ERROR_P)),
-    (f"pi 0 {PI_DELTA_MAX + 0.01}", (False, PI_RANGE_ERROR_I)),
-    ("pi abc 0", (False, "p_delta/i_delta must be numbers")),
-    ("pi 0.1", (False, "usage: pi <p_delta> <i_delta>")),
-    ("pi 0.1 0.1 0.1", (False, "usage: pi <p_delta> <i_delta>")),
-    ("pulse 300", (True, None)),
-    ("pulse -300", (True, None)),
-    (f"pulse {PULSE_SPEED_MAX}", (True, None)),
-    (f"pulse {PULSE_SPEED_MIN}", (True, None)),
-    (f"pulse {PULSE_SPEED_MAX + 1}", (False, PULSE_RANGE_ERROR)),
-    (f"pulse {PULSE_SPEED_MIN - 1}", (False, PULSE_RANGE_ERROR)),
-    ("pulse abc", (False, "pulse value must be an integer")),
-    ("pulse", (False, "usage: pulse <value>")),
-    ("hal", (True, None)),
-    ("rpm", (True, None)),
-    ("temp", (True, None)),
-    ("current", (True, None)),
-    ("errors", (True, None)),
-    ("selftest", (True, None)),
-    ("kickcount", (True, None)),
-    ("reset", (True, None)),
-    ("reset extra", (False, "usage: reset")),
-    ("status", (True, None)),
-    ("status extra", (False, "usage: status")),
-    ("burst -500 10 1000 5", (True, None)),
-    (f"burst {PULSE_SPEED_MIN} 0 {PULSE_SPEED_MAX} 0", (True, None)),
-    (f"burst {PULSE_SPEED_MIN - 1} 10 100 5",
+    ("speed 0 300", (True, None)),
+    ("speed 0 -300", (True, None)),
+    ("speed 0 0", (True, None)),
+    ("speed 3 300", (True, None)),  # highest valid motor instance
+    (f"speed 0 {SPEED_MAX}", (True, None)),
+    (f"speed 0 {SPEED_MIN}", (True, None)),
+    (f"speed 0 {SPEED_MAX + 1}", (False, RANGE_ERROR)),
+    (f"speed 0 {SPEED_MIN - 1}", (False, RANGE_ERROR)),
+    ("speed 0 abc", (False, "speed value must be an integer")),
+    ("speed 4 300", (False, MOTOR_INSTANCE_ERROR)),  # one past the max
+    ("speed -1 300", (False, MOTOR_INSTANCE_ERROR)),
+    ("speed abc 300", (False, "motor instance must be an integer")),
+    ("speed", (False, "usage: speed <motor_instance> <value>")),
+    ("speed 0", (False, "usage: speed <motor_instance> <value>")),
+    ("speed 0 1 2", (False, "usage: speed <motor_instance> <value>")),
+    ("pi 0 0.1 -0.05", (True, None)),
+    (f"pi 0 {PI_DELTA_MAX} {PI_DELTA_MIN}", (True, None)),
+    ("pi 0 0 0", (True, None)),
+    (f"pi 0 {PI_DELTA_MAX + 0.01} 0", (False, PI_RANGE_ERROR_P)),
+    (f"pi 0 {PI_DELTA_MIN - 0.01} 0", (False, PI_RANGE_ERROR_P)),
+    (f"pi 0 0 {PI_DELTA_MAX + 0.01}", (False, PI_RANGE_ERROR_I)),
+    ("pi 4 0.1 0", (False, MOTOR_INSTANCE_ERROR)),
+    ("pi 0 abc 0", (False, "p_delta/i_delta must be numbers")),
+    ("pi 0 0.1", (False, "usage: pi <motor_instance> <p_delta> <i_delta>")),
+    ("pi 0 0.1 0.1 0.1", (False, "usage: pi <motor_instance> <p_delta> <i_delta>")),
+    ("pulse 0 300", (True, None)),
+    ("pulse 0 -300", (True, None)),
+    (f"pulse 0 {PULSE_SPEED_MAX}", (True, None)),
+    (f"pulse 0 {PULSE_SPEED_MIN}", (True, None)),
+    (f"pulse 0 {PULSE_SPEED_MAX + 1}", (False, PULSE_RANGE_ERROR)),
+    (f"pulse 0 {PULSE_SPEED_MIN - 1}", (False, PULSE_RANGE_ERROR)),
+    ("pulse 0 abc", (False, "pulse value must be an integer")),
+    ("pulse 4 300", (False, MOTOR_INSTANCE_ERROR)),
+    ("pulse", (False, "usage: pulse <motor_instance> <value>")),
+    ("hal 0", (True, None)),
+    ("hal 3", (True, None)),
+    ("hal 4", (False, MOTOR_INSTANCE_ERROR)),
+    ("hal", (False, "usage: hal <motor_instance>")),
+    ("hal 0 extra", (False, "usage: hal <motor_instance>")),
+    ("rpm 0", (True, None)),
+    ("temp 0", (True, None)),
+    ("current 0", (True, None)),
+    ("current 1", (True, None)),  # highest valid current-sensor instance
+    ("current 2", (False, CURRENT_INSTANCE_ERROR)),
+    ("current", (False, "usage: current <current_instance>")),
+    ("errors 0", (True, None)),
+    ("errors 2", (False, CURRENT_INSTANCE_ERROR)),
+    ("selftest", (True, None)),  # NOT yet instance-parameterized, see watchdog.py
+    ("kickcount 0", (True, None)),
+    ("reset 0", (True, None)),
+    ("reset 0 extra", (False, "usage: reset <motor_instance>")),
+    ("reset", (False, "usage: reset <motor_instance>")),
+    ("status 0", (True, None)),
+    ("status 0 extra", (False, "usage: status <motor_instance>")),
+    ("status", (False, "usage: status <motor_instance>")),
+    ("burst 0 -500 10 1000 5", (True, None)),
+    (f"burst 0 {PULSE_SPEED_MIN} 0 {PULSE_SPEED_MAX} 0", (True, None)),
+    (f"burst 0 {PULSE_SPEED_MIN - 1} 10 100 5",
      (False, f"value1 out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})")),
-    (f"burst -100 10 {PULSE_SPEED_MAX + 1} 5",
+    (f"burst 0 -100 10 {PULSE_SPEED_MAX + 1} 5",
      (False, f"value2 out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})")),
-    ("burst -500 -10 1000 5", (False, "pause1_ms/pause2_ms must be non-negative")),
-    ("burst -500 10 1000 -5", (False, "pause1_ms/pause2_ms must be non-negative")),
-    ("burst abc 10 1000 5",
+    ("burst 0 -500 -10 1000 5", (False, "pause1_ms/pause2_ms must be non-negative")),
+    ("burst 0 -500 10 1000 -5", (False, "pause1_ms/pause2_ms must be non-negative")),
+    ("burst 0 abc 10 1000 5",
      (False, "burst usage: value1/value2 must be integers, pause1_ms/pause2_ms must be numbers")),
-    ("burst -500 10 1000", (False, "usage: burst <value1> <pause1_ms> <value2> <pause2_ms>")),
-    ("hal extra", (False, "usage: hal")),
+    ("burst 4 -500 10 1000 5", (False, MOTOR_INSTANCE_ERROR)),
+    ("burst 0 -500 10 1000",
+     (False, "usage: burst <motor_instance> <value1> <pause1_ms> <value2> <pause2_ms>")),
     ("banana", (False, "unknown command: banana")),
     ("", (False, "empty command")),
 ])
@@ -91,7 +119,7 @@ def test_execute_invalid_command_returns_err_with_reason():
 
 def test_execute_speed_relays_to_dry_run_bus():
     wd = Watchdog(DryRunLin())
-    assert wd.execute("speed 300") == "OK"
+    assert wd.execute("speed 0 300") == "OK"
     assert len(wd.lin.writes) == 1
     address, data = wd.lin.writes[0]
     assert address == CNTL3MOT_WIRE
@@ -100,7 +128,7 @@ def test_execute_speed_relays_to_dry_run_bus():
 
 def test_execute_pulse_relays_to_dry_run_bus():
     wd = Watchdog(DryRunLin())
-    assert wd.execute("pulse 300") == "OK"
+    assert wd.execute("pulse 0 300") == "OK"
     assert len(wd.lin.writes) == 1
     address, data = wd.lin.writes[0]
     assert address == CNTL1MOT_WIRE
@@ -113,14 +141,14 @@ def test_execute_pulse_does_not_touch_stall_check_state():
     wd = Watchdog(DryRunLin())
     wd.last_commanded_speed = 300
     wd.speed_became_nonzero_at = 12345.0
-    assert wd.execute("pulse -300") == "OK"
+    assert wd.execute("pulse 0 -300") == "OK"
     assert wd.last_commanded_speed == 300
     assert wd.speed_became_nonzero_at == 12345.0
 
 
 def test_execute_burst_relays_two_pulses_in_order():
     wd = Watchdog(DryRunLin())
-    assert wd.execute("burst -500 0 1000 0") == "OK"
+    assert wd.execute("burst 0 -500 0 1000 0") == "OK"
     assert len(wd.lin.writes) == 2
     address1, data1 = wd.lin.writes[0]
     address2, data2 = wd.lin.writes[1]
@@ -134,14 +162,14 @@ def test_execute_burst_does_not_touch_stall_check_state():
     wd = Watchdog(DryRunLin())
     wd.last_commanded_speed = 300
     wd.speed_became_nonzero_at = 12345.0
-    assert wd.execute("burst -500 0 1000 0") == "OK"
+    assert wd.execute("burst 0 -500 0 1000 0") == "OK"
     assert wd.last_commanded_speed == 300
     assert wd.speed_became_nonzero_at == 12345.0
 
 
 def test_execute_reset_relays_to_dry_run_bus():
     wd = Watchdog(DryRunLin())
-    assert wd.execute("reset") == "OK"
+    assert wd.execute("reset 0") == "OK"
     assert wd.lin.writes == [(CNTL2MOT_WIRE, [0, 0, 0, 0, 0, 0])]
 
 
@@ -152,14 +180,14 @@ def test_execute_reset_clears_stall_check_state():
     wd = Watchdog(DryRunLin())
     wd.last_commanded_speed = 300
     wd.speed_became_nonzero_at = 12345.0
-    assert wd.execute("reset") == "OK"
+    assert wd.execute("reset 0") == "OK"
     assert wd.last_commanded_speed == 0
     assert wd.speed_became_nonzero_at is None
 
 
 def test_execute_pi_relays_to_dry_run_bus():
     wd = Watchdog(DryRunLin())
-    assert wd.execute("pi 0.1 -0.05") == "OK"
+    assert wd.execute("pi 0 0.1 -0.05") == "OK"
     assert wd.lin.writes == [
         (CNTL0MOT_WIRE, [10, 251]),  # p_byte=10 (0.1*100), i_byte=-5 as unsigned (0.05*100)
     ]
@@ -167,48 +195,48 @@ def test_execute_pi_relays_to_dry_run_bus():
 
 def test_execute_pi_clamps_to_wire_extremes():
     wd = Watchdog(DryRunLin())
-    assert wd.execute(f"pi {PI_DELTA_MAX} {PI_DELTA_MIN}") == "OK"
+    assert wd.execute(f"pi 0 {PI_DELTA_MAX} {PI_DELTA_MIN}") == "OK"
     assert wd.lin.writes == [(CNTL0MOT_WIRE, [127, 128])]
 
 
 def test_execute_hal_uses_injected_read_response():
     wd = Watchdog(DryRunLin())
     wd.lin.read_responses[constants.st0mot] = [0x01, 0x00, 0x01]
-    reply = wd.execute("hal")
+    reply = wd.execute("hal 0")
     assert reply == "OK ret=0 data=['0x01', '0x00', '0x01']"
 
 
 def test_execute_hal_defaults_to_zeros_when_not_injected():
     wd = Watchdog(DryRunLin())
-    reply = wd.execute("hal")
+    reply = wd.execute("hal 0")
     assert reply == "OK ret=0 data=['0x00', '0x00', '0x00']"
 
 
 def test_execute_rpm_reply_includes_hex():
     wd = Watchdog(DryRunLin())
     wd.lin.read_responses[constants.st2mot] = [0x2c, 0x01]  # 300
-    reply = wd.execute("rpm")
+    reply = wd.execute("rpm 0")
     assert reply == "OK ret=0 rpm=300 (hex=0x012c)"
 
 
 def test_execute_rpm_negative_shows_twos_complement_hex():
     wd = Watchdog(DryRunLin())
     wd.lin.read_responses[constants.st2mot] = [0xd4, 0xfe]  # -300, per get_rpm
-    reply = wd.execute("rpm")
+    reply = wd.execute("rpm 0")
     assert reply == "OK ret=0 rpm=-300 (hex=0xfed4)"
 
 
 def test_execute_temp_reply_includes_hex():
     wd = Watchdog(DryRunLin())
     wd.lin.read_responses[constants.st1mot] = [0x10, 0x00]  # 16
-    reply = wd.execute("temp")
+    reply = wd.execute("temp 0")
     assert reply == "OK ret=0 temp=16 (hex=0x0010)"
 
 
 def test_execute_kickcount_reads_data3():
     wd = Watchdog(DryRunLin())
     wd.lin.read_responses[constants.st3mot] = [0x00, 0x00, 0x01, 0x07]
-    reply = wd.execute("kickcount")
+    reply = wd.execute("kickcount 0")
     assert reply == "OK ret=0 kickcount=7"
 
 
@@ -218,7 +246,7 @@ def test_execute_status_decodes_all_fields():
     # two's complement) -- same STALL_TIM_ERR value used elsewhere in
     # this file, confirms the negative decoding survives execute() too.
     wd.lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x07, 0xbf, 0x00]
-    reply = wd.execute("status")
+    reply = wd.execute("status 0")
     assert reply == ("OK ret=0 timeout=300 checksum=3 kickstart=7 "
                       "sys_error=-65")
 
@@ -230,7 +258,7 @@ def test_execute_current_parses_and_converts_to_amps():
     # packing. Converted via linbus._adc_to_amps() (Vcc=5V, 2.5V=0A,
     # 100mV/A -- ACS712xLCTR-20A datasheet value).
     wd.lin.read_responses[constants.st0cur] = [0x2c, 0x01, 0x64, 0x00]
-    reply = wd.execute("current")
+    reply = wd.execute("current 0")
     assert reply == "OK ret=0 val1=-10.35 val2=-20.12"
 
 
@@ -240,16 +268,49 @@ def test_execute_errors_decodes_two_complement_codes_and_names():
     # matches currentsensor/firmware/main.cpp's errorstorage[8] on-wire
     # as raw int8_t bytes (two's complement).
     wd.lin.read_responses[constants.st1cur] = [0xfb, 0, 0, 0, 0, 0, 0, 0]
-    reply = wd.execute("errors")
+    reply = wd.execute("errors 0")
     assert reply == ("OK ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] "
                       "names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']")
 
 
 def test_execute_errors_defaults_to_no_errors_when_not_injected():
     wd = Watchdog(DryRunLin())
-    reply = wd.execute("errors")
+    reply = wd.execute("errors 0")
     assert reply == ("OK ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] "
                       "names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']")
+
+
+def test_execute_speed_different_instance_reaches_different_wire_pid():
+    # Multi-instance sanity check (2026-09-11): "speed 1 300" must reach
+    # motor instance 1's own wire pid, not instance 0's -- confirms the
+    # instance argument actually changes what's on the bus, not just that
+    # it's accepted syntactically.
+    wd = Watchdog(DryRunLin())
+    assert wd.execute("speed 1 300") == "OK"
+    address, data = wd.lin.writes[0]
+    assert address == (constants.cntl3mot | constants.motor_instances[1])
+    assert address != CNTL3MOT_WIRE
+    assert data == [0x01, 0x2c]
+    # Commanding instance 1 must not perturb instance 0's own stall-check
+    # bookkeeping (MONITORED_MOTOR_INSTANCE is 0) -- see _dispatch()'s
+    # comment.
+    assert wd.last_commanded_speed == 0
+    assert wd.speed_became_nonzero_at is None
+
+
+def test_execute_current_instance_1_is_accepted_and_resolves_a_different_wire_id():
+    wd = Watchdog(DryRunLin())
+    # DryRunLin's read() is keyed by base address regardless of instance
+    # (see its own docstring) -- the reply content is identical for
+    # instance 0 or 1, so this only confirms "current 1" is accepted and
+    # dispatched, not stuck at "unknown command"/a validate() rejection.
+    assert wd.execute("current 1") == "OK ret=0 val1=-25.00 val2=-25.00"
+    # The actual wire-id resolution itself (base pid | instance) is
+    # exercised directly here, since DryRunLin.read() doesn't log reads
+    # the way it logs writes.
+    from linbus import _current_wire_id
+    assert _current_wire_id(1) == constants.current_instances[1]
+    assert _current_wire_id(1) != _current_wire_id(0)
 
 
 def test_execute_selftest_writes_inject_reset_csbadwrite_sabotage_then_bad_checksum_in_order():
@@ -312,7 +373,7 @@ def test_get_motor_counters_decodes_timeout_uint16_and_checksum_byte():
     # data[3] (0x07) is kickStartCount since 2026-08-27 -- not part of
     # checksum_error_count anymore, see get_kick_start_count() below.
     lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x07]  # timeout=300, checksum=3
-    ret, timeout_count, checksum_error_count = get_motor_counters(lin)
+    ret, timeout_count, checksum_error_count = get_motor_counters(lin, 0)
     assert (ret, timeout_count, checksum_error_count) == (0, 300, 3)
 
 
@@ -320,7 +381,7 @@ def test_get_kick_start_count_decodes_data3():
     from linbus import get_kick_start_count
     lin = DryRunLin()
     lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x07]
-    ret, kick_start_count = get_kick_start_count(lin)
+    ret, kick_start_count = get_kick_start_count(lin, 0)
     assert (ret, kick_start_count) == (0, 7)
 
 
@@ -329,7 +390,7 @@ def test_get_motor_status_decodes_all_six_bytes():
     lin = DryRunLin()
     # timeout=300, checksum=3, kickstart=7, sys_error=0 (MOT_OK), reserved=0
     lin.read_responses[constants.st3mot] = [0x2c, 0x01, 0x03, 0x07, 0x00, 0x00]
-    result = get_motor_status(lin)
+    result = get_motor_status(lin, 0)
     assert result == (0, 300, 3, 7, 0)
 
 
@@ -338,14 +399,14 @@ def test_get_motor_status_decodes_negative_sys_error():
     lin = DryRunLin()
     # sys_error=0xbf -- two's complement for -65 (errors.h's STALL_TIM_ERR)
     lin.read_responses[constants.st3mot] = [0x00, 0x00, 0x00, 0x00, 0xbf, 0x00]
-    result = get_motor_status(lin)
+    result = get_motor_status(lin, 0)
     assert result == (0, 0, 0, 0, -65)
 
 
 def test_provoke_checksum_error_writes_safe_speed_zero_via_bad_checksum():
     from linbus import provoke_checksum_error
     lin = DryRunLin()
-    ret = provoke_checksum_error(lin)
+    ret = provoke_checksum_error(lin, 0)
     assert ret == 0
     assert lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
 
@@ -353,7 +414,7 @@ def test_provoke_checksum_error_writes_safe_speed_zero_via_bad_checksum():
 def test_provoke_currentsensor_checksum_error_writes_inject_bytes_via_bad_checksum():
     from linbus import provoke_currentsensor_checksum_error
     lin = DryRunLin()
-    ret = provoke_currentsensor_checksum_error(lin)
+    ret = provoke_currentsensor_checksum_error(lin, 0)
     assert ret == 0
     assert lin.writes == [(CNTL0CUR_WIRE, [0x01, 0xab])]
 
@@ -361,7 +422,7 @@ def test_provoke_currentsensor_checksum_error_writes_inject_bytes_via_bad_checks
 def test_provoke_bus_hang_timeout_arms_sabotage_and_triggers_current_read():
     from linbus import provoke_bus_hang_timeout
     lin = DryRunLin()
-    ret_arm, ret_trigger = provoke_bus_hang_timeout(lin)
+    ret_arm, ret_trigger = provoke_bus_hang_timeout(lin, 0)
     assert (ret_arm, ret_trigger) == (0, 0)  # dry-run: no real failure to see
     assert lin.writes == [(CNTL0CUR_WIRE, [0xfa, 0x17])]
 
@@ -371,7 +432,7 @@ def test_provoke_bus_hang_timeout_arms_sabotage_and_triggers_current_read():
 def test_disconnect_stops_motor_immediately():
     wd = Watchdog(DryRunLin())
     wd.on_connect()
-    wd.execute("speed 300")
+    wd.execute("speed 0 300")
     wd.lin.writes.clear()
     wd.on_disconnect()
     assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]  # speed 0
@@ -388,7 +449,7 @@ def test_idle_check_does_nothing_with_no_connection():
 def test_idle_check_does_nothing_right_after_a_command():
     wd = Watchdog(DryRunLin())
     wd.on_connect()
-    wd.execute("hal")
+    wd.execute("hal 0")
     wd.check_idle()
     assert wd.lin.writes == []
 
@@ -396,7 +457,7 @@ def test_idle_check_does_nothing_right_after_a_command():
 def test_idle_timeout_stops_motor_when_stale():
     wd = Watchdog(DryRunLin())
     wd.on_connect()
-    wd.execute("hal")
+    wd.execute("hal 0")
     wd.last_command_time -= (IDLE_TIMEOUT + 0.1)  # simulate elapsed time
     wd.check_idle()
     assert wd.stopped_for_idle is True
@@ -435,7 +496,7 @@ def test_stall_not_checked_while_speed_is_zero():
 
 def test_stall_not_judged_during_grace_period():
     wd = Watchdog(DryRunLin())
-    wd.execute("speed 300")
+    wd.execute("speed 0 300")
     wd.lin.writes.clear()
     wd.lin.read_responses[constants.st2mot] = [0x00, 0x00]  # rpm=0
     wd.poll_rpm()  # still within STALL_GRACE_PERIOD, not judged yet
@@ -446,7 +507,7 @@ def test_stall_not_judged_during_grace_period():
 def test_stall_detected_after_grace_period_if_rpm_still_zero():
     from watchdog import STALL_GRACE_PERIOD
     wd = Watchdog(DryRunLin())
-    wd.execute("speed 300")
+    wd.execute("speed 0 300")
     wd.speed_became_nonzero_at -= (STALL_GRACE_PERIOD + 0.1)  # simulate elapsed time
     wd.lin.writes.clear()
     wd.lin.read_responses[constants.st2mot] = [0x00, 0x00]  # rpm=0
@@ -458,7 +519,7 @@ def test_stall_detected_after_grace_period_if_rpm_still_zero():
 def test_no_stall_after_grace_period_if_rpm_nonzero():
     from watchdog import STALL_GRACE_PERIOD
     wd = Watchdog(DryRunLin())
-    wd.execute("speed 300")
+    wd.execute("speed 0 300")
     wd.speed_became_nonzero_at -= (STALL_GRACE_PERIOD + 0.1)
     wd.lin.writes.clear()
     wd.lin.read_responses[constants.st2mot] = [0x2c, 0x01]  # rpm=300, moving
@@ -471,7 +532,7 @@ def test_poll_rpm_works_with_no_client_connected():
     # Self-polling must not depend on last_command_time / an active
     # connection — it's a separate concern from the idle check.
     wd = Watchdog(DryRunLin())
-    wd.execute("speed 300")
+    wd.execute("speed 0 300")
     wd.on_disconnect()  # no client connected anymore; motor already
     # stopped by on_disconnect(), so re-command it to test poll_rpm in
     # isolation without a connection:

@@ -188,8 +188,8 @@ def _send(conn, command):
     return reply
 
 
-def _read_hal(conn):
-    reply = _send(conn, "hal")
+def _read_hal(conn, motor):
+    reply = _send(conn, f"hal {motor}")
     if not reply.startswith("OK"):
         return None, None, reply
     # reply looks like "OK ret=0 data=['0x01', '0x00', '0x00']"
@@ -200,7 +200,7 @@ def _read_hal(conn):
     return bits, HALL_STATE_TABLE.get(bits), reply
 
 
-def _find_threshold(conn, pulse_start, pulse_step, pulse_ceiling, direction):
+def _find_threshold(conn, motor, pulse_start, pulse_step, pulse_ceiling, direction):
     # direction: +1 or -1, multiplied into every pulse sent -- the
     # escalation itself (pulse_start/step/ceiling) is always given as a
     # magnitude, direction decides which way it actually drives the
@@ -210,7 +210,7 @@ def _find_threshold(conn, pulse_start, pulse_step, pulse_ceiling, direction):
     # hal_new_state, attempts). threshold is None if no permanent
     # transition happened by pulse_ceiling -- hal_new_* then just
     # echoes hal_ref_* back, since nothing actually changed.
-    hal_ref_bits, hal_ref_state, reply = _read_hal(conn)
+    hal_ref_bits, hal_ref_state, reply = _read_hal(conn, motor)
     if hal_ref_bits is None:
         return None, None, None, None, None, 0
 
@@ -219,12 +219,12 @@ def _find_threshold(conn, pulse_start, pulse_step, pulse_ceiling, direction):
     while pulse_magnitude <= pulse_ceiling:
         attempts += 1
         signed_pulse = direction * pulse_magnitude
-        pulse_reply = _send(conn, f"pulse {signed_pulse}")
+        pulse_reply = _send(conn, f"pulse {motor} {signed_pulse}")
         if not pulse_reply.startswith("OK"):
             print(f"WARNUNG: pulse {signed_pulse} abgelehnt ({pulse_reply}).")
             break
         time.sleep(SETTLE_S)
-        hal_bits, hal_state, reply = _read_hal(conn)
+        hal_bits, hal_state, reply = _read_hal(conn, motor)
         if hal_bits is None:
             print(f"WARNUNG: hal-Read nach pulse {signed_pulse} fehlgeschlagen ({reply}).")
             break
@@ -267,7 +267,7 @@ def _step_size(hal_ref_state, hal_new_state, direction):
 
 def run(csv_path, start_quarter, direction=1, pulse_start=PULSE_START_DEFAULT,
         pulse_step=PULSE_STEP_DEFAULT, pulse_ceiling=PULSE_CEILING_DEFAULT,
-        address=SOCKET_ADDRESS):
+        address=SOCKET_ADDRESS, motor=0):
     logsetup.configure("characterize_hall_positions", LOG_PATH, terminal_level=None)
 
     aborted = False
@@ -279,7 +279,7 @@ def run(csv_path, start_quarter, direction=1, pulse_start=PULSE_START_DEFAULT,
                           "detent_type"])
         f.flush()
 
-        _send(conn, "speed 0")  # known-rest baseline before any pulse
+        _send(conn, f"speed {motor} 0")  # known-rest baseline before any pulse
         print(f"Läuft automatisch bis ein Quartal (6 Zustände) durchlaufen ist, Richtung "
               f"{'CW (+)' if direction > 0 else 'CCW (-)'}, Startquartal {start_quarter}. "
               f"Ergebnisse werden laufend nach {csv_path} geschrieben.\n")
@@ -293,7 +293,7 @@ def run(csv_path, start_quarter, direction=1, pulse_start=PULSE_START_DEFAULT,
                 print(f"Position {index} (Quartal {quarter}){tag}:")
                 (hal_ref_bits, hal_ref_state, threshold,
                  hal_new_bits, hal_new_state, attempts) = _find_threshold(
-                    conn, pulse_start, pulse_step, pulse_ceiling, direction)
+                    conn, motor, pulse_start, pulse_step, pulse_ceiling, direction)
 
                 if hal_ref_bits is None:
                     print("WARNUNG: hal-Read fehlgeschlagen -- Lauf wird abgebrochen.")
@@ -344,7 +344,7 @@ def run(csv_path, start_quarter, direction=1, pulse_start=PULSE_START_DEFAULT,
             print("\nABGEBROCHEN VOM USER.")
             aborted = True
 
-        _send(conn, "speed 0")  # belt-and-suspenders, matches every other script here
+        _send(conn, f"speed {motor} 0")  # belt-and-suspenders, matches every other script here
 
     print(f"\n{'Abgebrochen' if aborted else 'Fertig'}. Ergebnisse in {csv_path}")
 
@@ -386,8 +386,13 @@ if __name__ == "__main__":
     default_csv = f"characterize_hall_positions_{raw_dir}_q{start_quarter}_{datetime.now():%Y-%m-%d_%H%M%S}.csv"
     csv_path = input(f"CSV-Ausgabedatei (Enter = '{default_csv}'): ").strip() or default_csv
 
+    # Multi-instance addressing (2026-09-11) -- which motor instance
+    # (0-3) to pulse/read, default 0. See raspi/watchdog/CLAUDE.md's
+    # "Multi-Instance Addressing" section.
+    motor = _ask_int("Motor-Instanz", 0)
+
     if input(f"Automatischer Lauf über ein Quartal, Richtung {raw_dir}, Startquartal "
-             f"{start_quarter}, eskalierende Pulse {pulse_start}..{pulse_ceiling} "
+             f"{start_quarter}, Motor {motor}, eskalierende Pulse {pulse_start}..{pulse_ceiling} "
              f"(Schritt {pulse_step}), jetzt starten? [y/N]: ").strip().lower() != "y":
         sys.exit("Abgebrochen.")
-    run(csv_path, start_quarter, direction, pulse_start, pulse_step, pulse_ceiling)
+    run(csv_path, start_quarter, direction, pulse_start, pulse_step, pulse_ceiling, motor=motor)

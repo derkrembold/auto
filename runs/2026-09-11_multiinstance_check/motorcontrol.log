@@ -1,0 +1,81 @@
+13:09:09.412  INFO    connected to watchdog
+13:09:24.872  INFO    -> hal 0
+13:09:24.879  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+13:09:29.353  INFO    -> hal 0
+13:09:29.359  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+13:09:33.289  INFO    -> hal 0
+13:09:33.295  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+13:09:38.426  INFO    -> hal 0
+13:09:38.432  INFO    <- OK ret=0 data=['0x01', '0x00', '0x01']
+13:09:44.299  INFO    -> hal 1
+13:09:44.305  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+13:09:48.619  INFO    -> hal 1
+13:09:48.625  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+13:09:54.748  INFO    -> hal 1
+13:09:54.754  INFO    <- OK ret=0 data=['0x01', '0x00', '0x00']
+13:09:58.525  INFO    -> hal 1
+13:09:58.531  INFO    <- OK ret=0 data=['0x01', '0x00', '0x01']
+13:10:01.789  INFO    -> hal 1
+13:10:01.795  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+13:10:06.238  INFO    -> hal 1
+13:10:06.244  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+13:10:11.214  INFO    -> hal 0
+13:10:11.220  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+13:10:30.417  INFO    -> hal 0
+13:10:30.423  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+13:10:34.866  INFO    -> hal 0
+13:10:34.872  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+13:10:38.674  INFO    -> hal 0
+13:10:38.680  INFO    <- OK ret=0 data=['0x01', '0x01', '0x00']
+13:10:42.195  INFO    -> hal 0
+13:10:42.201  INFO    <- OK ret=0 data=['0x00', '0x01', '0x00']
+13:10:46.243  INFO    -> hal 1
+13:10:46.249  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+13:10:59.125  INFO    -> hal 1
+13:10:59.131  INFO    <- OK ret=0 data=['0x00', '0x00', '0x01']
+13:11:04.502  INFO    -> hal 1
+13:11:04.507  INFO    <- OK ret=0 data=['0x00', '0x01', '0x01']
+13:11:39.626  INFO    -> current 0
+13:11:39.633  INFO    <- OK ret=0 val1=-0.10 val2=0.05
+13:11:59.965  INFO    -> status 0
+13:11:59.972  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+13:12:02.717  INFO    -> status 1
+13:12:02.725  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+13:14:32.802  INFO    -> pulse 0 1000
+13:14:32.807  INFO    <- OK
+13:15:43.707  INFO    -> pulse 0 -1000
+13:15:43.713  INFO    <- OK
+13:16:55.605  INFO    -> rpm 0
+13:16:55.610  INFO    <- OK ret=0 rpm=0 (hex=0x0000)
+13:17:23.112  INFO    -> speed 0 0
+13:17:23.117  INFO    <- OK
+13:17:28.601  INFO    -> speed 0
+13:17:28.602  INFO    <- ERR usage: speed <motor_instance> <value>
+13:17:32.729  INFO    -> speed 0 0
+13:17:32.735  INFO    <- OK
+13:17:39.274  INFO    -> speed 0 500
+13:17:39.279  INFO    <- OK
+13:17:41.578  INFO    -> speed 0 0
+13:17:41.584  INFO    <- OK
+13:17:56.412  INFO    -> status 0
+13:17:56.420  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=1 sys_error=0
+13:17:58.781  INFO    -> status 1
+13:17:58.788  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+13:18:02.765  INFO    -> reset 0
+13:18:02.773  INFO    <- OK
+13:18:05.822  INFO    -> reset 1
+13:18:05.829  INFO    <- OK
+13:18:08.910  INFO    -> status 0
+13:18:08.917  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+13:18:10.286  INFO    -> reset 1
+13:18:10.294  INFO    <- OK
+13:18:16.591  INFO    -> speed 0 0
+13:18:16.596  INFO    <- OK
+13:18:28.737  INFO    -> speed 0 -500
+13:18:28.742  INFO    <- OK
+13:18:31.521  INFO    -> speed 0 0
+13:18:31.526  INFO    <- OK
+13:20:46.115  INFO    -> selftest
+13:20:48.228  INFO    <- OK inject_ret=0 injected(ret=0 codes=[17, 85, 119, -86, -69, -52, -35, -1] names=['17', '85', '119', '-86', '-69', '-52', '-35', 'SYN']) reset_ret=0 after_reset(ret=0 codes=[0, 0, 0, 0, 0, 0, 0, 0] names=['OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) currentsensor_checksum_test(motor_before(ret=0 timeout=0 checksum=0) bad_write_ret=0 currentsensor_after(ret=0 codes=[-5, 0, 0, 0, 0, 0, 0, 0] names=['CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK']) motor_after(ret=0 timeout=0 checksum=0)) bushang_test(before(ret=0 timeout=0 checksum=0) arm_ret=0 trigger_ret=-5 after(ret=0 timeout=1 checksum=0) currentsensor_after(ret=0 codes=[-5, -5, 0, 0, 0, 0, 0, 0] names=['CHK', 'CHK', 'OK', 'OK', 'OK', 'OK', 'OK', 'OK'])) checksum_test(before(ret=0 timeout=1 checksum=0) bad_write_ret=0 after(ret=0 timeout=1 checksum=1)) reset_test(before(ret=0 timeout=1 checksum=1 kickstart=2 sys_error=0) reset_ret=0 after(ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0))
+13:20:53.908  INFO    -> status 0
+13:20:53.916  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0

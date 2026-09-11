@@ -17,24 +17,40 @@ UART_BAUDRATE = 19200
 SPEED_MIN = -32768
 SPEED_MAX = 32767
 
-# Which physical motor instance the one motor currently on the bus
-# identifies as, per its PB14/PB15 strap pins (see STM32/CLAUDE.md's
-# "Instance-Selection Jumper" section): neither pin is jumpered to GND
-# right now, both read HIGH via their internal pull-ups, so the firmware
-# computes hwbits = 0x03 -- instance 3, not 0. Every motor command must
-# OR this into the message's base pid to actually reach it. Hardcoded
-# here (not auto-discovered) because only one motor is on the bus today;
-# revisit once a real multi-motor setup exists and the master needs to
-# pick a target per-call instead of once globally.
-TARGET_MOTOR_INSTANCE = 3
+# Multi-instance addressing (2026-09-11): every motor/current-sensor
+# command below now takes an explicit `instance` argument -- no more
+# single hardcoded module-level target. The actual on-wire pid is
+# base_pid | constants.<class>_instances[instance], resolved per-call by
+# _motor_wire_id()/_current_wire_id() below. This mirrors the firmware's
+# own PB14/PB15 strap-pin scheme (see STM32/CLAUDE.md's
+# "Instance-Selection Jumper" section) exactly: instance 0 = both pins
+# grounded, instance 1 = PB14 grounded/PB15 not, etc.
+#
+# IMPORTANT PHYSICAL PRECONDITION: a board with *neither* jumper set
+# reads hwbits = 0x03 (both PB14/PB15 float HIGH via internal pull-ups)
+# -- instance 3, not 0. The one real motor on the bus before this change
+# was never jumpered (only one motor existed, no instance selection
+# needed) and so answers as instance 3 today. For it to be reachable as
+# "motor 0" under this new addressing (and for the watchdog's own
+# self-polling/stall-check/overcurrent-stop, which now targets a fixed
+# MONITORED_MOTOR_INSTANCE, see watchdog.py), its jumper must actually be
+# set to ground both PB14 and PB15. Until that's done, `speed 0 500`
+# etc. against the real motor will just time out (no reply) -- this is a
+# hardware step, not a code gap.
+def _motor_wire_id(instance):
+    # Resolves a motor instance number (0-3) to its strap-pin wire id.
+    # Range is validated upstream (watchdog.py's validate(), see
+    # MOTOR_INSTANCE_MIN/MAX) -- a bad instance here raises KeyError as a
+    # defensive backstop, not the primary check, same pattern as
+    # set_pi()'s clamp below.
+    return constants.motor_instances[instance]
 
-# The current sensor's own firmware (currentsensor/firmware/main.cpp)
-# doesn't read any strap-pin instance selector yet -- it dispatches on
-# st0cur/cntl0cur unconditionally, regardless of instance bits (unlike
-# the motor's hwbits handling, see TARGET_MOTOR_INSTANCE above). So this
-# stays at instance 0 for now; revisit once that firmware gains the same
-# jumper-read treatment the motor got.
-CURRENT_INSTANCE_ID = constants.current_instances[0]
+
+def _current_wire_id(instance):
+    # Resolves a current-sensor instance number (0-1) to its wire id.
+    # Same defensive-backstop reasoning as _motor_wire_id() above --
+    # watchdog.py's validate() is the primary range check.
+    return constants.current_instances[instance]
 
 # ACS712xLCTR-20A conversion (see currentsensor/CLAUDE.md's Hardware
 # section) -- done here, not on the AVR, deliberately: the ATmega328 has
@@ -138,8 +154,8 @@ class Lin:
         # `address` is a message's BASE pid (from constants.pids) -- used
         # as-is to look up byte count/source, but combined with `instance`
         # (the target unit's strap-pin id, e.g. constants.motor_instances[n])
-        # for what actually goes out on the wire. See TARGET_MOTOR_INSTANCE
-        # above for why this matters right now.
+        # for what actually goes out on the wire. See _motor_wire_id()/
+        # _current_wire_id() below for how callers resolve that.
         if address not in constants.pids:
             logger.warning("pid not known")
             return -1
@@ -324,19 +340,16 @@ class DryRunLin:
         pass
 
 
-MOTOR_INSTANCE_ID = constants.motor_instances[TARGET_MOTOR_INSTANCE]
-
-
-def set_speed(lin, value):
+def set_speed(lin, instance, value):
     # `value` is assumed to be RPM, but this is unconfirmed — the firmware
     # side has never been verified against an actual measured speed. Check
     # this once the Saleae Hall-edge speed measurement is in place.
     value = max(SPEED_MIN, min(SPEED_MAX, int(value)))
     data = struct.pack('>h', value)
-    return lin.write(constants.cntl3mot, data, instance=MOTOR_INSTANCE_ID)
+    return lin.write(constants.cntl3mot, data, instance=_motor_wire_id(instance))
 
 
-def set_pulse(lin, value):
+def set_pulse(lin, instance, value):
     # cntl1mot -- a single raw, open-loop driveStep() pulse (main.c's
     # cntl1mot dispatch), no PI controller/ramp involved at all. Built
     # 2026-08-28 for characterizing torque response by starting Hall
@@ -351,10 +364,10 @@ def set_pulse(lin, value):
     # pattern as set_speed()/SPEED_MIN/MAX above.
     value = max(SPEED_MIN, min(SPEED_MAX, int(value)))
     data = struct.pack('>h', value)
-    return lin.write(constants.cntl1mot, data, instance=MOTOR_INSTANCE_ID)
+    return lin.write(constants.cntl1mot, data, instance=_motor_wire_id(instance))
 
 
-def set_pi(lin, p_delta, i_delta):
+def set_pi(lin, instance, p_delta, i_delta):
     # cntl0mot's body is two signed bytes (int8_t), each *100 -- the
     # firmware always computes KP = KPDEFAULT + byte/100.0 (never
     # cumulative against whatever KP currently is), so p_delta/i_delta
@@ -368,15 +381,15 @@ def set_pi(lin, p_delta, i_delta):
     p_byte = max(-128, min(127, round(p_delta * 100)))
     i_byte = max(-128, min(127, round(i_delta * 100)))
     data = struct.pack('bb', p_byte, i_byte)
-    return lin.write(constants.cntl0mot, data, instance=MOTOR_INSTANCE_ID)
+    return lin.write(constants.cntl0mot, data, instance=_motor_wire_id(instance))
 
 
-def get_hal(lin):
-    return lin.read(constants.st0mot, instance=MOTOR_INSTANCE_ID)
+def get_hal(lin, instance):
+    return lin.read(constants.st0mot, instance=_motor_wire_id(instance))
 
 
-def get_rpm(lin):
-    ret, data = lin.read(constants.st2mot, instance=MOTOR_INSTANCE_ID)
+def get_rpm(lin, instance):
+    ret, data = lin.read(constants.st2mot, instance=_motor_wire_id(instance))
     if ret < 0:
         return ret, None
     raw = data[0] + 256 * data[1]
@@ -385,14 +398,14 @@ def get_rpm(lin):
     return ret, raw
 
 
-def get_temp(lin):
-    ret, data = lin.read(constants.st1mot, instance=MOTOR_INSTANCE_ID)
+def get_temp(lin, instance):
+    ret, data = lin.read(constants.st1mot, instance=_motor_wire_id(instance))
     if ret < 0:
         return ret, None
     return ret, data[0] + 256 * data[1]
 
 
-def get_motor_counters(lin):
+def get_motor_counters(lin, instance):
     # 4-byte reply -- STM32/firmware/Core/Src/main.c's fillbody() st3mot
     # case: data[0:2] = bodyTimeoutCount (how many times the
     # HAL_GetTick() bus-hang timeout has fired, see STM32/CLAUDE.md's
@@ -408,7 +421,7 @@ def get_motor_counters(lin):
     # throwaway diagnostic for the kick-start dead-zone/stiction fix).
     # Plain unsigned -- unlike get_error_history()'s codes, these are
     # counters, not two's-complement error codes.
-    ret, data = lin.read(constants.st3mot, instance=MOTOR_INSTANCE_ID)
+    ret, data = lin.read(constants.st3mot, instance=_motor_wire_id(instance))
     if ret < 0:
         return ret, None, None
     timeout_count = data[0] | (data[1] << 8)
@@ -416,7 +429,7 @@ def get_motor_counters(lin):
     return ret, timeout_count, checksum_error_count
 
 
-def get_kick_start_count(lin):
+def get_kick_start_count(lin, instance):
     # Experimental/throwaway diagnostic (2026-08-27) for the firmware
     # kick-start mechanism (main.c's driveKickStart()) -- st3mot's
     # data[3], a free-running counter (mod 16 on the firmware side,
@@ -428,13 +441,13 @@ def get_kick_start_count(lin):
     # function's existing callers (selftest()'s checksum/bus-hang
     # provocations) don't need updating for a value they don't care
     # about.
-    ret, data = lin.read(constants.st3mot, instance=MOTOR_INSTANCE_ID)
+    ret, data = lin.read(constants.st3mot, instance=_motor_wire_id(instance))
     if ret < 0:
         return ret, None
     return ret, data[3]
 
 
-def reset_motor(lin):
+def reset_motor(lin, instance):
     # cntl2mot, repurposed 2026-09-07 (was a raw per-MOSFET debug write,
     # driveMOSFET() directly -- never actually sent from the Raspi side,
     # see STM32/CLAUDE.md's Planned Redesign section) into a full state
@@ -449,10 +462,10 @@ def reset_motor(lin):
     # selective-reset bitmask, see analysis/grid_search_log.md's
     # 2026-09-07 discussion) body bytes + checksum, so 6 zero bytes go
     # out as a harmless placeholder payload.
-    return lin.write(constants.cntl2mot, bytes(6), instance=MOTOR_INSTANCE_ID)
+    return lin.write(constants.cntl2mot, bytes(6), instance=_motor_wire_id(instance))
 
 
-def get_motor_status(lin):
+def get_motor_status(lin, instance):
     # Full 6-byte st3mot reply (extended 2026-09-07 from 4 bytes, see
     # STM32/CLAUDE.md's Planned Redesign section) in one LIN round-trip
     # -- use this instead of separate get_motor_counters()/
@@ -463,7 +476,7 @@ def get_motor_status(lin):
     # counts). data[4] = sysError (main.c's MOT_OK=0/STALL_TIM_ERR=-65/
     # etc., from errors.h -- signed, two's-complement, unlike the plain
     # unsigned counters), data[5] = reserved, always 0.
-    ret, data = lin.read(constants.st3mot, instance=MOTOR_INSTANCE_ID)
+    ret, data = lin.read(constants.st3mot, instance=_motor_wire_id(instance))
     if ret < 0:
         return ret, None, None, None, None
     timeout_count = data[0] | (data[1] << 8)
@@ -491,34 +504,34 @@ CURRENTSENSOR_ERROR_NAMES = {
 }
 
 
-def get_error_history(lin):
+def get_error_history(lin, instance):
     # 8-byte reply: currentsensor/firmware/main.cpp's errorstorage[8],
     # most recent error first, sent as raw int8_t bytes (two's
     # complement on the wire) -- decoded back to signed ints here, same
     # split-conversion-out-of-the-message-function precedent as
     # get_current()'s _adc_to_amps() above.
-    ret, data = lin.read(constants.st1cur, instance=CURRENT_INSTANCE_ID)
+    ret, data = lin.read(constants.st1cur, instance=_current_wire_id(instance))
     if ret < 0:
         return ret, None
     codes = [b - 256 if b >= 128 else b for b in data]
     return ret, codes
 
 
-def currentsensor_selftest(lin):
+def currentsensor_selftest(lin, instance):
     # Exercises currentsensor/firmware/main.cpp's cntl0cur test hook end
     # to end: inject a known non-zero pattern into errorstorage (0x01,
     # 0xab), read it back via st1cur, then reset errorstorage to zero
     # (0xcd, 0x0c) and read it back again. Confirms both the write path
     # (cntl0cur) and the read path (st1cur) actually work, independent
     # of whether a real error has ever occurred.
-    ret_inject = lin.write(constants.cntl0cur, [0x01, 0xab], instance=CURRENT_INSTANCE_ID)
-    ret_injected, codes_injected = get_error_history(lin)
-    ret_reset = lin.write(constants.cntl0cur, [0xcd, 0x0c], instance=CURRENT_INSTANCE_ID)
-    ret_after_reset, codes_after_reset = get_error_history(lin)
+    ret_inject = lin.write(constants.cntl0cur, [0x01, 0xab], instance=_current_wire_id(instance))
+    ret_injected, codes_injected = get_error_history(lin, instance)
+    ret_reset = lin.write(constants.cntl0cur, [0xcd, 0x0c], instance=_current_wire_id(instance))
+    ret_after_reset, codes_after_reset = get_error_history(lin, instance)
     return ret_inject, ret_injected, codes_injected, ret_reset, ret_after_reset, codes_after_reset
 
 
-def provoke_currentsensor_checksum_error(lin):
+def provoke_currentsensor_checksum_error(lin, instance):
     # Deliberately sends currentsensor's cntl0cur "inject test pattern"
     # command ([0x01, 0xab], see currentsensor_selftest() above) with a
     # wrong checksum, to exercise currentsensor/firmware/main.cpp's
@@ -542,10 +555,10 @@ def provoke_currentsensor_checksum_error(lin):
     # motor, so the STM32's is_our_write scoping should exclude it even
     # though it still tracks the frame on the shared bus.
     data = [0x01, 0xab]
-    return lin.write_bad_checksum(constants.cntl0cur, data, instance=CURRENT_INSTANCE_ID)
+    return lin.write_bad_checksum(constants.cntl0cur, data, instance=_current_wire_id(instance))
 
 
-def provoke_bus_hang_timeout(lin):
+def provoke_bus_hang_timeout(lin, instance):
     # Deliberately reproduces, on demand, the short-reply condition that
     # the STM32's HAL_GetTick() bus-hang timeout (main.c) exists to catch
     # (see STM32/CLAUDE.md's Open Points): arms currentsensor's
@@ -557,13 +570,15 @@ def provoke_bus_hang_timeout(lin):
     # get_error_history() before and after to confirm the STM32 and the
     # currentsensor both actually caught it. Takes ~2s to return (the
     # master's own read timeout on the sabotaged reply) -- expected, not
-    # a bug.
-    ret_arm = lin.write(constants.cntl0cur, [0xfa, 0x17], instance=CURRENT_INSTANCE_ID)
-    ret_trigger, _val1, _val2 = get_current(lin)
+    # a bug. `instance` here is the currentsensor instance being armed
+    # AND read -- the motor instance whose get_motor_counters() the
+    # caller separately checks is unrelated to this call.
+    ret_arm = lin.write(constants.cntl0cur, [0xfa, 0x17], instance=_current_wire_id(instance))
+    ret_trigger, _val1, _val2 = get_current(lin, instance)
     return ret_arm, ret_trigger
 
 
-def provoke_checksum_error(lin):
+def provoke_checksum_error(lin, instance):
     # Deliberately sends a cntl3mot (speed/setpoint) write with a wrong
     # checksum, to exercise STM32/firmware/Core/Src/main.c's checksum_ok
     # gate (added 2026-08-14) on real hardware. Value is fixed at 0 (not
@@ -577,16 +592,16 @@ def provoke_checksum_error(lin):
     # before/after check with a real (nonzero) target speed, which does
     # need Motor Execution Consent and isn't built here yet.
     data = struct.pack('>h', 0)
-    return lin.write_bad_checksum(constants.cntl3mot, data, instance=MOTOR_INSTANCE_ID)
+    return lin.write_bad_checksum(constants.cntl3mot, data, instance=_motor_wire_id(instance))
 
 
-def get_current(lin):
+def get_current(lin, instance):
     # 4-byte reply: 2x 10-bit ADC readings, each split as (low byte,
     # high 2 bits) -- matches currentsensor/firmware/main.cpp's packing
     # (data[0]=val&0xFF, data[1]=(val>>8)&0x03). Converted to amps via
     # _adc_to_amps() -- see its comment for why the conversion lives here
     # and not on the AVR.
-    ret, data = lin.read(constants.st0cur, instance=CURRENT_INSTANCE_ID)
+    ret, data = lin.read(constants.st0cur, instance=_current_wire_id(instance))
     if ret < 0:
         return ret, None, None
     val1 = _adc_to_amps(data[0] | ((data[1] & 0x03) << 8))

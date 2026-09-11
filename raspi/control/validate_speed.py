@@ -18,7 +18,18 @@ a file). See raspi/watchdog/CLAUDE.md's log-format notes.
 Run on the Pi with the watchdog already running (--live). Falls under
 raspi/CLAUDE.md's Motor Execution Consent rule like any other motor
 command, whether started manually on the Pi or triggered remotely.
+
+Optional --motor (added 2026-09-11, multi-instance addressing -- see
+raspi/watchdog/CLAUDE.md's "Multi-Instance Addressing" section): which
+motor instance (0-3) to drive/read, defaults to 0. Every watchdog
+command is instance-mandatory now, so this is threaded through every
+`speed`/`rpm` send. `current` stays at --current-instance (default 0,
+also new) independently -- it addresses the currentsensor board, a
+different device class with its own 0-1 instance range, not tied 1:1 to
+which motor is being validated (today's one physical board reports both
+motors' currents on val1/val2 regardless of which motor you're testing).
 """
+import argparse
 import logging
 import re
 import time
@@ -52,17 +63,18 @@ def _send(conn, command):
     return reply
 
 
-def _read_rpm(conn):
-    match = RPM_RE.search(_send(conn, "rpm"))
+def _read_rpm(conn, motor):
+    match = RPM_RE.search(_send(conn, f"rpm {motor}"))
     return int(match.group(1)) if match else None
 
 
-def _read_current(conn):
-    match = CURRENT_RE.search(_send(conn, "current"))
+def _read_current(conn, current_instance):
+    match = CURRENT_RE.search(_send(conn, f"current {current_instance}"))
     return (match.group(1), match.group(2)) if match else (None, None)
 
 
-def run(address=SOCKET_ADDRESS, sequence=SEQUENCE, settle_time=SETTLE_TIME):
+def run(address=SOCKET_ADDRESS, sequence=SEQUENCE, settle_time=SETTLE_TIME,
+        motor=0, current_instance=0):
     logsetup.configure("validate_speed", LOG_PATH, terminal_level=None)
 
     # One persistent connection for the whole run, not one-shot
@@ -74,15 +86,21 @@ def run(address=SOCKET_ADDRESS, sequence=SEQUENCE, settle_time=SETTLE_TIME):
         start = time.monotonic()
         print("elapsed_ms,speed,rpm,current_val1,current_val2")
         for value in sequence:
-            _send(conn, f"speed {value}")
+            _send(conn, f"speed {motor} {value}")
 
             time.sleep(settle_time)
 
-            rpm = _read_rpm(conn)
-            current_val1, current_val2 = _read_current(conn)
+            rpm = _read_rpm(conn, motor)
+            current_val1, current_val2 = _read_current(conn, current_instance)
             elapsed_ms = (time.monotonic() - start) * 1000
             print(f"{elapsed_ms:.0f},{value},{rpm},{current_val1},{current_val2}")
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--motor", type=int, default=0,
+                         help="motor instance to drive/read, 0-3 (default 0)")
+    parser.add_argument("--current-instance", type=int, default=0,
+                         help="currentsensor instance to read, 0-1 (default 0)")
+    args = parser.parse_args()
+    run(motor=args.motor, current_instance=args.current_instance)

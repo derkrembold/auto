@@ -18,12 +18,12 @@ def _fake_conn(rpm_values, current_values=()):
 
     def fake_recv():
         command = sent_commands[-1]
-        if command == "rpm":
+        if command == "rpm 0":
             return f"OK ret=0 rpm={next(rpm_iter)} (hex=0x0000)"
-        if command == "current":
+        if command == "current 0":
             val1, val2 = next(current_iter)
             return f"OK ret=0 val1={val1} val2={val2}"
-        return "OK"  # speed <value>
+        return "OK"  # speed <motor> <value>
 
     conn.send.side_effect = fake_send
     conn.recv.side_effect = fake_recv
@@ -38,9 +38,9 @@ def test_run_sends_speed_then_rpm_then_current_for_each_step():
         run(address="/tmp/fake.sock", sequence=[0, 400, -400], settle_time=0)
 
     assert conn.send.call_args_list == [
-        (("speed 0",),), (("rpm",),), (("current",),),
-        (("speed 400",),), (("rpm",),), (("current",),),
-        (("speed -400",),), (("rpm",),), (("current",),),
+        (("speed 0 0",),), (("rpm 0",),), (("current 0",),),
+        (("speed 0 400",),), (("rpm 0",),), (("current 0",),),
+        (("speed 0 -400",),), (("rpm 0",),), (("current 0",),),
     ]
 
 

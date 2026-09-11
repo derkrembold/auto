@@ -21,6 +21,56 @@ logger = logging.getLogger("watchdog")
 KNOWN_COMMANDS = {"speed", "pi", "hal", "rpm", "temp", "current", "errors", "selftest",
                    "kickcount", "pulse", "reset", "status", "burst"}
 
+# Multi-instance addressing (2026-09-11): every motor- and current-
+# sensor-scoped command now takes an explicit instance number as its
+# FIRST argument (right after the verb) -- e.g. "status 0", "pulse 1
+# 1000", "current 0". Required, no default: a missing/wrong instance is
+# a validate() usage error, not a silent fall-through to instance 0 --
+# same "explicit over implicit" reasoning already used elsewhere in this
+# project (e.g. `errors` staying a separate manual command instead of
+# auto-triggering after a failed `current` read). Range mirrors the
+# addressing scheme's own reserved capacity (addresses.json's
+# `instances` list), not a business limit like SPEED_MIN/MAX below: the
+# strap-pin instance field only has room for what's reserved there.
+# `selftest` and `help`/`exit` are NOT instance-scoped (see their own
+# handling below). `current`/`errors` (currentsensor board), NOT
+# `speed`/`pi`/`hal`/`rpm`/`temp`/`status`/`pulse`/`burst`/`reset`/
+# `kickcount` (motor) -- two different device classes, two different
+# ranges.
+MOTOR_INSTANCE_MIN = 0
+MOTOR_INSTANCE_MAX = 3
+CURRENT_INSTANCE_MIN = 0
+CURRENT_INSTANCE_MAX = 1
+
+# Verbs whose first argument is a motor instance vs. a current-sensor
+# instance -- used by validate() below to pick the right range, and to
+# know which verbs need this treatment at all (burst/pi/speed/pulse take
+# further positional args after the instance; the rest take only it).
+MOTOR_INSTANCE_VERBS = {"speed", "pulse", "burst", "pi", "hal", "rpm", "temp",
+                         "status", "reset", "kickcount"}
+CURRENT_INSTANCE_VERBS = {"current", "errors"}
+
+# Which motor/current-sensor instance the watchdog's own background
+# self-polling (poll_rpm/poll_current), stall check, and overcurrent hard
+# stop act on. NOT yet multi-instance-aware -- extending self-polling and
+# _stop_motor() to cover every connected motor (and stop ALL of them on
+# any one's fault, see raspi/watchdog/CLAUDE.md's §6.3) is separate,
+# deferred work, not part of this addressing-layer change. IMPORTANT: for
+# the real motor to actually be monitored under this scheme, its PB14/
+# PB15 jumper must be set so it identifies as instance 0 -- see
+# linbus.py's module docstring for why an unjumpered board reads
+# instance 3, not 0.
+MONITORED_MOTOR_INSTANCE = 0
+MONITORED_CURRENT_INSTANCE = 0
+
+# `selftest` is not yet instance-parameterized on the CLI -- see its
+# handling in _dispatch() for the staged plan (step 1: pass these
+# explicitly so selftest keeps working now that linbus requires an
+# instance everywhere; step 2, later: expose
+# `selftest <motor_instance> <current_instance>` for real).
+SELFTEST_MOTOR_INSTANCE = 0
+SELFTEST_CURRENT_INSTANCE = 0
+
 # Business/safety speed limit — separate from the protocol-level int16
 # range linbus.set_speed() clamps to. Deliberately below the motor's
 # physical ceiling (~2700-4050 rpm depending on voltage, see
@@ -101,6 +151,19 @@ OVERCURRENT_STOP_THRESHOLD = 15.0  # amps, abs value, either sensor channel
 SPINNER_CHARS = "-\\|/"
 
 
+def _parse_instance(token, min_val, max_val, device_label):
+    # Shared by every motor-/current-scoped verb below -- one place that
+    # knows how to parse+range-check an instance token, so the per-verb
+    # branches only differ in which (min, max, label) they pass in.
+    try:
+        instance = int(token)
+    except ValueError:
+        return None, f"{device_label} instance must be an integer"
+    if not (min_val <= instance <= max_val):
+        return None, f"{device_label} instance out of range ({min_val}..{max_val})"
+    return instance, None
+
+
 def validate(command):
     parts = command.split()
     if not parts:
@@ -111,31 +174,40 @@ def validate(command):
         return False, f"unknown command: {verb}"
 
     if verb == "speed":
-        if len(parts) != 2:
-            return False, "usage: speed <value>"
+        if len(parts) != 3:
+            return False, "usage: speed <motor_instance> <value>"
+        instance, err = _parse_instance(parts[1], MOTOR_INSTANCE_MIN, MOTOR_INSTANCE_MAX, "motor")
+        if err:
+            return False, err
         try:
-            value = int(parts[1])
+            value = int(parts[2])
         except ValueError:
             return False, "speed value must be an integer"
         if not (SPEED_MIN <= value <= SPEED_MAX):
             return False, f"speed value out of range ({SPEED_MIN}..{SPEED_MAX})"
     elif verb == "pulse":
-        if len(parts) != 2:
-            return False, "usage: pulse <value>"
+        if len(parts) != 3:
+            return False, "usage: pulse <motor_instance> <value>"
+        instance, err = _parse_instance(parts[1], MOTOR_INSTANCE_MIN, MOTOR_INSTANCE_MAX, "motor")
+        if err:
+            return False, err
         try:
-            value = int(parts[1])
+            value = int(parts[2])
         except ValueError:
             return False, "pulse value must be an integer"
         if not (PULSE_SPEED_MIN <= value <= PULSE_SPEED_MAX):
             return False, f"pulse value out of range ({PULSE_SPEED_MIN}..{PULSE_SPEED_MAX})"
     elif verb == "burst":
-        if len(parts) != 5:
-            return False, "usage: burst <value1> <pause1_ms> <value2> <pause2_ms>"
+        if len(parts) != 6:
+            return False, "usage: burst <motor_instance> <value1> <pause1_ms> <value2> <pause2_ms>"
+        instance, err = _parse_instance(parts[1], MOTOR_INSTANCE_MIN, MOTOR_INSTANCE_MAX, "motor")
+        if err:
+            return False, err
         try:
-            value1 = int(parts[1])
-            pause1_ms = float(parts[2])
-            value2 = int(parts[3])
-            pause2_ms = float(parts[4])
+            value1 = int(parts[2])
+            pause1_ms = float(parts[3])
+            value2 = int(parts[4])
+            pause2_ms = float(parts[5])
         except ValueError:
             return False, ("burst usage: value1/value2 must be integers, "
                             "pause1_ms/pause2_ms must be numbers")
@@ -146,17 +218,36 @@ def validate(command):
         if pause1_ms < 0 or pause2_ms < 0:
             return False, "pause1_ms/pause2_ms must be non-negative"
     elif verb == "pi":
-        if len(parts) != 3:
-            return False, "usage: pi <p_delta> <i_delta>"
+        if len(parts) != 4:
+            return False, "usage: pi <motor_instance> <p_delta> <i_delta>"
+        instance, err = _parse_instance(parts[1], MOTOR_INSTANCE_MIN, MOTOR_INSTANCE_MAX, "motor")
+        if err:
+            return False, err
         try:
-            p_delta = float(parts[1])
-            i_delta = float(parts[2])
+            p_delta = float(parts[2])
+            i_delta = float(parts[3])
         except ValueError:
             return False, "p_delta/i_delta must be numbers"
         if not (PI_DELTA_MIN <= p_delta <= PI_DELTA_MAX):
             return False, f"p_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
         if not (PI_DELTA_MIN <= i_delta <= PI_DELTA_MAX):
             return False, f"i_delta out of range ({PI_DELTA_MIN}..{PI_DELTA_MAX})"
+    elif verb in MOTOR_INSTANCE_VERBS:
+        # hal/rpm/temp/status/reset/kickcount -- verb + motor instance
+        # only (speed/pulse/burst/pi, also in MOTOR_INSTANCE_VERBS, are
+        # already handled by their own branches above).
+        if len(parts) != 2:
+            return False, f"usage: {verb} <motor_instance>"
+        instance, err = _parse_instance(parts[1], MOTOR_INSTANCE_MIN, MOTOR_INSTANCE_MAX, "motor")
+        if err:
+            return False, err
+    elif verb in CURRENT_INSTANCE_VERBS:
+        # current/errors -- verb + current-sensor instance only.
+        if len(parts) != 2:
+            return False, f"usage: {verb} <current_instance>"
+        instance, err = _parse_instance(parts[1], CURRENT_INSTANCE_MIN, CURRENT_INSTANCE_MAX, "current sensor")
+        if err:
+            return False, err
     elif len(parts) != 1:
         return False, f"usage: {verb}"
 
@@ -198,9 +289,11 @@ class Watchdog:
         print(f"\rwatchdog: {char}  ", end="", flush=True)
 
     def _stop_motor(self, reason):
+        # Stops MONITORED_MOTOR_INSTANCE only -- see that constant's own
+        # comment. Not yet "stop every motor on any one's fault" (§6.3).
         logger.warning(f"{reason} — stopping motor")
         with self.lock:
-            linbus.set_speed(self.lin, 0)
+            linbus.set_speed(self.lin, MONITORED_MOTOR_INSTANCE, 0)
         self.last_commanded_speed = 0
         self.speed_became_nonzero_at = None
 
@@ -224,13 +317,21 @@ class Watchdog:
     def _dispatch(self, verb, parts):
         # Must be called with self.lock held.
         if verb == "speed":
-            value = int(parts[1])
-            linbus.set_speed(self.lin, value)
-            if self.last_commanded_speed == 0 and value != 0:
-                self.speed_became_nonzero_at = time.monotonic()
-            elif value == 0:
-                self.speed_became_nonzero_at = None
-            self.last_commanded_speed = value
+            instance = int(parts[1])
+            value = int(parts[2])
+            linbus.set_speed(self.lin, instance, value)
+            # Stall-check bookkeeping (last_commanded_speed/
+            # speed_became_nonzero_at) only tracks MONITORED_MOTOR_
+            # INSTANCE -- self-polling/the stall check/the overcurrent
+            # stop are not yet multi-instance-aware (§6.3, see that
+            # constant's own comment). Commanding a different instance
+            # must not perturb instance 0's own bookkeeping.
+            if instance == MONITORED_MOTOR_INSTANCE:
+                if self.last_commanded_speed == 0 and value != 0:
+                    self.speed_became_nonzero_at = time.monotonic()
+                elif value == 0:
+                    self.speed_became_nonzero_at = None
+                self.last_commanded_speed = value
             return "OK"
         if verb == "pulse":
             # A single raw, open-loop driveStep() pulse (cntl1mot) --
@@ -242,8 +343,9 @@ class Watchdog:
             # would be nonsensical. Same as every other non-"speed"
             # verb here, this leaves the stall-check state exactly as
             # the last real "speed" command left it.
-            value = int(parts[1])
-            linbus.set_pulse(self.lin, value)
+            instance = int(parts[1])
+            value = int(parts[2])
+            linbus.set_pulse(self.lin, instance, value)
             return "OK"
         if verb == "burst":
             # Two pulse() writes with a Python-side pause in between and
@@ -264,29 +366,34 @@ class Watchdog:
             # short (single-digit to low double-digit ms, matching the
             # rock-back maneuver this is for) -- this is not enforced in
             # code, just don't use "burst" for anything long-running.
-            value1 = int(parts[1])
-            pause1_ms = float(parts[2])
-            value2 = int(parts[3])
-            pause2_ms = float(parts[4])
-            linbus.set_pulse(self.lin, value1)
+            instance = int(parts[1])
+            value1 = int(parts[2])
+            pause1_ms = float(parts[3])
+            value2 = int(parts[4])
+            pause2_ms = float(parts[5])
+            linbus.set_pulse(self.lin, instance, value1)
             time.sleep(pause1_ms / 1000.0)
-            linbus.set_pulse(self.lin, value2)
+            linbus.set_pulse(self.lin, instance, value2)
             time.sleep(pause2_ms / 1000.0)
             return "OK"
         if verb == "pi":
-            p_delta = float(parts[1])
-            i_delta = float(parts[2])
-            linbus.set_pi(self.lin, p_delta, i_delta)
+            instance = int(parts[1])
+            p_delta = float(parts[2])
+            i_delta = float(parts[3])
+            linbus.set_pi(self.lin, instance, p_delta, i_delta)
             return "OK"
         if verb == "hal":
-            ret, data = linbus.get_hal(self.lin)
+            instance = int(parts[1])
+            ret, data = linbus.get_hal(self.lin, instance)
             return f"OK ret={ret} data={[linbus.hexbyte(b) for b in data]}"
         if verb == "rpm":
-            ret, value = linbus.get_rpm(self.lin)
+            instance = int(parts[1])
+            ret, value = linbus.get_rpm(self.lin, instance)
             hex_value = linbus.hexword(value) if value is not None else None
             return f"OK ret={ret} rpm={value} (hex={hex_value})"
         if verb == "temp":
-            ret, value = linbus.get_temp(self.lin)
+            instance = int(parts[1])
+            ret, value = linbus.get_temp(self.lin, instance)
             hex_value = linbus.hexword(value) if value is not None else None
             return f"OK ret={ret} temp={value} (hex={hex_value})"
         if verb == "reset":
@@ -299,9 +406,12 @@ class Watchdog:
             # for a zero value -- otherwise last_commanded_speed would
             # stay stale (nonzero) here while the motor's actually
             # stopped, and a later poll could misjudge stall state.
-            linbus.reset_motor(self.lin)
-            self.last_commanded_speed = 0
-            self.speed_became_nonzero_at = None
+            # Same MONITORED_MOTOR_INSTANCE-only scoping as "speed" above.
+            instance = int(parts[1])
+            linbus.reset_motor(self.lin, instance)
+            if instance == MONITORED_MOTOR_INSTANCE:
+                self.last_commanded_speed = 0
+                self.speed_became_nonzero_at = None
             return "OK"
         if verb == "kickcount":
             # Experimental/throwaway diagnostic for the firmware
@@ -309,7 +419,8 @@ class Watchdog:
             # linbus.get_kick_start_count()'s own docstring. Free-running
             # mod-16 counter, only useful as a before/after delta over one
             # run, not a reliable whole-session total.
-            ret, value = linbus.get_kick_start_count(self.lin)
+            instance = int(parts[1])
+            ret, value = linbus.get_kick_start_count(self.lin, instance)
             return f"OK ret={ret} kickcount={value}"
         if verb == "status":
             # st3mot, 6 bytes -- see linbus.get_motor_status()'s
@@ -318,13 +429,15 @@ class Watchdog:
             # is the plain, on-demand version for manual diagnostics
             # (e.g. checking sysError after deliberately provoking
             # something, without running the whole selftest sequence).
+            instance = int(parts[1])
             ret, timeout_count, checksum_error_count, kickstart_count, sys_error = \
-                linbus.get_motor_status(self.lin)
+                linbus.get_motor_status(self.lin, instance)
             return (f"OK ret={ret} timeout={timeout_count} "
                     f"checksum={checksum_error_count} kickstart={kickstart_count} "
                     f"sys_error={sys_error}")
         if verb == "current":
-            ret, val1, val2 = linbus.get_current(self.lin)
+            instance = int(parts[1])
+            ret, val1, val2 = linbus.get_current(self.lin, instance)
             val1_str = f"{val1:.2f}" if val1 is not None else None
             val2_str = f"{val2:.2f}" if val2 is not None else None
             return f"OK ret={ret} val1={val1_str} val2={val2_str}"
@@ -333,15 +446,28 @@ class Watchdog:
             # side has no equivalent (its st3mot is a single running
             # counter, not a per-error-type history, see "selftest"
             # below).
-            ret, codes = linbus.get_error_history(self.lin)
+            instance = int(parts[1])
+            ret, codes = linbus.get_error_history(self.lin, instance)
             names = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes]
                       if codes is not None else None)
             return f"OK ret={ret} codes={codes} names={names}"
         if verb == "selftest":
+            # Not yet instance-parameterized on the CLI (staged plan,
+            # 2026-09-11): step 1 (this) keeps selftest working now that
+            # every linbus call below requires an instance, by passing
+            # SELFTEST_MOTOR_INSTANCE/SELFTEST_CURRENT_INSTANCE (both 0)
+            # explicitly everywhere -- no behavior change from before
+            # this addressing update. Step 2 (later): expose
+            # `selftest <motor_instance> <current_instance>` for real,
+            # since selftest's own checksum-isolation checks already span
+            # exactly one motor instance and one currentsensor instance.
+            motor = SELFTEST_MOTOR_INSTANCE
+            current = SELFTEST_CURRENT_INSTANCE
+
             # Part 1: currentsensor's cntl0cur test hook, round-trip
             # inject-then-reset of errorstorage via st1cur.
             (ret_inject, ret_injected, codes_injected,
-             ret_reset, ret_after_reset, codes_after_reset) = linbus.currentsensor_selftest(self.lin)
+             ret_reset, ret_after_reset, codes_after_reset) = linbus.currentsensor_selftest(self.lin, current)
             names_injected = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_injected]
                                 if codes_injected is not None else None)
             names_after_reset = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_after_reset]
@@ -356,12 +482,12 @@ class Watchdog:
             # own counters that it correctly attributes this to nobody
             # (message wasn't addressed to it), even though it still
             # sees the frame go by on the shared bus.
-            ret_motor_counters_before0, timeout_before0, checksum_before0 = linbus.get_motor_counters(self.lin)
-            ret_bad_cs_write = linbus.provoke_currentsensor_checksum_error(self.lin)
-            ret_errors_after0, codes_after_cs_provoke = linbus.get_error_history(self.lin)
+            ret_motor_counters_before0, timeout_before0, checksum_before0 = linbus.get_motor_counters(self.lin, motor)
+            ret_bad_cs_write = linbus.provoke_currentsensor_checksum_error(self.lin, current)
+            ret_errors_after0, codes_after_cs_provoke = linbus.get_error_history(self.lin, current)
             names_after_cs_provoke = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_after_cs_provoke]
                                         if codes_after_cs_provoke is not None else None)
-            ret_motor_counters_after0, timeout_after0, checksum_after0 = linbus.get_motor_counters(self.lin)
+            ret_motor_counters_after0, timeout_after0, checksum_after0 = linbus.get_motor_counters(self.lin, motor)
 
             # Part 2: deliberately provoke the STM32 bus-hang timeout
             # (see linbus.provoke_bus_hang_timeout()'s docstring) and
@@ -369,10 +495,10 @@ class Watchdog:
             # bodyTimeoutCount (st3mot) went up, currentsensor logged a
             # CHK error (st1cur). Takes ~2s (the master's own read
             # timeout on the deliberately-sabotaged reply).
-            ret_counters_before, timeout_before, checksum_before = linbus.get_motor_counters(self.lin)
-            ret_arm, ret_trigger = linbus.provoke_bus_hang_timeout(self.lin)
-            ret_counters_after, timeout_after, checksum_after = linbus.get_motor_counters(self.lin)
-            ret_errors_after, codes_after_provoke = linbus.get_error_history(self.lin)
+            ret_counters_before, timeout_before, checksum_before = linbus.get_motor_counters(self.lin, motor)
+            ret_arm, ret_trigger = linbus.provoke_bus_hang_timeout(self.lin, current)
+            ret_counters_after, timeout_after, checksum_after = linbus.get_motor_counters(self.lin, motor)
+            ret_errors_after, codes_after_provoke = linbus.get_error_history(self.lin, current)
             names_after_provoke = ([linbus.CURRENTSENSOR_ERROR_NAMES.get(c, str(c)) for c in codes_after_provoke]
                                      if codes_after_provoke is not None else None)
 
@@ -384,9 +510,9 @@ class Watchdog:
             # Only proves detection, not that the motor's setpoint truly
             # didn't change -- see that function's docstring for the
             # (not yet built) direct rpm-based proof.
-            ret_counters_before2, timeout_before2, checksum_before2 = linbus.get_motor_counters(self.lin)
-            ret_bad_write = linbus.provoke_checksum_error(self.lin)
-            ret_counters_after2, timeout_after2, checksum_after2 = linbus.get_motor_counters(self.lin)
+            ret_counters_before2, timeout_before2, checksum_before2 = linbus.get_motor_counters(self.lin, motor)
+            ret_bad_write = linbus.provoke_checksum_error(self.lin, motor)
+            ret_counters_after2, timeout_after2, checksum_after2 = linbus.get_motor_counters(self.lin, motor)
 
             # Part 4: exercise the new reset command (added 2026-09-07,
             # see linbus.reset_motor()'s docstring) using the state parts
@@ -395,9 +521,9 @@ class Watchdog:
             # accumulated bodyTimeoutCount/checksumErrorCount from this
             # same selftest run (nonzero), status_after to show
             # everything back to 0/MOT_OK.
-            status_before = linbus.get_motor_status(self.lin)
-            ret_reset_cmd = linbus.reset_motor(self.lin)
-            status_after = linbus.get_motor_status(self.lin)
+            status_before = linbus.get_motor_status(self.lin, motor)
+            ret_reset_cmd = linbus.reset_motor(self.lin, motor)
+            status_after = linbus.get_motor_status(self.lin, motor)
             (ret_status_before, timeout_before3, checksum_before3,
              kickstart_before3, sys_error_before3) = status_before
             (ret_status_after, timeout_after3, checksum_after3,
@@ -459,7 +585,7 @@ class Watchdog:
         # thread, timing, raw bytes) now lives in linbus.Lin itself (see
         # its --debug support) rather than being duplicated here.
         with self.lock:
-            ret, value = linbus.get_rpm(self.lin)
+            ret, value = linbus.get_rpm(self.lin, MONITORED_MOTOR_INSTANCE)
         if ret == 0 and value is not None:
             self.last_known_rpm = value
             self._check_stall(value)
@@ -477,7 +603,7 @@ class Watchdog:
         #     currentsensor/CLAUDE.md's Hardware section). Uses the rpm
         #     value poll_rpm() already cached this same tick.
         with self.lock:
-            ret, val1, val2 = linbus.get_current(self.lin)
+            ret, val1, val2 = linbus.get_current(self.lin, MONITORED_CURRENT_INSTANCE)
         if ret != 0 or val1 is None:
             return
 

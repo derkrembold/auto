@@ -19,6 +19,14 @@ see logsetup.rotate_log()) — file only, not echoed to the terminal,
 since stdout is reserved for the CSV stream above. See
 raspi/watchdog/CLAUDE.md's log-format notes.
 
+Optional --motor/--current-instance (added 2026-09-11, multi-instance
+addressing -- see raspi/watchdog/CLAUDE.md's "Multi-Instance Addressing"
+section): both default 0. Every watchdog command is now instance-
+mandatory, so `motor` is threaded through every speed/pulse/burst/pi/
+hal/rpm/status/reset send (including every recovery-sequence strategy);
+`current_instance` only affects the `current` reads (a different device
+class, its own 0-1 range, independent of which motor is being tested).
+
 Optional --p-delta/--i-delta (added 2026-08-19): if given, sends
 `pi <p_delta> <i_delta>` as the very first command, before `speed 0` —
 so an out-of-range value (rejected by the watchdog's own validate(),
@@ -279,13 +287,13 @@ def _send(conn, command):
     return reply
 
 
-def _read_rpm(conn):
-    match = RPM_RE.search(_send(conn, "rpm"))
+def _read_rpm(conn, motor):
+    match = RPM_RE.search(_send(conn, f"rpm {motor}"))
     return int(match.group(1)) if match else None
 
 
-def _read_current(conn):
-    match = CURRENT_RE.search(_send(conn, "current"))
+def _read_current(conn, current_instance):
+    match = CURRENT_RE.search(_send(conn, f"current {current_instance}"))
     return (match.group(1), match.group(2)) if match else (None, None)
 
 
@@ -329,28 +337,32 @@ def _generate_recovery_sequence(rng=random):
             return sequence
 
 
-def _execute_strategy(conn, name):
+def _execute_strategy(conn, name, motor):
     # Returns the exact command(s) sent (not just `name`) -- the
     # catalog's own parameter values could change later (2026-09-09,
     # explicit user request), so the log needs to capture what was
     # actually tried, not a label whose meaning could drift over time.
+    # Every command includes `motor` (2026-09-11, multi-instance
+    # addressing) -- which motor the sequence targeted is now visible
+    # directly in the logged command text, no separate field needed.
     strategy = STRATEGIES[name]
     kind = strategy["kind"]
     commands = []
     if kind == "speed":
-        cmd = f"speed {strategy['value']}"
+        cmd = f"speed {motor} {strategy['value']}"
         _send(conn, cmd)
         commands.append(cmd)
         if strategy["value"] != 0:
             time.sleep(SPEED_STRATEGY_HOLD_S)
-            _send(conn, "speed 0")
-            commands.append("speed 0")
+            stop_cmd = f"speed {motor} 0"
+            _send(conn, stop_cmd)
+            commands.append(stop_cmd)
     elif kind == "pulse":
-        cmd = f"pulse {strategy['value']}"
+        cmd = f"pulse {motor} {strategy['value']}"
         _send(conn, cmd)
         commands.append(cmd)
     elif kind == "burst":
-        cmd = (f"burst {strategy['value1']} {strategy['pause1_ms']} "
+        cmd = (f"burst {motor} {strategy['value1']} {strategy['pause1_ms']} "
                f"{strategy['value2']} {strategy['pause2_ms']}")
         _send(conn, cmd)
         commands.append(cmd)
@@ -358,12 +370,12 @@ def _execute_strategy(conn, name):
     return commands
 
 
-def _run_recovery_sequence(conn):
+def _run_recovery_sequence(conn, motor):
     sequence = _generate_recovery_sequence()
     logger.info(f"stall confirmed -- running recovery sequence: {sequence}")
     commands = []
     for name in sequence:
-        commands.extend(_execute_strategy(conn, name))
+        commands.extend(_execute_strategy(conn, name, motor))
     return commands
 
 
@@ -380,7 +392,8 @@ def _append_recovery_row(row):
         writer.writerow({k: row.get(k, "") for k in RECOVERY_LOG_FIELDS})
 
 
-def _run_one_attempt(conn, target_speed, sample_interval, current_sample_interval, duration):
+def _run_one_attempt(conn, motor, current_instance, target_speed, sample_interval,
+                      current_sample_interval, duration):
     # One full step attempt: speed 0 -> speed <target> -> sample until
     # `duration` or until a stall is confirmed (see module docstring).
     # Returns (rows, stalled, rpm_1s, rpm_1p5s). rpm_1s / rpm_1p5s are
@@ -390,8 +403,8 @@ def _run_one_attempt(conn, target_speed, sample_interval, current_sample_interva
     # stall, sampling still runs long enough to capture rpm_1p5s, then
     # stops early -- no point sampling the full window for a hopeless
     # retry, but both rpm data points must exist for the log.
-    _send(conn, "speed 0")
-    _send(conn, f"speed {target_speed}")
+    _send(conn, f"speed {motor} 0")
+    _send(conn, f"speed {motor} {target_speed}")
     start = time.monotonic()
     next_current_sample = start
     stall_checked = False
@@ -409,11 +422,11 @@ def _run_one_attempt(conn, target_speed, sample_interval, current_sample_interva
         now = time.monotonic()
         if target_time > now:
             time.sleep(target_time - now)
-        rpm = _read_rpm(conn)
+        rpm = _read_rpm(conn, motor)
 
         current_val1 = current_val2 = ""
         if time.monotonic() >= next_current_sample:
-            current_val1, current_val2 = _read_current(conn)
+            current_val1, current_val2 = _read_current(conn, current_instance)
             next_current_sample += current_sample_interval
 
         elapsed_ms = (time.monotonic() - start) * 1000
@@ -423,7 +436,7 @@ def _run_one_attempt(conn, target_speed, sample_interval, current_sample_interva
             stall_checked = True
             rpm_1s = rpm
             if rpm == 0:
-                status_reply = _send(conn, "status")
+                status_reply = _send(conn, f"status {motor}")
                 sys_error_match = SYS_ERROR_RE.search(status_reply)
                 sys_error = int(sys_error_match.group(1)) if sys_error_match else None
                 stalled = sys_error == STALL_TIM_ERR
@@ -436,7 +449,7 @@ def _run_one_attempt(conn, target_speed, sample_interval, current_sample_interva
     return rows, stalled, rpm_1s, rpm_1p5s
 
 
-def _soft_stop(conn, target_speed, steps=STOP_RAMP_STEPS, duration=STOP_RAMP_DURATION):
+def _soft_stop(conn, motor, target_speed, steps=STOP_RAMP_STEPS, duration=STOP_RAMP_DURATION):
     # A single abrupt `speed 0` after a sustained high speed was
     # observed live (2026-08-20) to stop the motor harder than a plain
     # coast-down would -- plausibly the PI controller reacting to a
@@ -449,15 +462,15 @@ def _soft_stop(conn, target_speed, steps=STOP_RAMP_STEPS, duration=STOP_RAMP_DUR
     # affecting the stop.
     step_interval = duration / (steps - 1)
     for i in range(steps - 1, 0, -1):
-        _send(conn, f"speed {round(target_speed * i / steps)}")
+        _send(conn, f"speed {motor} {round(target_speed * i / steps)}")
         time.sleep(step_interval)
-    _send(conn, "speed 0")
+    _send(conn, f"speed {motor} 0")
 
 
 def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
         sample_interval=SAMPLE_INTERVAL,
         current_sample_interval=CURRENT_SAMPLE_INTERVAL, duration=DURATION,
-        p_delta=None, i_delta=None):
+        p_delta=None, i_delta=None, motor=0, current_instance=0):
     logsetup.configure("capture_step_response", LOG_PATH, terminal_level=None)
 
     # One persistent connection for the whole run — see
@@ -471,20 +484,20 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
         # whatever happened before. Also makes the "status" read at the
         # end below an exact before/after delta for *this* run, not an
         # ambiguous whole-session total.
-        _send(conn, "reset")
+        _send(conn, f"reset {motor}")
         # Starting Hall position (2026-09-09) -- logged only, lets a
         # stall/stiction event found later be correlated with exactly
         # where the rotor started (e.g. a known-bad Mittelrast, see
         # STM32/CLAUDE.md's Hall-chattering finding), not just guessed
         # at after the fact.
-        _send(conn, "hal")
+        _send(conn, f"hal {motor}")
         if p_delta is not None or i_delta is not None:
-            reply = _send(conn, f"pi {p_delta} {i_delta}")
+            reply = _send(conn, f"pi {motor} {p_delta} {i_delta}")
             if not reply.startswith("OK"):
                 sys.exit(f"pi command rejected, aborting before touching the motor: {reply}")
 
-        rows, stalled, _, _ = _run_one_attempt(conn, target_speed, sample_interval,
-                                                current_sample_interval, duration)
+        rows, stalled, _, _ = _run_one_attempt(conn, motor, current_instance, target_speed,
+                                                sample_interval, current_sample_interval, duration)
 
         if stalled:
             # phase "sequence": everything about what state the sequence
@@ -493,11 +506,11 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
             # The retry's rpm result is phase "retry" below, joined on
             # the same timestamp. See RECOVERY_LOG_PATH's comment.
             seq_timestamp = datetime.datetime.now().isoformat()
-            hal_before = _send(conn, "hal")
-            status_before = _send(conn, "status")
-            sequence = _run_recovery_sequence(conn)
-            hal_after = _send(conn, "hal")
-            status_after = _send(conn, "status")
+            hal_before = _send(conn, f"hal {motor}")
+            status_before = _send(conn, f"status {motor}")
+            sequence = _run_recovery_sequence(conn, motor)
+            hal_after = _send(conn, f"hal {motor}")
+            status_after = _send(conn, f"status {motor}")
             _append_recovery_row({
                 "timestamp": seq_timestamp,
                 "phase": "sequence",
@@ -509,10 +522,11 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
                 "status_after_sequence": status_after,
             })
 
-            _send(conn, "reset")
-            _send(conn, "hal")
+            _send(conn, f"reset {motor}")
+            _send(conn, f"hal {motor}")
             rows, stalled_again, rpm_1s, rpm_1p5s = _run_one_attempt(
-                conn, target_speed, sample_interval, current_sample_interval, duration)
+                conn, motor, current_instance, target_speed, sample_interval,
+                current_sample_interval, duration)
             # Full `status` reply once, right after the retry's sampling
             # ends (2026-09-10). Catches the case where the retry's `rpm`
             # reads nonzero on a rotor that never actually turned --
@@ -524,7 +538,7 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
             # rpm_1p5s is the tell the analysis tool needs -- raw reply,
             # no script-side interpretation, same reasoning as the raw
             # rpm values.
-            status_after_retry = _send(conn, "status")
+            status_after_retry = _send(conn, f"status {motor}")
             _append_recovery_row({
                 "timestamp": seq_timestamp,
                 "phase": "retry",
@@ -557,20 +571,20 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
         # rpm=25 seen during that same stall, isn't real movement
         # either) and/or sysError already showing STALL_TIM_ERR (the
         # firmware's own, more reliable confirmation that it gave up).
-        _send(conn, "hal")
-        rpm = _read_rpm(conn)
-        status_reply = _send(conn, "status")
+        _send(conn, f"hal {motor}")
+        rpm = _read_rpm(conn, motor)
+        status_reply = _send(conn, f"status {motor}")
         sys_error_match = SYS_ERROR_RE.search(status_reply)
         sys_error = int(sys_error_match.group(1)) if sys_error_match else None
 
         moved_enough = rpm is not None and abs(rpm) >= STOP_RAMP_RPM_FRACTION * abs(target_speed)
         no_stall_latched = sys_error is not None and sys_error != STALL_TIM_ERR
         if moved_enough and no_stall_latched:
-            _soft_stop(conn, target_speed)
+            _soft_stop(conn, motor, target_speed)
         else:
             logger.info(f"skipping soft-stop ramp -- rpm={rpm} sys_error={sys_error} "
                         f"target_speed={target_speed}")
-            _send(conn, "speed 0")
+            _send(conn, f"speed {motor} 0")
 
 
 if __name__ == "__main__":
@@ -579,7 +593,12 @@ if __name__ == "__main__":
     parser.add_argument("--i-delta", type=float, default=None)
     parser.add_argument("--target-speed", type=int, default=TARGET_SPEED,
                          help=f"step target, +/- (default {TARGET_SPEED})")
+    parser.add_argument("--motor", type=int, default=0,
+                         help="motor instance to drive/read, 0-3 (default 0)")
+    parser.add_argument("--current-instance", type=int, default=0,
+                         help="currentsensor instance to read, 0-1 (default 0)")
     args = parser.parse_args()
     if (args.p_delta is None) != (args.i_delta is None):
         sys.exit("--p-delta and --i-delta must be given together, or not at all")
-    run(p_delta=args.p_delta, i_delta=args.i_delta, target_speed=args.target_speed)
+    run(p_delta=args.p_delta, i_delta=args.i_delta, target_speed=args.target_speed,
+        motor=args.motor, current_instance=args.current_instance)
