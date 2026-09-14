@@ -1,0 +1,31 @@
+17:46:06.425  INFO    connected to watchdog
+17:46:17.093  INFO    -> speed 0 0
+17:46:17.098  INFO    <- OK
+17:46:22.038  INFO    -> speed 1 1
+17:46:22.043  INFO    <- OK
+17:46:26.310  INFO    -> speed 1 0
+17:46:26.315  INFO    <- OK
+17:46:35.959  INFO    -> status 0
+17:46:35.967  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+17:46:37.704  INFO    -> status 1
+17:46:37.711  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65
+17:46:50.281  INFO    -> reset 1
+17:46:50.289  INFO    <- OK
+17:46:51.721  INFO    -> status 1
+17:46:51.729  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+17:47:07.388  INFO    -> status 0
+17:47:07.395  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+17:47:08.732  INFO    -> status 1
+17:47:08.739  INFO    <- OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0
+17:47:16.157  INFO    -> speed 0 0
+17:47:16.162  INFO    <- OK
+17:47:20.205  INFO    -> speed 1 0
+17:47:20.211  INFO    <- OK
+17:47:33.247  INFO    -> speed 0 500
+17:47:33.252  INFO    <- OK
+17:47:37.071  INFO    -> speed 1 500
+17:47:37.077  INFO    <- OK
+17:47:40.624  INFO    -> speed 0 0
+17:47:40.629  INFO    <- OK
+17:47:42.896  INFO    -> speed 1 0
+17:47:42.901  INFO    <- OK

@@ -1,0 +1,21 @@
+18:42:35.893  INFO    connected to watchdog
+18:42:46.190  INFO    -> speed 0 0
+18:42:46.196  INFO    <- OK
+18:42:52.319  INFO    -> speed 0 500
+18:42:52.324  INFO    <- OK
+18:42:54.591  INFO    -> speed 0 0
+18:42:54.596  INFO    <- OK
+18:42:57.792  INFO    -> speed 1 0
+18:42:57.797  INFO    <- OK
+18:43:08.833  INFO    -> speed 1 500
+18:43:08.839  INFO    <- OK
+18:43:10.961  INFO    -> speed 1 0
+18:43:10.967  INFO    <- OK
+18:43:32.709  INFO    -> speed 0 500
+18:43:32.714  INFO    <- OK
+18:43:35.525  INFO    -> speed 1 500
+18:43:35.530  INFO    <- OK
+18:43:38.805  INFO    -> speed 1 0
+18:43:38.811  INFO    <- OK
+18:43:43.078  INFO    -> speed 0 0
+18:43:43.083  INFO    <- OK

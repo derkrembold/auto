@@ -1,9 +1,11 @@
 import pytest
+from unittest.mock import patch
 
 from watchdog import (validate, Watchdog, SPEED_MIN, SPEED_MAX, IDLE_TIMEOUT,
                       PI_DELTA_MIN, PI_DELTA_MAX, PULSE_SPEED_MIN, PULSE_SPEED_MAX,
                       MOTOR_INSTANCE_MIN, MOTOR_INSTANCE_MAX,
-                      CURRENT_INSTANCE_MIN, CURRENT_INSTANCE_MAX)
+                      CURRENT_INSTANCE_MIN, CURRENT_INSTANCE_MAX,
+                      _startup_reset, STARTUP_PROBE_INSTANCES)
 from linbus import DryRunLin
 from linaddresses import constants
 
@@ -178,11 +180,11 @@ def test_execute_reset_clears_stall_check_state():
     # real-world effect as "speed 0" -- see watchdog.py's _dispatch()
     # comment for why the Pi-side bookkeeping is updated to match.
     wd = Watchdog(DryRunLin())
-    wd.last_commanded_speed = 300
-    wd.speed_became_nonzero_at = 12345.0
+    wd.last_commanded_speed[0] = 300
+    wd.speed_became_nonzero_at[0] = 12345.0
     assert wd.execute("reset 0") == "OK"
-    assert wd.last_commanded_speed == 0
-    assert wd.speed_became_nonzero_at is None
+    assert wd.last_commanded_speed[0] == 0
+    assert wd.speed_became_nonzero_at[0] is None
 
 
 def test_execute_pi_relays_to_dry_run_bus():
@@ -291,11 +293,12 @@ def test_execute_speed_different_instance_reaches_different_wire_pid():
     assert address == (constants.cntl3mot | constants.motor_instances[1])
     assert address != CNTL3MOT_WIRE
     assert data == [0x01, 0x2c]
-    # Commanding instance 1 must not perturb instance 0's own stall-check
-    # bookkeeping (MONITORED_MOTOR_INSTANCE is 0) -- see _dispatch()'s
-    # comment.
-    assert wd.last_commanded_speed == 0
-    assert wd.speed_became_nonzero_at is None
+    # Stall-check bookkeeping is per instance (§6.3, 2026-09-14) -- instance
+    # 1 gets tracked on its own, instance 0 stays untouched/never-commanded.
+    assert wd.last_commanded_speed[1] == 300
+    assert wd.speed_became_nonzero_at[1] is not None
+    assert wd.last_commanded_speed.get(0, 0) == 0
+    assert wd.speed_became_nonzero_at.get(0) is None
 
 
 def test_execute_current_instance_1_is_accepted_and_resolves_a_different_wire_id():
@@ -436,7 +439,7 @@ def test_disconnect_stops_motor_immediately():
     wd.lin.writes.clear()
     wd.on_disconnect()
     assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]  # speed 0
-    assert wd.last_commanded_speed == 0
+    assert wd.last_commanded_speed[0] == 0
     assert wd.last_command_time is None
 
 
@@ -501,31 +504,50 @@ def test_stall_not_judged_during_grace_period():
     wd.lin.read_responses[constants.st2mot] = [0x00, 0x00]  # rpm=0
     wd.poll_rpm()  # still within STALL_GRACE_PERIOD, not judged yet
     assert wd.lin.writes == []
-    assert wd.last_commanded_speed == 300
+    assert wd.last_commanded_speed[0] == 300
 
 
 def test_stall_detected_after_grace_period_if_rpm_still_zero():
     from watchdog import STALL_GRACE_PERIOD
     wd = Watchdog(DryRunLin())
     wd.execute("speed 0 300")
-    wd.speed_became_nonzero_at -= (STALL_GRACE_PERIOD + 0.1)  # simulate elapsed time
+    wd.speed_became_nonzero_at[0] -= (STALL_GRACE_PERIOD + 0.1)  # simulate elapsed time
     wd.lin.writes.clear()
     wd.lin.read_responses[constants.st2mot] = [0x00, 0x00]  # rpm=0
     wd.poll_rpm()
     assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]  # stop sent
-    assert wd.last_commanded_speed == 0
+    assert wd.last_commanded_speed[0] == 0
 
 
 def test_no_stall_after_grace_period_if_rpm_nonzero():
     from watchdog import STALL_GRACE_PERIOD
     wd = Watchdog(DryRunLin())
     wd.execute("speed 0 300")
-    wd.speed_became_nonzero_at -= (STALL_GRACE_PERIOD + 0.1)
+    wd.speed_became_nonzero_at[0] -= (STALL_GRACE_PERIOD + 0.1)
     wd.lin.writes.clear()
     wd.lin.read_responses[constants.st2mot] = [0x2c, 0x01]  # rpm=300, moving
     wd.poll_rpm()
     assert wd.lin.writes == []  # no stall, no stop sent
-    assert wd.last_commanded_speed == 300
+    assert wd.last_commanded_speed[0] == 300
+
+
+def test_stall_on_one_instance_stops_every_known_motor():
+    # §6.3 (2026-09-14): a stall on ANY motor stops ALL currently-known
+    # motors, not just the one that stalled.
+    from watchdog import STALL_GRACE_PERIOD
+    wd = Watchdog(DryRunLin())
+    wd.execute("speed 0 300")
+    wd.execute("speed 1 400")
+    wd.speed_became_nonzero_at[0] -= (STALL_GRACE_PERIOD + 0.1)
+    wd.lin.writes.clear()
+    wd.lin.read_responses[constants.st2mot] = [0x00, 0x00]  # rpm=0 for whichever instance is read
+    wd.poll_rpm()
+    writes = wd.lin.writes
+    motor1_wire = constants.cntl3mot | constants.motor_instances[1]
+    assert (CNTL3MOT_WIRE, [0x00, 0x00]) in writes  # motor 0 stopped
+    assert (motor1_wire, [0x00, 0x00]) in writes    # motor 1 stopped too
+    assert wd.last_commanded_speed[0] == 0
+    assert wd.last_commanded_speed[1] == 0
 
 
 def test_poll_rpm_works_with_no_client_connected():
@@ -536,8 +558,8 @@ def test_poll_rpm_works_with_no_client_connected():
     wd.on_disconnect()  # no client connected anymore; motor already
     # stopped by on_disconnect(), so re-command it to test poll_rpm in
     # isolation without a connection:
-    wd.last_commanded_speed = 300
-    wd.speed_became_nonzero_at = 0  # long in the past -> past grace period
+    wd.last_commanded_speed[0] = 300
+    wd.speed_became_nonzero_at[0] = 0  # long in the past -> past grace period
     wd.lin.writes.clear()
     wd.lin.read_responses[constants.st2mot] = [0x00, 0x00]
     wd.poll_rpm()
@@ -601,19 +623,37 @@ def test_poll_current_silent_when_last_known_rpm_unset(caplog):
 
 def test_poll_current_hard_stops_on_overcurrent_val1(caplog):
     wd = Watchdog(DryRunLin())
+    wd.last_commanded_speed[0] = 500  # motor 0 known/active -- see _stop_all_motors()
     wd.lin.read_responses[constants.st0cur] = [133, 3, 0, 2]  # val1 ~19A, val2 ~0A
     wd.poll_current()
     assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]  # speed 0 sent
-    assert "OVERCURRENT" in caplog.text and "val1" in caplog.text
-    assert wd.last_commanded_speed == 0
+    assert "OVERCURRENT" in caplog.text and "val1" in caplog.text and "motor 0" in caplog.text
+    assert wd.last_commanded_speed[0] == 0
 
 
 def test_poll_current_hard_stops_on_overcurrent_val2(caplog):
     wd = Watchdog(DryRunLin())
+    wd.last_commanded_speed[0] = 500
     wd.lin.read_responses[constants.st0cur] = [10, 2, 133, 3]  # val1 ~0.5A, val2 ~19A
     wd.poll_current()
     assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
-    assert "OVERCURRENT" in caplog.text and "val2" in caplog.text
+    assert "OVERCURRENT" in caplog.text and "val2" in caplog.text and "motor 1" in caplog.text
+
+
+def test_poll_current_overcurrent_stops_every_known_motor(caplog):
+    # §6.3 (2026-09-14): an overcurrent on either channel stops every
+    # currently-known motor, not just the one the channel maps to.
+    wd = Watchdog(DryRunLin())
+    wd.last_commanded_speed[0] = 500
+    wd.last_commanded_speed[1] = 400
+    wd.lin.read_responses[constants.st0cur] = [133, 3, 0, 2]  # val1 ~19A (motor 0's channel)
+    wd.poll_current()
+    writes = wd.lin.writes
+    motor1_wire = constants.cntl3mot | constants.motor_instances[1]
+    assert (CNTL3MOT_WIRE, [0x00, 0x00]) in writes
+    assert (motor1_wire, [0x00, 0x00]) in writes
+    assert wd.last_commanded_speed[0] == 0
+    assert wd.last_commanded_speed[1] == 0
 
 
 def test_poll_current_overcurrent_stops_even_when_rpm_nonzero(caplog):
@@ -621,6 +661,7 @@ def test_poll_current_overcurrent_stops_even_when_rpm_nonzero(caplog):
     # A jammed wheel while the vehicle is moving is still an overcurrent.
     wd = Watchdog(DryRunLin())
     wd.last_known_rpm = 1000
+    wd.last_commanded_speed[0] = 500
     wd.lin.read_responses[constants.st0cur] = [133, 3, 0, 2]  # val1 ~19A
     wd.poll_current()
     assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
@@ -630,6 +671,7 @@ def test_poll_current_overcurrent_stops_even_when_rpm_nonzero(caplog):
 def test_poll_current_no_hard_stop_below_overcurrent(caplog):
     wd = Watchdog(DryRunLin())
     wd.last_known_rpm = 300
+    wd.last_commanded_speed[0] = 500
     wd.lin.read_responses[constants.st0cur] = [184, 2, 184, 2]  # both ~9A, under 15A
     wd.poll_current()
     assert wd.lin.writes == []
@@ -641,10 +683,77 @@ def test_poll_current_hard_stops_on_negative_overcurrent(caplog):
     # either sign. _adc_to_amps(123) ~= -19.0A, past the 15A magnitude.
     wd = Watchdog(DryRunLin())
     wd.last_known_rpm = 300
+    wd.last_commanded_speed[0] = 500
     wd.lin.read_responses[constants.st0cur] = [123, 0, 0, 2]  # val1 ~-19A
     wd.poll_current()
     assert wd.lin.writes == [(CNTL3MOT_WIRE, [0x00, 0x00])]
     assert "OVERCURRENT" in caplog.text
+
+
+def test_poll_current_overcurrent_with_no_known_motors_logs_but_writes_nothing(caplog):
+    # Edge case: overcurrent trips before any motor was ever commanded
+    # (e.g. right at startup, before the probe found anything) -- nothing
+    # to stop, but this must not crash the poll thread.
+    wd = Watchdog(DryRunLin())
+    wd.lin.read_responses[constants.st0cur] = [133, 3, 0, 2]  # val1 ~19A
+    wd.poll_current()
+    assert wd.lin.writes == []
+    assert "OVERCURRENT" in caplog.text
+    assert "no known motor instances" in caplog.text
+
+
+# --- Startup probe/reset (_startup_reset, added 2026-09-14, see §6.3
+# in raspi/watchdog/CLAUDE.md) ---
+
+def test_startup_reset_resets_and_seeds_every_responding_instance():
+    wd = Watchdog(DryRunLin())
+    _startup_reset(wd)
+    # DryRunLin.read() always answers ret=0 -- every STARTUP_PROBE_
+    # INSTANCES entry "responds" and gets reset + seeded.
+    for instance in STARTUP_PROBE_INSTANCES:
+        assert wd.last_commanded_speed[instance] == 0
+        assert wd.speed_became_nonzero_at[instance] is None
+    expected_reset_wires = {
+        constants.cntl2mot | constants.motor_instances[i] for i in STARTUP_PROBE_INSTANCES
+    }
+    actual_reset_wires = {addr for addr, data in wd.lin.writes if data == [0] * 6}
+    assert actual_reset_wires == expected_reset_wires
+
+
+def test_startup_reset_skips_non_responding_instance(caplog):
+    caplog.set_level("INFO")  # _startup_reset logs at INFO, above caplog's default WARNING
+    wd = Watchdog(DryRunLin())
+
+    def fake_get_motor_status(lin, instance):
+        if instance == 1:
+            return (-5, None, None, None, None)  # simulated timeout
+        return (0, 0, 0, 0, 0)
+
+    with patch("watchdog.linbus.get_motor_status", side_effect=fake_get_motor_status):
+        _startup_reset(wd)
+
+    assert 0 in wd.last_commanded_speed  # responded -- reset+seeded
+    assert 1 not in wd.last_commanded_speed  # timed out -- skipped entirely
+    assert "motor 1 did not respond" in caplog.text
+
+
+def test_startup_reset_logs_stale_state_before_wiping_it(caplog):
+    # Unconditional reset either way (see _startup_reset()'s own
+    # docstring on why it's not gated on sys_error) -- but what was found
+    # should still be visible in the log for debugging.
+    caplog.set_level("INFO")
+    wd = Watchdog(DryRunLin())
+
+    def fake_get_motor_status(lin, instance):
+        if instance == 0:
+            return (0, 5, 1, 3, -65)  # stale STALL_TIM_ERR from before restart
+        return (0, 0, 0, 0, 0)
+
+    with patch("watchdog.linbus.get_motor_status", side_effect=fake_get_motor_status):
+        _startup_reset(wd)
+
+    assert "sys_error=-65" in caplog.text
+    assert wd.last_commanded_speed[0] == 0  # still unconditionally reset/seeded
 
 
 # Note: --debug tracing (timestamped ->/<- bus-call logging) moved to

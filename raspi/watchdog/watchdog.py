@@ -50,18 +50,52 @@ MOTOR_INSTANCE_VERBS = {"speed", "pulse", "burst", "pi", "hal", "rpm", "temp",
                          "status", "reset", "kickcount"}
 CURRENT_INSTANCE_VERBS = {"current", "errors"}
 
-# Which motor/current-sensor instance the watchdog's own background
-# self-polling (poll_rpm/poll_current), stall check, and overcurrent hard
-# stop act on. NOT yet multi-instance-aware -- extending self-polling and
-# _stop_motor() to cover every connected motor (and stop ALL of them on
-# any one's fault, see raspi/watchdog/CLAUDE.md's §6.3) is separate,
-# deferred work, not part of this addressing-layer change. IMPORTANT: for
-# the real motor to actually be monitored under this scheme, its PB14/
-# PB15 jumper must be set so it identifies as instance 0 -- see
-# linbus.py's module docstring for why an unjumpered board reads
-# instance 3, not 0.
+# The one motor instance ALWAYS self-polled for rpm, every tick,
+# regardless of whether it's currently commanded nonzero (see
+# poll_rpm()) -- feeds last_known_rpm, which poll_current()'s
+# observe-only current-while-idle stall *signature* check depends on
+# regardless of active state. Every OTHER instance is only polled while
+# actively commanded (added 2026-09-14, see raspi/watchdog/CLAUDE.md's
+# §6.3 multi-instance self-polling section) -- this one stays a fixed
+# baseline rather than becoming fully dynamic too, since nothing else
+# in the class currently needs a "who is instance 0 right now" answer
+# other than this hardcoded assumption. IMPORTANT: for the real motor to
+# actually be monitored under this scheme, its PB14/PB15 jumper must be
+# set so it identifies as instance 0 -- see linbus.py's module docstring
+# for why an unjumpered board reads instance 3, not 0.
 MONITORED_MOTOR_INSTANCE = 0
+
+# The currentsensor instance read every poll tick -- unrelated to the
+# motor multi-instance work above (different device class, see
+# linbus.py). Still just one physical board (instance 0) as of
+# 2026-09-14; val1/val2 on THAT one board are motor 0's and motor 1's
+# current respectively (confirmed against real hardware the same day,
+# see CURRENT_CHANNEL_TO_MOTOR_INSTANCE below), not two separate boards.
 MONITORED_CURRENT_INSTANCE = 0
+
+# Confirmed by real-hardware rewiring + measurement (2026-09-14, see
+# raspi/CLAUDE.md's currentsensor Hardware notes): val1 = ACS712 #1 =
+# motor 0's current, val2 = ACS712 #2 = motor 1's current. Used only to
+# make poll_current()'s overcurrent log line say which motor tripped it
+# -- the actual STOP action always stops every currently-active motor
+# regardless of which channel triggered it (see _stop_all_motors()),
+# not just the one named here.
+CURRENT_CHANNEL_TO_MOTOR_INSTANCE = {"val1": 0, "val2": 1}
+
+# Which motor instances get probed (via `status`) and unconditionally
+# reset when the watchdog itself starts up (see serve()'s _startup_reset()
+# and raspi/watchdog/CLAUDE.md's §6.3 section for the full design
+# discussion). Deliberately NOT "try every instance 0-3" -- each
+# non-responding instance costs a full ~2s read timeout on EVERY
+# watchdog start, and motor 2/3 are long-term-only future work (see root
+# CLAUDE.md's Two-Motor Vehicle Architecture section), not imminent.
+# Extend this the day a 3rd/4th motor actually exists -- nothing else
+# needs to change: an instance not in this tuple still works completely
+# normally once a client actually commands it (_dispatch() adds it to
+# last_commanded_speed dynamically on its first "speed"/"reset"), it
+# just doesn't get the startup stale-state cleanup for that one instance
+# until this tuple is updated.
+STARTUP_PROBE_INSTANCES = (0, 1)
 
 # `selftest` is not yet instance-parameterized on the CLI -- see its
 # handling in _dispatch() for the staged plan (step 1: pass these
@@ -143,9 +177,9 @@ CURRENT_STALL_THRESHOLD = 0.15
 # hundreds of amps) just pegs the sensor and cannot be caught this way
 # -- that stays a design-limits problem (magnitude caps, conservative
 # sequence constraints). See raspi/watchdog/CLAUDE.md's Two-Layer
-# Safety Check. NOTE: _stop_motor() currently stops the one addressable
-# motor; once a second motor is wired to val2, an overcurrent on either
-# channel must stop BOTH motors (see the §6.3 point in that CLAUDE.md).
+# Safety Check. Stops every currently-active motor (see
+# _stop_all_motors(), added 2026-09-14 per §6.3) whichever channel trips
+# it -- an overcurrent on either side is reason enough to stop both.
 OVERCURRENT_STOP_THRESHOLD = 15.0  # amps, abs value, either sensor channel
 
 SPINNER_CHARS = "-\\|/"
@@ -273,8 +307,14 @@ class Watchdog:
         self.spinner_index = 0
 
         # Lower layer: rpm-only stall check (self-stopping, live).
-        self.last_commanded_speed = 0
-        self.speed_became_nonzero_at = None
+        # Per motor instance (added 2026-09-14, see §6.3 in
+        # raspi/watchdog/CLAUDE.md) -- keys appear the first time an
+        # instance is touched (a startup probe reset, or a real "speed"/
+        # "reset" command), values/timestamps exactly mirror the old
+        # single-instance semantics, just per key now. `.get(instance, 0)`/
+        # `.get(instance)` everywhere an entry might not exist yet.
+        self.last_commanded_speed = {}
+        self.speed_became_nonzero_at = {}
 
         # Upper layer: current-based stall *signature* — observe-only
         # for now (logs, does not stop the motor yet). See "Two-Layer
@@ -288,31 +328,60 @@ class Watchdog:
         self.spinner_index += 1
         print(f"\rwatchdog: {char}  ", end="", flush=True)
 
-    def _stop_motor(self, reason):
-        # Stops MONITORED_MOTOR_INSTANCE only -- see that constant's own
-        # comment. Not yet "stop every motor on any one's fault" (§6.3).
-        logger.warning(f"{reason} — stopping motor")
+    def _stop_motor(self, instance, reason):
+        # Stops exactly one instance. Used where only one specific motor
+        # is meaningfully implicated (disconnect/idle-timeout, both still
+        # scoped to MONITORED_MOTOR_INSTANCE -- see those callers' own
+        # comments). For a stall or overcurrent, see _stop_all_motors()
+        # below instead (§6.3: either one is reason enough to stop every
+        # currently-active motor, not just the one that triggered it).
+        logger.warning(f"{reason} — stopping motor {instance}")
         with self.lock:
-            linbus.set_speed(self.lin, MONITORED_MOTOR_INSTANCE, 0)
-        self.last_commanded_speed = 0
-        self.speed_became_nonzero_at = None
+            linbus.set_speed(self.lin, instance, 0)
+        self.last_commanded_speed[instance] = 0
+        self.speed_became_nonzero_at[instance] = None
+
+    def _stop_all_motors(self, reason):
+        # Stops every motor instance this session currently knows about
+        # (added 2026-09-14, see §6.3 in raspi/watchdog/CLAUDE.md) --
+        # i.e. every key in last_commanded_speed, which gets populated by
+        # the startup probe (serve()'s _startup_reset(), STARTUP_PROBE_
+        # INSTANCES) plus dynamically by any real "speed"/"reset" command
+        # since. Sending "speed <n> 0" to an instance that's already
+        # stopped is harmless (same command a stopped motor would already
+        # be sitting at), so this doesn't need to first check which ones
+        # are actually spinning -- "stop everything we know about" and
+        # "stop only what's currently active" produce the same real-world
+        # result here, the former is just simpler to implement correctly.
+        instances = sorted(self.last_commanded_speed.keys())
+        if not instances:
+            logger.warning(f"{reason} — no known motor instances to stop yet")
+            return
+        for instance in instances:
+            self._stop_motor(instance, reason)
 
     def on_connect(self):
         self.last_command_time = time.monotonic()
         self.stopped_for_idle = False
 
     def on_disconnect(self):
-        self._stop_motor("client disconnected")
+        self._stop_motor(MONITORED_MOTOR_INSTANCE, "client disconnected")
         self.last_command_time = None
 
-    def _check_stall(self, rpm_value):
-        if self.last_commanded_speed == 0 or self.speed_became_nonzero_at is None:
+    def _check_stall(self, instance, rpm_value):
+        commanded = self.last_commanded_speed.get(instance, 0)
+        became_nonzero_at = self.speed_became_nonzero_at.get(instance)
+        if commanded == 0 or became_nonzero_at is None:
             return
-        if time.monotonic() - self.speed_became_nonzero_at < STALL_GRACE_PERIOD:
+        if time.monotonic() - became_nonzero_at < STALL_GRACE_PERIOD:
             return  # still in startup grace period, don't judge yet
         if rpm_value == 0:
-            self._stop_motor(f"STALL suspected — commanded speed="
-                              f"{self.last_commanded_speed} but rpm=0")
+            # §6.3: a stall on any one motor stops ALL of them, not just
+            # the one that stalled -- e.g. on a differential-drive
+            # vehicle, one side stalling while the other keeps driving
+            # would spin/lurch the vehicle, not just stop cleanly.
+            self._stop_all_motors(f"STALL suspected on motor {instance} — "
+                                   f"commanded speed={commanded} but rpm=0")
 
     def _dispatch(self, verb, parts):
         # Must be called with self.lock held.
@@ -320,18 +389,15 @@ class Watchdog:
             instance = int(parts[1])
             value = int(parts[2])
             linbus.set_speed(self.lin, instance, value)
-            # Stall-check bookkeeping (last_commanded_speed/
-            # speed_became_nonzero_at) only tracks MONITORED_MOTOR_
-            # INSTANCE -- self-polling/the stall check/the overcurrent
-            # stop are not yet multi-instance-aware (§6.3, see that
-            # constant's own comment). Commanding a different instance
-            # must not perturb instance 0's own bookkeeping.
-            if instance == MONITORED_MOTOR_INSTANCE:
-                if self.last_commanded_speed == 0 and value != 0:
-                    self.speed_became_nonzero_at = time.monotonic()
-                elif value == 0:
-                    self.speed_became_nonzero_at = None
-                self.last_commanded_speed = value
+            # Stall-check bookkeeping, per instance (§6.3, 2026-09-14) --
+            # every instance gets tracked now, not just MONITORED_MOTOR_
+            # INSTANCE, so poll_rpm()/the stall check can cover whichever
+            # motor(s) are actually running.
+            if self.last_commanded_speed.get(instance, 0) == 0 and value != 0:
+                self.speed_became_nonzero_at[instance] = time.monotonic()
+            elif value == 0:
+                self.speed_became_nonzero_at[instance] = None
+            self.last_commanded_speed[instance] = value
             return "OK"
         if verb == "pulse":
             # A single raw, open-loop driveStep() pulse (cntl1mot) --
@@ -406,12 +472,11 @@ class Watchdog:
             # for a zero value -- otherwise last_commanded_speed would
             # stay stale (nonzero) here while the motor's actually
             # stopped, and a later poll could misjudge stall state.
-            # Same MONITORED_MOTOR_INSTANCE-only scoping as "speed" above.
+            # Per instance now (§6.3, 2026-09-14), same as "speed" above.
             instance = int(parts[1])
             linbus.reset_motor(self.lin, instance)
-            if instance == MONITORED_MOTOR_INSTANCE:
-                self.last_commanded_speed = 0
-                self.speed_became_nonzero_at = None
+            self.last_commanded_speed[instance] = 0
+            self.speed_became_nonzero_at[instance] = None
             return "OK"
         if verb == "kickcount":
             # Experimental/throwaway diagnostic for the firmware
@@ -574,7 +639,8 @@ class Watchdog:
             return
         elapsed = time.monotonic() - self.last_command_time
         if elapsed > IDLE_TIMEOUT:
-            self._stop_motor(f"idle {elapsed:.1f}s with connection still open")
+            self._stop_motor(MONITORED_MOTOR_INSTANCE,
+                              f"idle {elapsed:.1f}s with connection still open")
             self.stopped_for_idle = True
 
     def poll_rpm(self):
@@ -584,38 +650,56 @@ class Watchdog:
         # anyway, but this doesn't assume that). Per-call tracing (which
         # thread, timing, raw bytes) now lives in linbus.Lin itself (see
         # its --debug support) rather than being duplicated here.
+        #
+        # Multi-instance (§6.3, 2026-09-14): MONITORED_MOTOR_INSTANCE is
+        # always polled (feeds last_known_rpm/poll_current()'s stall
+        # signature, which wants an answer regardless of active state) --
+        # every OTHER instance is polled only while it's actually
+        # commanded nonzero, so an instance nobody's using never costs a
+        # poll-cycle timeout. The instance set is snapshotted under the
+        # lock (a plain dict-iteration race against _dispatch()'s
+        # concurrent writes, from the client thread, is possible
+        # otherwise -- see raspi/watchdog/CLAUDE.md's §6.3 section).
         with self.lock:
-            ret, value = linbus.get_rpm(self.lin, MONITORED_MOTOR_INSTANCE)
-        if ret == 0 and value is not None:
-            self.last_known_rpm = value
-            self._check_stall(value)
+            instances = {MONITORED_MOTOR_INSTANCE} | {
+                instance for instance, speed in self.last_commanded_speed.items()
+                if speed != 0
+            }
+        for instance in instances:
+            with self.lock:
+                ret, value = linbus.get_rpm(self.lin, instance)
+            if ret == 0 and value is not None:
+                if instance == MONITORED_MOTOR_INSTANCE:
+                    self.last_known_rpm = value
+                self._check_stall(instance, value)
 
     def poll_current(self):
         # Two things off the same current read (see "Two-Layer Safety
         # Check" in raspi/watchdog/CLAUDE.md):
-        #  1. Overcurrent hard stop (added 2026-09-10) -- unconditional,
-        #     acts via _stop_motor(), both channels, see
-        #     OVERCURRENT_STOP_THRESHOLD.
+        #  1. Overcurrent hard stop (added 2026-09-10, made per-instance
+        #     2026-09-14) -- unconditional, acts via _stop_all_motors(),
+        #     both channels, see OVERCURRENT_STOP_THRESHOLD.
         #  2. Stall *signature* -- current flowing while rpm reads 0.
-        #     Still observe-only (logs, does NOT stop). Only val1 here
-        #     (val2 is reserved for a second motor once one exists on
-        #     the bus, not a redundant reading of this one -- see
-        #     currentsensor/CLAUDE.md's Hardware section). Uses the rpm
-        #     value poll_rpm() already cached this same tick.
+        #     Still observe-only (logs, does NOT stop). Only val1/
+        #     MONITORED_MOTOR_INSTANCE here, unchanged from before --
+        #     this check itself isn't part of today's multi-instance
+        #     work, see CURRENT_STALL_THRESHOLD's own comment. Uses the
+        #     rpm value poll_rpm() already cached this same tick.
         with self.lock:
             ret, val1, val2 = linbus.get_current(self.lin, MONITORED_CURRENT_INSTANCE)
         if ret != 0 or val1 is None:
             return
 
         # Unconditional overcurrent hard stop (see OVERCURRENT_STOP_THRESHOLD).
-        # Runs regardless of rpm. Checks both channels: once a second motor
-        # is wired to val2 this covers it automatically; until then val2 is
-        # either motor 1's return leg (same current, still a valid signal)
-        # or near-zero (never trips).
+        # Runs regardless of rpm. Stops every currently-active motor, not
+        # just the channel that tripped it (§6.3) -- CURRENT_CHANNEL_TO_
+        # MOTOR_INSTANCE only makes the log line name which motor it was.
         for chan, amps in (("val1", val1), ("val2", val2)):
             if amps is not None and abs(amps) > OVERCURRENT_STOP_THRESHOLD:
-                self._stop_motor(f"OVERCURRENT — {chan}={amps:.1f}A "
-                                  f"> {OVERCURRENT_STOP_THRESHOLD:.0f}A")
+                motor = CURRENT_CHANNEL_TO_MOTOR_INSTANCE.get(chan)
+                self._stop_all_motors(f"OVERCURRENT — {chan}={amps:.1f}A "
+                                       f"> {OVERCURRENT_STOP_THRESHOLD:.0f}A "
+                                       f"(motor {motor})")
                 return
 
         if self.last_known_rpm == 0 and abs(val1) > CURRENT_STALL_THRESHOLD:
@@ -638,6 +722,45 @@ class Watchdog:
                 logger.error(f"monitor loop error (continuing): {exc}")
 
 
+def _startup_reset(wd):
+    # Probes+resets every instance in STARTUP_PROBE_INSTANCES once, right
+    # after the Watchdog is constructed and before the monitor thread
+    # starts (added 2026-09-14, see §6.3 in raspi/watchdog/CLAUDE.md and
+    # that constant's own comment for why this set is deliberately not
+    # "every possible instance"). Two purposes in one pass:
+    #  1. Clears any stale firmware state (e.g. a leftover nonzero
+    #     controlvariableinput from before this watchdog process started/
+    #     restarted -- `status` alone wouldn't show this as an error,
+    #     sysError stays MOT_OK the whole time a motor just keeps quietly
+    #     spinning, so the reset here is unconditional, not gated on
+    #     whether `status` reported a problem).
+    #  2. Seeds last_commanded_speed/speed_became_nonzero_at for every
+    #     instance that actually answered, so _stop_all_motors() knows
+    #     about both real motors from tick one, not only after each has
+    #     received its first real "speed" command.
+    # `status` (not `hal`) is the probe: it's a read, so a non-existent
+    # instance times out (~2s) and a real one answers in a few ms -- the
+    # only reliable way to detect presence at all (a LIN write, like
+    # `reset` itself, gets no slave reply by protocol design, so it can't
+    # be used to detect who's listening). Using `status` specifically
+    # (not `hal`) also means whatever stale state existed gets logged
+    # before it's wiped, not just silently discarded.
+    for instance in STARTUP_PROBE_INSTANCES:
+        with wd.lock:
+            ret, timeout_count, checksum_error_count, kickstart_count, sys_error = \
+                linbus.get_motor_status(wd.lin, instance)
+        if ret != 0:
+            logger.info(f"startup probe: motor {instance} did not respond (ret={ret}) -- skipping")
+            continue
+        logger.info(f"startup probe: motor {instance} found -- timeout={timeout_count} "
+                    f"checksum={checksum_error_count} kickstart={kickstart_count} "
+                    f"sys_error={sys_error} -- resetting")
+        with wd.lock:
+            linbus.reset_motor(wd.lin, instance)
+        wd.last_commanded_speed[instance] = 0
+        wd.speed_became_nonzero_at[instance] = None
+
+
 def serve(address=SOCKET_ADDRESS, live=False, debug=False):
     # File always gets full detail (DEBUG level); terminal only mirrors
     # it if --debug. Log file is rotated (one generation kept) here, not
@@ -658,6 +781,7 @@ def serve(address=SOCKET_ADDRESS, live=False, debug=False):
     lin = linbus.Lin() if live else linbus.DryRunLin()
 
     wd = Watchdog(lin)
+    _startup_reset(wd)  # before the monitor thread starts -- see its own docstring
     monitor_thread = threading.Thread(target=wd.monitor, daemon=True)
     monitor_thread.start()
 

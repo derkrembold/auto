@@ -50,51 +50,63 @@ as a problem.
   `rpm` **itself**, directly, in its background `monitor()` thread
   (`Watchdog.poll_rpm()`, every `RPM_POLL_INTERVAL` = 1.0s) — this does
   **not** depend on a client asking for `rpm`; it runs regardless of
-  whether anyone's connected. This is what feeds the stall check
-  (`Watchdog._check_stall()`): commanded speed nonzero, but `rpm` stays
-  0 past `STALL_GRACE_PERIOD` (3.0s, covers startup torque/static
-  friction) → stop. Self-polling was chosen specifically so this check
-  doesn't depend on `motorcontrol.py` doing anything — it's a pure
-  motor-behavior check, decoupled from whether a supervisor is even
-  connected. (An earlier design had `motorcontrol.py` send `rpm`
-  explicitly as a "heartbeat" to feed this — replaced because it
-  conflated "is the motor stalled" with "is the supervisor alive," which
-  are different questions needing different mechanisms; see Connection
-  Model above for how "is the supervisor alive" is answered now.)
+  whether anyone's connected. **Multi-instance since 2026-09-14 (§6.3):**
+  `MONITORED_MOTOR_INSTANCE` (0) is always polled every tick; every other
+  instance is polled only while it's actually commanded nonzero (tracked
+  per instance in `last_commanded_speed`/`speed_became_nonzero_at`, both
+  dicts now) — an instance nobody's using never costs a poll-cycle
+  timeout. This feeds the stall check (`Watchdog._check_stall(instance,
+  rpm_value)`, per instance now): that instance's commanded speed
+  nonzero, but its `rpm` stays 0 past `STALL_GRACE_PERIOD` (3.0s, covers
+  startup torque/static friction) → **`_stop_all_motors()`** — a stall on
+  *any* known motor stops *every* known motor, not just the one that
+  stalled (e.g. on a differential-drive vehicle, one side stalling while
+  the other keeps driving would spin/lurch it, not just stop cleanly).
+  Self-polling was chosen specifically so this check doesn't depend on
+  `motorcontrol.py` doing anything — it's a pure motor-behavior check,
+  decoupled from whether a supervisor is even connected. (An earlier
+  design had `motorcontrol.py` send `rpm` explicitly as a "heartbeat" to
+  feed this — replaced because it conflated "is the motor stalled" with
+  "is the supervisor alive," which are different questions needing
+  different mechanisms; see Connection Model above for how "is the
+  supervisor alive" is answered now.)
 - **Upper layer: the current sensor.** `Watchdog.poll_current()`,
   called from `monitor()` alongside `poll_rpm()` at the same
   `RPM_POLL_INTERVAL` (the current sensor's own on-board averaging
   window is ~1s anyway, see `currentsensor/CLAUDE.md`'s `countmax`/
   `OCR1A` tuning, so polling it faster wouldn't get fresher data).
   **Two checks off the same current read:**
-  - **Overcurrent hard stop (added 2026-09-10, this one DOES act).**
-    `abs(val1) > OVERCURRENT_STOP_THRESHOLD` (15A) — or `val2`, checked
-    the same way for when a second motor is wired there — calls
-    `_stop_motor()` unconditionally, whether the rotor is turning or
-    not. 15A is inside the ACS712xLCTR-20A's linear range (saturates
-    ~20A, raw ADC tops ~25A) and above the motor's ~16-17A rated draw.
-    Backstop for *sustained* overcurrent (stalled-and-grinding);
-    reaction ~1-3s (sensor averaging + poll interval), NOT a fast
-    transient crowbar — a real catastrophic spike (a stalled winding
-    can pull hundreds of amps) just pegs the sensor. **`_stop_motor()`
-    currently stops the one addressable motor; once a second motor is
-    wired to `val2`, an overcurrent on either channel must stop BOTH
-    (see the §6.3 point in the planned Watchdog extensions below).**
-  - **Stall signature — still observe-only.** `abs(val1) >
-    CURRENT_STALL_THRESHOLD` (0.15A) **while the last known `rpm` reads
-    0** (motor commanded to move, drawing current, not turning). More
-    precise than a bare high-current threshold since it targets the
-    dangerous case directly. **Logs a conspicuous message but does
-    **not** call `_stop_motor()`** — the sensor only started working
-    reliably after several rounds of real-hardware bugfixing
-    (2026-08-06 → 08-11, see `currentsensor/CLAUDE.md`'s Status), not
-    yet trusted to autonomously cut power on *this* subtler signal;
-    promote it once it's proven itself over a real observation period.
-    Only `val1` here — `val2` is reserved for a second motor, not a
-    redundant reading (see `currentsensor/CLAUDE.md`'s Hardware
-    section). `_check_stall()` (the lower, rpm-only layer) plus this
-    new overcurrent stop are the layers that actually stop the motor
-    today.
+  - **Overcurrent hard stop (added 2026-09-10, made multi-instance
+    2026-09-14, this one DOES act).** `abs(val1) >
+    OVERCURRENT_STOP_THRESHOLD` (15A) — or `val2`, checked the same way
+    — calls **`_stop_all_motors()`**, stopping every currently-known
+    motor regardless of which channel tripped it (§6.3), whether any
+    rotor is turning or not. `CURRENT_CHANNEL_TO_MOTOR_INSTANCE` (val1 =
+    motor 0, val2 = motor 1 — confirmed against real hardware the same
+    day via the actual rewiring + a live dual-motor capture, see
+    `raspi/CLAUDE.md`'s currentsensor notes) only makes the log line name
+    which motor tripped it; the stop action itself doesn't care. 15A is
+    inside the ACS712xLCTR-20A's linear range (saturates ~20A, raw ADC
+    tops ~25A) and above the motor's ~16-17A rated draw. Backstop for
+    *sustained* overcurrent (stalled-and-grinding); reaction ~1-3s
+    (sensor averaging + poll interval), NOT a fast transient crowbar — a
+    real catastrophic spike (a stalled winding can pull hundreds of
+    amps) just pegs the sensor.
+  - **Stall signature — still observe-only, NOT part of the 2026-09-14
+    multi-instance work.** `abs(val1) > CURRENT_STALL_THRESHOLD` (0.15A)
+    **while the last known `rpm` reads 0** (motor commanded to move,
+    drawing current, not turning). More precise than a bare high-current
+    threshold since it targets the dangerous case directly. **Logs a
+    conspicuous message but does not stop anything** — the sensor only
+    started working reliably after several rounds of real-hardware
+    bugfixing (2026-08-06 → 08-11, see `currentsensor/CLAUDE.md`'s
+    Status), not yet trusted to autonomously cut power on *this* subtler
+    signal; promote it once it's proven itself over a real observation
+    period. Deliberately still scoped to `val1`/`MONITORED_MOTOR_
+    INSTANCE` only, unlike the overcurrent check above — extending this
+    one to both motors is separate, not-yet-decided future work.
+    `_check_stall()` (the lower, rpm-only layer) plus the overcurrent
+    stop above are the layers that actually stop a motor today.
   Both thresholds (`OVERCURRENT_STOP_THRESHOLD`, `CURRENT_STALL_
   THRESHOLD`) are named constants in `watchdog.py` so they're easy to
   retune; `CURRENT_STALL_THRESHOLD` needs headroom above ACS712
@@ -585,19 +597,21 @@ discussion, step by step, before writing anything:
   Step 2 (later): expose `selftest <motor_instance> <current_instance>`
   for real, since its own checksum-isolation checks already span
   exactly one motor instance and one currentsensor instance internally.
-- **The watchdog's own self-polling/stall-check/overcurrent-stop
-  (`poll_rpm()`, `poll_current()`, `_stop_motor()`) are NOT yet
-  multi-instance-aware** — deliberately out of scope for this change,
-  separate from stopping every motor on any one's fault (§6.3 below).
-  They act on `MONITORED_MOTOR_INSTANCE`/`MONITORED_CURRENT_INSTANCE`
-  (both 0) only. **Physical precondition:** the real motor (today's
-  only motor with a working power stage) must have its PB14/PB15 jumper
-  actually set to identify as instance 0 for this monitoring to reach
-  it at all — an unjumpered board reads hwbits=0x03 (instance 3), see
-  `STM32/CLAUDE.md`'s Instance-Selection Jumper section. Until that
-  jumper is set, the real motor is invisible to the watchdog's own
-  safety polling under this scheme (commands sent explicitly at
-  instance 3 would still reach it; self-polling would not).
+- **The watchdog's own self-polling/stall-check/overcurrent-stop were
+  NOT yet multi-instance-aware at the time this section was written —
+  since fixed 2026-09-14, see the new "§6.3: Multi-Instance Self-
+  Polling + Stop-All" section below.** `MONITORED_MOTOR_INSTANCE`
+  (still 0) is the one always-polled baseline; every other instance is
+  now polled dynamically while active. **Physical precondition (still
+  applies):** the real motor (today's only motor with a working power
+  stage) must have its PB14/PB15 jumper actually set to identify as
+  instance 0 for the always-on baseline poll to reach it at all — an
+  unjumpered board reads hwbits=0x03 (instance 3), see `STM32/CLAUDE.md`'s
+  Instance-Selection Jumper section. **Confirmed done 2026-09-14** — both
+  real motors jumpered correctly (0 = both PB14+PB15 grounded, 1 = PB15
+  only) and verified live (`hal`/`status`/`speed`/`reset` all answering
+  correctly on both, a real simultaneous-both-motors run observed in
+  `watchdog.log`).
 - **Every script that talks to the watchdog directly now has a
   `--motor`/`motor=` parameter (default 0), updated the same session,
   right after the addressing layer itself** — `capture_step_response.py`
@@ -617,6 +631,89 @@ discussion, step by step, before writing anything:
   the stall-check bookkeeping, `_execute_strategy()`/`_soft_stop()`
   honor a non-default motor). `test_validate_speed.py`/
   `test_validate_motor_currentsensor.py` updated too.
+
+## §6.3: Multi-Instance Self-Polling + Stop-All (2026-09-14)
+
+Built the same day the physical rewiring was confirmed live (both real
+motors jumpered, both current-sensor channels confirmed mapped —
+`CURRENT_CHANNEL_TO_MOTOR_INSTANCE`, `val1`=motor 0/`val2`=motor 1).
+Closes the gap the 2026-09-11 addressing work deliberately left open.
+Prompted by the user directly observing, during a real simultaneous-
+both-motors test, that the watchdog's background polling only ever
+looked at motor 0 — motor 1 could stall or overcurrent with zero
+reaction. Designed by discussion, step by step, before any code:
+
+- **`last_commanded_speed`/`speed_became_nonzero_at` are now per-
+  instance dicts**, not single scalars — populated by `_dispatch()`'s
+  `speed`/`reset` handlers for *whichever* instance was actually
+  commanded (previously gated to `MONITORED_MOTOR_INSTANCE` only), plus
+  seeded at watchdog startup (see below).
+- **`poll_rpm()`**: `MONITORED_MOTOR_INSTANCE` (0) is always polled
+  every tick (feeds `last_known_rpm`, which `poll_current()`'s
+  observe-only stall-signature check depends on regardless of active
+  state — deliberately unchanged, see that check's own comment). Every
+  *other* instance is polled only while `last_commanded_speed[instance]
+  != 0` — an instance nobody's using never costs a poll-cycle timeout.
+  The instance set is snapshotted under `self.lock` before the loop, to
+  avoid a dict-mutated-during-iteration race against `_dispatch()`
+  running concurrently on the client thread.
+- **`_check_stall(instance, rpm_value)`** (was `_check_stall(rpm_value)`,
+  implicitly instance 0 only) — per instance now.
+- **`_stop_all_motors(reason)`** (new): stops every instance currently
+  in `last_commanded_speed` (regardless of its value — sending `speed
+  <n> 0` to an already-stopped instance is harmless, so "stop everything
+  we know about" and "stop only what's active" give the same real-world
+  result; the former needs no extra bookkeeping to implement correctly).
+  Reuses `_stop_motor(instance, reason)` (now takes an explicit
+  `instance` argument) per instance, so each gets its own log line.
+  **Both existing triggers now call this instead of stopping only one
+  motor:**
+  - `_check_stall()`: a stall on *any* known motor stops *all* of them
+    — explicit user decision. Reasoning: on a differential-drive
+    vehicle, one side stalling while the other keeps driving would
+    spin/lurch it, not stop cleanly.
+  - `poll_current()`'s overcurrent hard stop: an overcurrent on *either*
+    channel stops *all* currently-known motors, not just the one the
+    channel maps to — also an explicit user decision, worked out to be
+    behaviorally identical to "stop both if both are on, stop the one
+    if only one is on" (since stopping an already-idle one is a no-op).
+    `CURRENT_CHANNEL_TO_MOTOR_INSTANCE` only makes the log line say
+    which motor's channel tripped it.
+  - `on_disconnect()`/`check_idle()` **deliberately NOT changed** — both
+    still call `_stop_motor(MONITORED_MOTOR_INSTANCE, ...)`, stopping
+    only instance 0. Raised explicitly during design, left open — not
+    part of this build.
+- **`_startup_reset()`** (new, called from `serve()` right after
+  `Watchdog(lin)`, before the monitor thread starts): probes each
+  instance in `STARTUP_PROBE_INSTANCES` (`(0, 1)` — deliberately not
+  "every possible instance 0-3," each non-existent one costs a full
+  ~2s read timeout on *every* watchdog start, and motor 2/3 are
+  long-term-only future work, not imminent) via `status` (a *read* —
+  the only way to detect presence at all; a LIN *write* like `reset`
+  gets no slave reply by protocol design, so it can't be used to probe
+  existence), logs whatever stale state was found (e.g. a `sys_error`
+  latched from before the previous watchdog process ended), then
+  **unconditionally** `reset`s it and seeds `last_commanded_speed`/
+  `speed_became_nonzero_at` for it. Unconditional, not gated on whether
+  `status` showed an error — the motivating scenario (a motor left
+  spinning because the previous watchdog process died mid-command)
+  shows `sys_error=0` (no error at all, `controlvariableinput` is just
+  quietly still nonzero), so a "only reset if `status` shows a problem"
+  rule would have missed exactly the case this exists to catch.
+  `STARTUP_PROBE_INSTANCES` only affects this one-time startup cleanup
+  — an instance not listed there still works completely normally the
+  moment a client actually commands it (`_dispatch()` adds it to
+  `last_commanded_speed` dynamically on its first real `speed`/`reset`);
+  it just doesn't get the startup stale-state safety net until the
+  tuple is updated. Extend it the day a 3rd/4th motor actually exists.
+- **201→204 tests, all green** — new coverage: a stall/overcurrent on
+  one instance stops every known instance; `_startup_reset()` resets +
+  seeds every responding instance, skips a non-responding one without
+  crashing, and logs stale state before wiping it (`patch()`-based fake
+  `linbus.get_motor_status()`, since `DryRunLin` itself has no way to
+  simulate a non-responding instance — every `DryRunLin.read()` always
+  returns `ret=0`).
+- Not deployed yet as of this writing.
 
 ## Status
 
