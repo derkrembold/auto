@@ -96,7 +96,8 @@ Planned hardware additions: a second motor+controller (identical to
 today's, addressed via the existing multi-instance LIN scheme — see
 LIN Protocol section above, `addresses.json` already reserves room for
 up to 4 motors, this would be the first time a second one actually
-exists); an **external current-sensor module** for both motors over
+exists — a 3rd/4th motor beyond that is tracked as its own long-term
+Issue #2); an **external current-sensor module** for both motors over
 LIN — a *different* device than the STM32's own internal current
 sense, which stays physically disabled on today's board (see
 `STM32/CLAUDE.md`'s Known Hardware Issue) — not yet decided whether
@@ -104,9 +105,10 @@ this reuses the existing `currentsensor/` LIN-slave design or is a new
 one; an **IFM sensor suite** (own Ethernet controller, MQTT or direct
 IP — TBD) — O3D depth camera (front, obstacle detection), 4x LiDAR
 (side, precise/long-range), 4x ultrasonic (side/rear, wide-angle near-
-field, backup for the O3D in direct sunlight); the Pi as a WiFi access
-point (phone SSH/browser, Bluetooth joystick, Ethernet to the IFM
-controller, LIN to both motors + current-sensor module).
+field, backup for the O3D in direct sunlight), tracked as long-term
+Issue #3; the Pi as a WiFi access point (phone SSH/browser, Bluetooth
+joystick, Ethernet to the IFM controller, LIN to both motors +
+current-sensor module).
 
 **Planned STM32-side redesign** (pulse/reset/status protocol, kickstart
 algorithm): see `STM32/CLAUDE.md`'s Commutation & Control section.
@@ -758,8 +760,8 @@ masking `& 0x3c` (instance-agnostic message-type match) and a separate
 
 ## Battery
 
-**Open decision: 8S vs 9S (24V vs ~28.8V nominal) — not yet decided, see
-Open Points below.** 9 cells were ordered (1 originally as a spare), and
+**Open decision: 8S vs 9S (24V vs ~28.8V nominal) — not yet decided.**
+9 cells were ordered (1 originally as a spare), and
 9S has been evaluated as viable (BMS supports 8S–20S; motor's 36V max
 comfortably covers 9S's ~32.9V full-charge; the Victron buck converter's
 36V input rating covers it too) — but no final call has been made yet.
@@ -856,42 +858,18 @@ Cross-cutting — applies regardless of concept/architecture changes.
 
 # Open Points / Still To Be Clarified
 
-Living tracker — remove items once resolved.
+Living tracker — remove items once resolved. Larger/multi-session items
+are tracked as GitHub Issues instead (repo `derkrembold/auto`,
+"Auto" project) — referenced by number here rather than described in
+full.
 
-- **8S vs 9S battery decision** (24V vs ~28.8V nominal) — not yet
-  decided. See Battery section above.
 - **`addresses.json`/`generate_addresses.py`** — design settled and
   built (2026-08-05), writes directly to every consuming file since
   2026-08-06 (no more `generated/` staging), see LIN Protocol "Address
-  Table Single Source of Truth" section above. Remaining concrete step:
-  - STM32 `main.c` LIN dispatch: **done** (confirmed 2026-09-10) —
-    `hwbits` read from `PB14`/`PB15` at boot, all four `cntl*mot`
-    dispatch branches compare `cntl*mot | hwbits`, index lookup masks
-    `& 0x3c`, separate `& 0x03 == hwbits` instance check.
-  - Same runtime treatment still needed in `currentsensor`/
-    `lightsensor` firmware once they're built for multiple physical
-    units.
+  Table Single Source of Truth" section above. STM32 `main.c` LIN
+  dispatch: **done** (confirmed 2026-09-10). Same runtime treatment for
+  `currentsensor`/`lightsensor` firmware: **Issue #1**.
 - Saleae-specific open points (pin mapping, sample rate) — see
   `saleae/CLAUDE.md`.
 - Analysis-specific open points (cost function/metric weighting) — see
   `analysis/CLAUDE.md`.
-- **`speed` ≈ `rpm`, confirmed live (2026-08-04) — no longer just
-  assumed.** `raspi/control/validate_speed.py` (0 → 400 → 800 → 1200 →
-  800 → 400 → 0 → -400 → -800 → -1200 → -800 → -400 → 0, `rpm` checked
-  after every step) ran clean end to end: `rpm` tracked `speed` to
-  within roughly ±6% at every step (e.g. 400→450, 800→825, 1200→1175,
-  -1200→-1200, back to 0→0), both directions, ramp up and back down.
-  Good enough to treat `speed`≈`rpm` as validated for now.
-  **Independent ground truth done (2026-08-17/18):** a real Saleae
-  Hall-edge capture during a live `capture_step_response.py` run,
-  converted to rpm via `analysis/hall_rpm.py`, tracks LIN `rpm` closely
-  across ramp-up/steady-state/coast-down — see `analysis/CLAUDE.md`'s
-  Hall-Edge RPM Conversion section. This *is* the independent
-  measurement the validate_speed.py run above couldn't provide on its
-  own. Along the way, found and explained a genuine small systematic
-  bias in LIN `rpm` itself (~3.4%, from `TIM4`'s prescaler giving a
-  ~1.024ms tick instead of exactly 1ms — see `STM32/CLAUDE.md`'s RPM
-  Measurement Resolution section) — since fixed in firmware
-  (`Prescaler=63999`). **Still not done:** explicitly controlling for
-  battery-voltage drift (see Battery section above) across a longer
-  run/discharge cycle.

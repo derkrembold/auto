@@ -357,6 +357,11 @@ other. Same caution applies to any future same-named files across
     `"retry"` row = the retry broke/was interrupted before
     measurement; that absence is itself a signal.
 
+  **Dual-motor support (launch both motors, stop both on either's
+  stall, retry both) is planned but not built — see Issue #4.** Today's
+  design throughout this whole section (sampling, stall detection, the
+  recovery sequence, the CSV/log schemas) is single-motor.
+
   **Any pre-existing `recovery_sequences.csv` on the Pi must be cleared
   by hand before a schema-changed script runs** — this happened twice:
   2026-09-10 the single-row schema became the two-phase one (column set
