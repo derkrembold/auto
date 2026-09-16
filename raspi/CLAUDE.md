@@ -372,12 +372,11 @@ other. Same caution applies to any future same-named files across
   Only ever ~2 real rows existed at each change, so clearing costs
   nothing.
 
-  **Caveat found live 2026-09-09, still open:** the *detailed*
-  per-command LIN trace for a given recovery attempt lives only in
+  **Caveat found live 2026-09-09:** the *detailed* per-command LIN
+  trace for a given recovery attempt lives only in
   `capture_step_response.log`, which rotates (one generation kept) —
   after ~2 more runs that trace is gone even though the CSV rows
-  survive forever. No decision made on whether to extend rotation or
-  otherwise preserve more detail per attempt.
+  survive forever. See Issue #14.
 - `analyze_logs.py` — read-only static analysis over the four `.log`
   files above (built 2026-08-12, together with the `/analyze-logs`
   skill): flags unmatched `->` calls (the 2026-08-11 bus-hang
@@ -429,17 +428,14 @@ real-hardware-confirmed, not just "best current understanding."
 
 - `watchdog/linbus.py` returns bare magic-number error codes
   (`-1`/`-2`/`-3`/`-4`) from `Lin.write()`/`Lin.read()`. Replace with named
-  constants (or an enum) — deferred.
+  constants (or an enum) — see Issue #12.
 - **`validate_speed.py`/`capture_step_response.py` silently swallow
   `ret!=0` reads** (2026-08-12, part of the bus-hang investigation — see
   `STM32/CLAUDE.md`'s Open Points): `_read_rpm()`/`_read_current()`'s
   regex just fails to match on a `None`/error reply, so the row prints
   literal `"None"` in the CSV instead of raising an alarm — easy to miss
-  live, only visible on close inspection of the output afterward. Should
-  flag conspicuously (or abort) on `ret!=0`, similar to
-  `validate_motor_currentsensor.py`'s `_invalid_current_reason()` sanity
-  check. Not yet built — planned alongside the STM32/currentsensor error
-  counters for the same investigation.
+  live, only visible on close inspection of the output afterward. See
+  Issue #13.
 
 ## Test Suite Policy
 

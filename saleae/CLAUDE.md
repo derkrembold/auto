@@ -199,10 +199,12 @@ setup on the Windows host:
   trigger_capture_hall_vs_lin_rpm.png`), same as every earlier
   `timed`-mode confirmation — and with **zero voice coordination**: no
   "Motor jetzt starten!" needed, the Saleae caught the run on its own.
-- Sample rate for the Hall channels — needs to resolve commutation edge
-  timing at max RPM without producing unmanageable capture sizes.
-- Headless mode (`Manager.launch()` instead of `Manager.connect()`) —
-  discussed as a real next step once the headful flow is trusted, not
-  built.
+- **Dropped (2026-09-16), not tracked further:** sample-rate tuning for
+  the Hall channels, and headless mode (`Manager.launch()` instead of
+  `Manager.connect()`). Both legitimate improvements in isolation, but
+  the Saleae's role in this project is diminishing (P/I search
+  concluded, gradient-search phase — the main reason ground truth would
+  have mattered more — isn't happening, see root `CLAUDE.md`'s Grid
+  Search section) — not worth pursuing right now.
 
-Fill these in here once fixed, not in the root `CLAUDE.md`.
+Fill this in here once fixed, not in the root `CLAUDE.md`.

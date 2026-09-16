@@ -175,6 +175,10 @@ connection, dry-run default, self-polled rpm stall check, etc.) as
 possible and build additively on top of it, specifically *because* it's
 already known to work. See root `CLAUDE.md`'s Two-Motor Vehicle
 Architecture section for the vehicle-level context this sits under.
+**Process 1 (Joystick) is tracked as Issue #19 — near-term, not
+long-term, the user expects this soon.** Processes 3/4 (Learning
+Algorithm, Webserver) plus the Logging Database are tracked together as
+long-term Issue #20.
 
 **Four planned processes** (today: one `watchdog.py` process + one
 interactive `motorcontrol.py` client):
@@ -758,32 +762,30 @@ coverage for the same reason documented in `raspi/tests/test_linbus.py`
 
 ## Open Points (watchdog-specific)
 
-- Concrete current-cutoff threshold and exact polling rate for the LIN
-  current sensor — blocked on the sensor existing; the interim rpm-only
-  stall check doesn't need this yet.
 - How the watchdog physically stops the motor if the watchdog *process
-  itself* fails — neither disconnect-detection nor LIN-based stopping
-  helps then, since nothing's driving the bus. Needs an independent
-  hardware kill switch/relay as the ultimate backstop.
+  itself* fails — see Issue #15.
 - Individual safety paths (disconnect detection, idle timeout, stall
   check) haven't been deliberately, separately exercised live yet — see
-  Status above.
+  Issue #16.
+- `on_disconnect()`/`check_idle()` only stop `MONITORED_MOTOR_INSTANCE`
+  (motor 0), unlike stall/overcurrent (both stop every known motor,
+  §6.3) — see Issue #17.
+- Current-stall *signature* check (observe-only) still scoped to
+  `val1`/motor 0 only — see Issue #18.
 - `hal` (Hall data over LIN) might be useful for something beyond what
   it does today (e.g. further validation/diagnostics) — not prioritized,
   but don't treat it as dead/removable either.
-- Whether "test suite must run on every change" stays a documented
-  human/Claude discipline or becomes an actual pre-commit/CI hook later
-  — not yet decided.
+- **Decided (2026-09-16):** "test suite must run on every change" stays
+  a documented human/Claude discipline, not a pre-commit/CI hook.
 - **Client-side correlation ID** (discussed 2026-08-12, deliberately not
   built): `motorcontrol.py`/etc. could generate an ID per command, send
   it over the wire, and have the watchdog thread it through to its own
   log lines, so "everything about this one command" is `grep`-able
-  across both logs directly. Not built because today's protocol is
-  strictly synchronous (one client, one command in flight at a time) —
-  timestamp + sequential order already disambiguate without it. Would
-  become worth it if the protocol ever stops being strictly one-at-a-
-  time, or if timestamp-based cross-log correlation turns out to be
-  annoying in practice (revisit then, not preemptively).
+  across both logs directly. Still correct as originally reasoned
+  (2026-09-16): today's protocol is still strictly synchronous (one
+  client, one command in flight at a time) even with two motors —
+  timestamp + sequential order still disambiguate without it. Revisit
+  only if the protocol stops being strictly one-at-a-time.
 - **Log-analysis tool** (built 2026-08-12): `raspi/analyze_logs.py` +
   the `/analyze-logs` skill — parses the logs this section documents
   and flags: unmatched `->` calls (hangs), non-zero `ret` codes, calls
@@ -793,13 +795,6 @@ coverage for the same reason documented in `raspi/tests/test_linbus.py`
   above), and poll-loop cadence gaps. Read-only, no motor
   interaction — see `raspi/analyze_logs.py`'s own docstring for exact
   check definitions rather than duplicating them here.
-
-- **Blocked on STM32/CLAUDE.md's Planned Redesign section (see there
-  for detail):** once the firmware gets a `reset` command and a
-  restructured 4-byte `status` reply, `watchdog.py` needs a matching
-  `reset` verb and `linbus.py`/`get_motor_counters()`-equivalent needs
-  updating for the new field layout (including the new `errorCode`).
-  Not started.
 
 Fill these in here once fixed, not in the root `CLAUDE.md` or
 `raspi/CLAUDE.md`.

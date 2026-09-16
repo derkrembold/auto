@@ -15,9 +15,10 @@ intentionally left out, same as `currentsensor/firmware/`.
 **No `addresses.hpp` here** — unlike the current-sensor firmware (see
 `currentsensor/CLAUDE.md`), this `main.cpp` only includes `errors.hpp`,
 no LIN address table. Either the DCPS course project never finished
-wiring this sensor onto the LIN bus, or it wasn't in scope for it —
-either way, an address table needs to be added here once this slave's
-PID is assigned (see Slave Topology note in root `CLAUDE.md`).
+wiring this sensor onto the LIN bus, or it wasn't in scope for it. The
+PID itself is already reserved (`addresses.json`'s `cntl0lig`/`st0lig`,
+2 instance slots) — `generate_addresses.py` just doesn't target this
+folder yet, unlike `STM32/`/`currentsensor/firmware/`. See Issue #11.
 
 **Build: working (2026-08-05).** Same setup as `currentsensor/CLAUDE.md`'s
 Firmware section — `light.elf`/`light.hex` build from this folder's own
@@ -29,9 +30,9 @@ section for the full reasoning, it applies here unchanged.
 **Not yet done here (unlike `currentsensor`):** the checksum/echo-compare
 fix — `main.cpp` currently has no `checksum()` function and doesn't
 validate echoed bytes on its LIN replies at all (matches the "maybe
-never finished wiring this sensor onto the bus" theory above). Worth
-doing before this slave is trusted on a real bus, once its own LIN
-addressing exists to test against.
+never finished wiring this sensor onto the bus" theory above). See
+Issue #11 — this is scoped as part of writing the real firmware, not a
+standalone patch on the DCPS fragments.
 
 Developing/building doesn't *need* to happen on this machine — the repo
 is the source-of-truth copy (same pattern as `raspi/control/` and
@@ -47,12 +48,15 @@ project, not yet flashed to real hardware.
 
 ## Open Points (lightsensor-specific)
 
-- Add `addresses.hpp` (or equivalent) once this slave's PID is assigned
-  — currently has no LIN address table at all.
-- Add the checksum/echo-compare fix `currentsensor/firmware/main.cpp`
-  already has (see Firmware section above) — not done here yet.
-- Verify/adapt the hardware design this firmware assumes.
-- Flash environment (`avrdude`/programmer) not yet set up/tested from
-  this repo — build is done, flashing isn't.
+- The firmware here is only unmodified DCPS-course-project fragments,
+  not a real working implementation — see Issue #11 (proper
+  implementation, LIN addressing off the already-reserved
+  `addresses.json` entries, checksum/echo-compare handling).
+- Hardware-design verification and flashing are deliberately **not**
+  tracked as separate open points — hardware verification naturally
+  happens once real firmware + real hardware are brought up together
+  (not before), and flashing is always done manually by the user, same
+  as `currentsensor` (see `avr_flashing_manual` project convention) —
+  no flashing tooling is built for either in this repo.
 
 Fill these in here once fixed, not in the root `CLAUDE.md`.

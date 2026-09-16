@@ -221,21 +221,27 @@ isolated, not just individually correct.
 - No hardware instance-strap-pin reading yet (unlike the motor's
   `hwbits`, see `STM32/CLAUDE.md`'s Instance-Selection Jumper section) —
   always answers as instance 0. Fine while only one physical current
-  sensor exists; revisit if/when a second one joins the bus.
-  `raspi/watchdog/linbus.py`'s `CURRENT_INSTANCE_ID` documents this too.
-- ACS712 zero-point (2.5V) is confirmed against real hardware, but the
-  "near 0A" noise tolerance is still just an initial guess, not
-  characterized — `raspi/watchdog/watchdog.py`'s `CURRENT_STALL_THRESHOLD`
-  (0.15A) was chosen with headroom above the ~0.05-0.09A chip-to-chip
-  offset observed once, not from a proper noise-floor measurement.
-  `validate_motor_currentsensor.py` also still only sanity-bounds the
-  raw range, doesn't assert values are close to 0A when the motor is
-  stopped.
+  sensor exists; needed once a second one joins the bus — see Issue #9.
+  (`raspi/watchdog/linbus.py` addresses it via `_current_wire_id()`,
+  currently always resolving to instance 0 — the old `CURRENT_INSTANCE_ID`
+  module constant this used to reference was removed in the 2026-09-11
+  multi-instance rework, this note was stale.)
+- ACS712 zero-point (2.5V) is confirmed against real hardware;
+  `raspi/watchdog/watchdog.py`'s `CURRENT_STALL_THRESHOLD` (0.15A) was
+  chosen with headroom above the ~0.05-0.09A chip-to-chip offset
+  observed once, not from a proper noise-floor measurement — **good
+  enough as-is (2026-09-16): the chips have high enough inherent
+  tolerance that precise characterization isn't worth pursuing.**
+  `validate_motor_currentsensor.py` asserting values are actually close
+  to 0A when the motor is stopped (reusing this same approximate
+  threshold as a loose sanity bound, not new calibration work) — see
+  Issue #10.
 - Chip-to-chip offset/gain tolerance between the two ACS712s (~0.05-0.09A
   observed with the same real current flowing through both, see Hardware
   above) — no per-channel calibration exists, both use the same fixed
-  constants. Deliberately left alone for now (small relative to
-  `CURRENT_STALL_THRESHOLD`).
+  constants. **Decided not to pursue (2026-09-16):** same high-inherent-
+  tolerance reasoning as above: small relative to `CURRENT_STALL_THRESHOLD`
+  and not worth calibrating against.
 - Apply the same checksum/echo-compare and sync-scan-loop fixes to
   `lightsensor/firmware/main.cpp` — not done yet, see
   `lightsensor/CLAUDE.md`.

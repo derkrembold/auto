@@ -149,11 +149,15 @@ not spent per grid point.** Reasoning from the 2026-08-21 discussion:
   may be worth bringing back in for that narrower phase, or at least
   for validating the final chosen point, not for scoring every point.
 
-**Still open, not yet decided:** exact ISE window (whole capture vs.
-just the step segment), how the 25rpm quantization/window-lag artifacts
-get handled in the subtraction (if at all), and the concrete mechanism
-for reintroducing Saleae in the gradient-search phase. Not implemented
-yet — this is a design decision only so far.
+**No longer being pursued (2026-09-16):** exact ISE window refinement,
+25rpm quantization/window-lag handling, and reintroducing Saleae for a
+gradient-search phase were all left open pending further P/I work — but
+the P/I search concluded 2026-09-10 (see `analysis/grid_search_log.md`)
+without a follow-up gradient-search phase (already judged a poor fit —
+see root `CLAUDE.md`'s Candidate Selection Philosophy section), and
+Saleae's role in this project is diminishing. Not tracked further; the
+ISE/MSSD metrics as they exist today were good enough to reach a
+decision.
 
 ## Grid Heatmap (`grid_heatmap.py`) — Built 2026-08-25
 
@@ -193,15 +197,17 @@ regenerate with current `run_grid.py`/`run_grid_row.py`, rather than
 being read as if they were the (differently-scaled, differently-
 meaning) MSSD columns.
 
-**Verified with synthetic data before any real use** (two overlapping
-synthetic `grid_results.csv`s, one mimicking a 3×3 grid and one a
-5-point row sharing one coordinate with it): correctly detected and
-averaged the one shared coordinate, correctly rendered the sparse
-combined shape, correctly marked both reference points. Not yet run
-against real hardware data, since no real `run_grid.py`/`run_grid_row.py`
-sweep has been captured with the final `mssd_2s`/`mssd_full` column
-names yet (every real sweep so far predates the MSSD rename — see
-`analysis/grid_search_log.md`'s 2026-08-25 section).
+**Verified with synthetic data first** (two overlapping synthetic
+`grid_results.csv`s, one mimicking a 3×3 grid and one a 5-point row
+sharing one coordinate with it): correctly detected and averaged the
+one shared coordinate, correctly rendered the sparse combined shape,
+correctly marked both reference points. **Then confirmed against real
+hardware data the same day (2026-08-25):** 11 real rows (108 unique
+(P,I) coordinates, 126 point measurements) merged and plotted
+(`runs/2026-08-25_162629_heatmap/`) — this run is what surfaced the
+`P+0.04, I+0.04` candidate that became the concluded P/I default (see
+`analysis/grid_search_log.md`). An earlier version of this note claimed
+"not yet run against real hardware data" — stale, corrected 2026-09-16.
 
 ## Open Points (analysis-specific)
 

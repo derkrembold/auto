@@ -628,12 +628,13 @@ that started this whole investigation) — everything since (the
 `I=0.00` vs. `I=-0.03` comparison, the theoretical cross-check above)
 has been visual/numeric reasoning built on that single anchor, not a
 second independent by-ear confirmation. **Correlation between `MSSD`
-and actually-audible roughness is plausible but not yet proven.**
-Practical fix, not yet started: on future real motor runs, explicitly
-note by ear whether a run sounded rough or not, and check that against
-the computed `MSSD` — a handful of paired observations would turn this
-from "plausible proxy" into either a trusted one or a metric that needs
-rethinking.
+and actually-audible roughness is plausible but not yet proven** — and
+**not being pursued further (2026-09-16):** the P/I search this metric
+was built for concluded 2026-09-10 with no big jumps found, so the
+practical stakes of tightening this correlation dropped along with it.
+Revisit if a future load-tested sweep (see the Grid Search section's
+"stays available for any future sweep" note) makes gain selection a
+live question again.
 
 **Related, same discussion: this is also part of why a classic small-
 step gradient search was judged a poor fit for the next phase (see

@@ -204,7 +204,7 @@ still fine, just mis-labeled) or genuinely used the older, superseded
 schematic (in which case they'd need re-checking against `demoboardV2`
 before being trusted further, e.g. before wiring anything new off `J1`
 or `J2`). Re-verify against `demoboardV2` specifically before relying on
-these for new hardware work.
+these for new hardware work — see Issue #5.
 
 - **SW1** → PE5. **SW3** → PC5. Both currently just toggle an onboard
   LED while held (bring-up/test code, `main.c:207-218` for SW1/PE5→PB7,
@@ -321,7 +321,8 @@ instead of baked into the firmware source).
   **Not yet done:** a firmware-side sanity clamp on
   the resulting `KP`/`KI` (nothing currently stops an automated search
   loop from driving either gain into an unstable region), and no
-  status readback of the currently-applied values exists yet.
+  status readback of the currently-applied values exists yet — see
+  Issue #6.
 
   **Confirmed on real hardware (2026-08-19),** flashed and deployed the
   same day: a `runs/2026-08-19_logs/` capture (fetched via
@@ -538,9 +539,20 @@ entry above) rather than have its CCW formula resolved — the open
 question about *why* CW and CCW aren't simple mirror images of each
 other is still genuinely unanswered, but no longer blocking anything,
 since nothing in the current manual-pulse design depends on it anymore.
-`driveKickStart()`'s automatic path still uses
-`driveStepKickStartMinus()`/`Null()` internally, so this question is
-still live there specifically, if it's ever revisited.
+
+**Update (2026-09-16): fully moot now, not just for the manual path.**
+`driveKickStart()`'s own internal simplification the next day
+(2026-09-09, see the Status section) also dropped its calls to
+`driveStepKickStartMinus()`/`Null()`/`Plus()` — confirmed via a source
+grep, none of the three are called anywhere in `main.c` anymore, only
+declared/defined. So this question isn't "still live there
+specifically" as an earlier version of this note said (now stale) —
+nothing in the current firmware depends on the CW/CCW asymmetry answer
+at all. Not tracked as an Issue; the three functions are dead code
+(harmless, `--gc-sections` already strips them from the flashed
+binary — see the Status section's Dead-Code-Cleanup entry for the same
+reasoning applied elsewhere), fine to leave or remove opportunistically
+whenever `main.c` is next touched, not worth a dedicated pass.
 
 ## RPM Measurement Resolution
 
@@ -1000,42 +1012,19 @@ Leerlauf Stromverbrauch: bei 5V: ca.: 0,5A,  bei 48V ca.: 1,4A
 ## Open Points (STM32-specific)
 
 - `STM32/notes.md`'s file-tree section needs re-verification against the
-  corrected `demoboard` source — written before the import, may not
-  match exactly.
+  corrected `demoboard` source — see Issue #7.
 - Implement Hall-based stall detection (see Stall Detection section
-  above) — deprioritized, was sequenced after the standalone-build-
-  environment goal; both build and flash are now headless, so this can
-  be reconsidered/picked up next. When it happens: timeout/threshold not
-  yet chosen, needs tuning against real startup behavior (torque needed
-  to overcome static friction before the first Hall transition must not
-  trigger a false stall trip).
-- **From the 2026-09-07 high-priority list — status update:**
-  - `reset` command: **done** (built and confirmed 2026-09-07, see the
-    Status section above).
-  - `status` reply restructure (6-byte `st3mot`, `sysError` field):
-    **done** (built 2026-09-07, extended with the UART-error fix's
-    `LIN_RCV_ERR` value 2026-09-08, see the Status section above).
-  - The `pulse` command's multi-pulse sequence: **built, then
-    redesigned again.** The original 3-pulse (n-1/n/n+1) idea became a
-    `driveStepKickStartMinus/Null/Plus` implementation, then (after the
-    2026-09-08 UART-hang investigation, see Status section above) that
-    sequencing logic moved to the Pi's new `burst` command instead —
-    **done**, `cntl1mot` is back to a single, plain
-    `driveStep(speedlocal)` call, confirmed working well on real
-    hardware (2026-09-08). `driveKickStart()`'s own internal
-    sequencing was also simplified the next day (2026-09-09): dropped
-    the escalating-repeat-count loop and
-    `driveStepKickStartMinus/Null/Plus` entirely, now a single
-    `driveStep()` per triggering window — see the Status section's
-    2026-09-09 entries (including a correction: this path was never
-    actually vulnerable to the UART collision, unlike first assumed).
-  - Systematically pulse-test all 24 mechanical positions (Tiefrast +
-    Mittelrast): still not started — extends, not replaces, the manual/
-    semi-automatic characterization already done 2026-08-28
-    (`characterize_hall_positions.py`, see `analysis/grid_search_log.md`).
-    Blocked on the `pulse`/`burst` design actually settling first.
+  above) — see Issue #8. Lower priority than it might read as: the
+  Pi-side watchdog already covers this via multiple layers (`rpm`
+  self-poll, overcurrent hard stop, `capture_step_response.py`'s own
+  recovery-sequence mechanism) — this would mainly buy faster reaction
+  time (single-digit ms vs. ~1s), not close a real gap.
 - **Deferred (2026-09-08):** a deterministic `selftest` provocation for
   the UART receive-error path — see the Status section above for why
-  (timing race, not content-based) and what would revisit this.
+  (timing race, not content-based). Not tracked as an Issue — the root
+  cause is already fixed and confirmed, and the triggering condition
+  (long blocking handler) was independently fixed too (`burst` moved
+  off the STM32); revisit only if real-world `burst` usage shows the
+  residual risk is still significant.
 
 Fill these in here once fixed, not in the root `CLAUDE.md`.
