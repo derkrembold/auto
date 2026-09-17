@@ -1,12 +1,15 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
+import argparse
+
 import capture_step_response
 from capture_step_response import (
     run, _soft_stop, _generate_recovery_sequence, _execute_strategy,
     _append_recovery_row, RECOVERY_LOG_FIELDS, STRATEGIES,
     SEQUENCE_MIN_LEN, SEQUENCE_MAX_LEN, SEQUENCE_MAX_BURST, SEQUENCE_MAX_PULSE,
     SEQUENCE_MAX_FULLSPEED, FULLSPEED_STRATEGIES, SEQUENCE_STEP_PAUSE_S,
+    _OnceAction,
 )
 
 
@@ -546,3 +549,261 @@ def test_append_recovery_row_appends_not_truncates(tmp_path, monkeypatch):
     content = (tmp_path / "recovery_sequences.csv").read_text().strip().splitlines()
     assert len(content) == 1 + 5  # header once, one row per call, nothing overwritten
     assert content[0] == ",".join(RECOVERY_LOG_FIELDS)
+
+
+# --- dual-motor mode (added 2026-09-17, Issue #4) ---
+# Same duration=2.0/sample_interval=0.2 shape as the single-motor stall
+# tests above: 10 samples per attempt (i=0..9), i=5 crosses 1000ms
+# (STALL_CHECK_DELAY_S + rpm_1s), i=8 crosses 1500ms (RPM_SAMPLE_2_S) --
+# a stalled attempt returns early right after i=8, so 9 samples.
+# motor=0 ("motor_a"), motor2=1 ("motor_b") throughout, matching this
+# test file's existing motor=1 convention elsewhere.
+
+def _fake_dual_conn(rpm_a_values, rpm_b_values, current_values=(),
+                     status_a_reply="OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0",
+                     status_b_reply="OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0"):
+    # Same shape as _fake_conn() above, just with independent rpm/status
+    # streams per motor instance (0 and 1) instead of one.
+    conn = MagicMock()
+    conn.__enter__.return_value = conn
+    rpm_a_iter = iter(rpm_a_values)
+    rpm_b_iter = iter(rpm_b_values)
+    current_iter = iter(current_values)
+    sent_commands = []
+
+    def fake_send(command):
+        sent_commands.append(command)
+
+    def fake_recv():
+        command = sent_commands[-1]
+        if command == "rpm 0":
+            return f"OK ret=0 rpm={next(rpm_a_iter)} (hex=0x0000)"
+        if command == "rpm 1":
+            return f"OK ret=0 rpm={next(rpm_b_iter)} (hex=0x0000)"
+        if command == "current 0":
+            val1, val2 = next(current_iter)
+            return f"OK ret=0 val1={val1} val2={val2}"
+        if command == "status 0":
+            return status_a_reply
+        if command == "status 1":
+            return status_b_reply
+        return "OK"  # speed/reset/hal/pi
+
+    conn.send.side_effect = fake_send
+    conn.recv.side_effect = fake_recv
+    return conn
+
+
+def test_run_dual_motor_launches_both_then_prints_both_rpm_columns(capsys):
+    # Neither motor stalls -- 10 clean samples each, plus 1 more each for
+    # the two _finish_motor() decision reads at the end.
+    conn = _fake_dual_conn(
+        rpm_a_values=[100] * 10 + [900],
+        rpm_b_values=[150] * 10 + [900],
+        current_values=[("1.00", "0.50"), ("1.00", "0.50")],  # sampled at i=0 and i=5
+    )
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=2.0, motor=0, motor2=1)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    # Both motors get reset+hal up front, then both go 0 -> target --
+    # sequential LIN writes (see module docstring), motor first.
+    assert sent[0] == "reset 0"
+    assert sent[1] == "hal 0"
+    assert sent[2] == "reset 1"
+    assert sent[3] == "hal 1"
+    assert sent[4] == "speed 0 0"
+    assert sent[5] == "speed 1 0"
+    assert sent[6] == "speed 0 1000"
+    assert sent[7] == "speed 1 1000"
+
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert lines[0] == "elapsed_ms,rpm_a,rpm_b,current_val1,current_val2"
+    assert lines[1].split(",")[:3] == ["0", "100", "150"]
+
+    # Both motors get soft-stopped at the end (neither stalled).
+    assert "speed 0 800" in sent
+    assert "speed 1 800" in sent
+    assert sent[-1] == "speed 1 0"  # motor2 finished last (called second)
+
+
+def test_run_dual_motor_one_stall_resets_before_ramping_healthy_motor():
+    # motor 0 stalls (rpm=0 the whole first attempt), motor 1 stays
+    # healthy throughout (rpm=150). Recovery succeeds on the retry.
+    conn = _fake_dual_conn(
+        rpm_a_values=[0] * 9 + [600] * 10 + [600],   # 9 (stall) + 10 (retry) + 1 (finish)
+        rpm_b_values=[150] * 20,                     # never stalls
+        current_values=[("0.00", "0.00")] * 10,
+        status_a_reply="OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
+    )
+    with patch("capture_step_response._generate_recovery_sequence",
+               return_value=["pulse_plus"]), \
+         patch("capture_step_response._append_recovery_row") as fake_append:
+        _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                              duration=2.0, motor=0, motor2=1)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    # The user's own explicit ordering: reset the stalled motor FIRST
+    # (confirms it's really stopped, clears the watchdog's own stall-
+    # check bookkeeping for it -- see module docstring's Selectivity
+    # discussion) -- only THEN ramp the healthy motor down.
+    reset_a_index = sent.index("reset 0", 4)  # skip the initial reset 0 at index 0
+    ramp_b_index = sent.index("speed 1 800")
+    assert reset_a_index < ramp_b_index
+
+    # Recovery only touches the stalled motor.
+    assert "pulse 0 1000" in sent
+    assert "pulse 1 1000" not in sent
+
+    # Both motors go through a full retry step.
+    assert sent.count("speed 0 1000") == 2  # initial attempt + retry
+    assert sent.count("speed 1 1000") == 2
+
+    rows = [c.args[0] for c in fake_append.call_args_list]
+    assert len(rows) == 2
+    assert rows[0]["phase"] == "sequence"
+    assert rows[0]["motor_instance"] == 0
+    assert rows[1]["phase"] == "retry"
+    assert rows[1]["motor_instance"] == 0
+
+
+def test_run_dual_motor_retry_stall_aborts_without_second_recovery():
+    # motor 0 stalls on the first attempt, gets "recovered", but motor 1
+    # stalls during the retry -- no second recovery sequence, motor 0
+    # (still healthy at that point) gets ramped down, then abort.
+    conn = _fake_dual_conn(
+        rpm_a_values=[0] * 9 + [600] * 9,   # 9 (stall) + 9 (retry -- b stalls, early return)
+        rpm_b_values=[150] * 9 + [0] * 9,   # healthy first, then stalls during retry
+        current_values=[("0.00", "0.00")] * 10,
+        status_a_reply="OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
+        status_b_reply="OK ret=0 timeout=0 checksum=0 kickstart=1 sys_error=-65",
+    )
+    with patch("capture_step_response._generate_recovery_sequence",
+               return_value=["pulse_plus"]), \
+         patch("capture_step_response._append_recovery_row") as fake_append:
+        with pytest.raises(SystemExit, match="stall persisted"):
+            _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                                  duration=2.0, motor=0, motor2=1)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent.count("pulse 0 1000") == 1  # exactly one recovery sequence, not two
+    assert "pulse 1 1000" not in sent       # never a recovery sequence for motor 1
+    assert "speed 0 800" in sent            # motor 0 (still healthy) ramped down before abort
+
+    rows = [c.args[0] for c in fake_append.call_args_list]
+    assert len(rows) == 2
+    assert rows[1]["phase"] == "retry"
+    assert rows[1]["motor_instance"] == 1  # the motor that stalled during the retry
+
+
+def test_run_dual_motor_both_stall_first_attempt_aborts_without_recovery():
+    conn = _fake_dual_conn(
+        rpm_a_values=[0] * 9,
+        rpm_b_values=[0] * 9,
+        current_values=[("0.00", "0.00")] * 2,  # sampled at i=0 and i=5
+        status_a_reply="OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
+        status_b_reply="OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
+    )
+    with patch("capture_step_response._generate_recovery_sequence") as fake_gen, \
+         patch("capture_step_response._append_recovery_row") as fake_append:
+        with pytest.raises(SystemExit, match="both motors stalled"):
+            _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                                  duration=2.0, motor=0, motor2=1)
+
+    fake_gen.assert_not_called()  # no recovery attempt at all -- the user's own call
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent.count("reset 0") == 2  # initial reset + the abort-path reset
+    assert sent.count("reset 1") == 2
+
+    rows = [c.args[0] for c in fake_append.call_args_list]
+    assert len(rows) == 2  # one diagnostic row per motor
+    assert {r["motor_instance"] for r in rows} == {0, 1}
+    assert all(r["phase"] == "both_stalled" for r in rows)
+
+
+def test_run_dual_motor_sends_pi_to_both_motors_when_given():
+    conn = _fake_dual_conn(rpm_a_values=[100] * 2, rpm_b_values=[150] * 2,
+                            current_values=[("0.00", "0.00")])
+    _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                          duration=0.2, motor=0, motor2=1,
+                          p_delta=0.1, i_delta=-0.05)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert "pi 0 0.1 -0.05" in sent
+    assert "pi 1 0.1 -0.05" in sent  # same delta sent to both -- user's own decision
+
+
+# --- fail-fast validation (added 2026-09-17, prompted by a live mixup
+# where an unclear invocation silently ran single-motor instead of the
+# intended dual-motor mode) ---
+
+def test_run_aborts_when_motor_and_motor2_are_the_same_instance():
+    conn = _fake_dual_conn(rpm_a_values=[], rpm_b_values=[])
+    with pytest.raises(SystemExit, match="must be different instances"):
+        _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                              duration=0.2, motor=0, motor2=0)
+
+    # Aborts before even connecting -- Client() itself is patched via
+    # _run_with_fake_clock, so "no commands sent" confirms the check
+    # runs before the with-Client block, not just before speed.
+    assert conn.send.call_count == 0
+
+
+def test_run_aborts_when_reset_is_rejected_for_motor():
+    conn = _fake_conn([100])
+    conn.recv.side_effect = lambda: "ERR motor instance out of range (0..3)"
+    with pytest.raises(SystemExit, match="reset rejected for motor 0"):
+        _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                              duration=0.2, motor=0)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent == ["reset 0"]  # aborted immediately, never reached hal/speed
+
+
+def test_run_aborts_when_reset_is_rejected_for_motor2():
+    conn = _fake_dual_conn(rpm_a_values=[], rpm_b_values=[])
+    real_recv = conn.recv.side_effect
+
+    def fake_recv():
+        # motor's own reset (the first command) still succeeds; only
+        # motor2's reset is rejected.
+        sent_commands = conn.send.call_args_list
+        if sent_commands and sent_commands[-1].args[0] == "reset 1":
+            return "ERR motor instance out of range (0..3)"
+        return real_recv()
+
+    conn.recv.side_effect = fake_recv
+    with pytest.raises(SystemExit, match="reset rejected for motor 1"):
+        _run_with_fake_clock(conn, target_speed=1000, sample_interval=0.2,
+                              duration=0.2, motor=0, motor2=1)
+
+    sent = [call.args[0] for call in conn.send.call_args_list]
+    assert sent == ["reset 0", "hal 0", "reset 1"]  # never reached hal 1/speed
+
+
+# --- _OnceAction (argparse, rejects a repeated --motor0/--motor1) ---
+
+def _parser_with_once_actions():
+    parser = argparse.ArgumentParser(exit_on_error=False)
+    parser.add_argument("--motor0", type=int, default=0, action=_OnceAction)
+    parser.add_argument("--motor1", type=int, default=None, action=_OnceAction)
+    return parser
+
+
+def test_once_action_accepts_a_single_occurrence():
+    args = _parser_with_once_actions().parse_args(["--motor0", "1", "--motor1", "2"])
+    assert args.motor0 == 1
+    assert args.motor1 == 2
+
+
+def test_once_action_rejects_repeated_motor0():
+    parser = _parser_with_once_actions()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--motor0", "0", "--motor0", "1"])
+
+
+def test_once_action_rejects_repeated_motor1():
+    parser = _parser_with_once_actions()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--motor1", "0", "--motor1", "1"])

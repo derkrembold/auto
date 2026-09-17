@@ -357,10 +357,54 @@ other. Same caution applies to any future same-named files across
     `"retry"` row = the retry broke/was interrupted before
     measurement; that absence is itself a signal.
 
-  **Dual-motor support (launch both motors, stop both on either's
-  stall, retry both) is planned but not built — see Issue #4.** Today's
-  design throughout this whole section (sampling, stall detection, the
-  recovery sequence, the CSV/log schemas) is single-motor.
+  **Dual-motor support (2026-09-17, Issue #4): `--motor0`/`--motor1`**
+  (renamed same day from `--motor`/`--motor2` after a live mixup where
+  an intended dual-motor run silently fell back to single-motor
+  because `--motor2` was never given — the asymmetric naming, one flag
+  with no number and one jumping straight to "2", contributed directly
+  to that. `--motor1` omitted = single-motor mode). Built and
+  pytest-tested — **not yet confirmed on real hardware.** Fails fast,
+  before touching the motor: `--motor0`/`--motor1` given the same
+  value, a duplicated `--motor0`/`--motor1` flag (`_OnceAction`), or a
+  rejected `reset` reply (invalid instance) all abort immediately, same
+  "check the reply, abort before proceeding" pattern the `pi` rejection
+  check already used. Same `target_speed` for both (design decision,
+  not independently settable in this first version); launch is two
+  sequential `speed 0`/`speed <target>` LIN writes per motor (motor0
+  first, motor1 second — a real, documented millisecond-scale stagger,
+  not literal simultaneity, LIN has one master). CSV gains a second rpm
+  column (`elapsed_ms,rpm_a,rpm_b,current_val1,current_val2`).
+
+  Stall handling — designed step by step with the user around
+  **selectivity** between this script's own recovery (the "inner"
+  handler) and the watchdog's background stall check (the "outer"
+  backstop, see `watchdog/CLAUDE.md`'s Two-Layer Safety Check/§6.3):
+  the stalled motor is **reset before** logging or running recovery,
+  not after — this confirms the stop and clears
+  `speed_became_nonzero_at` on the watchdog side, so its background
+  check has nothing left to see for that instance during the recovery
+  window (`pulse`/`burst` don't touch that bookkeeping either, so it
+  stays cleared throughout). Three cases, all ending with a soft-stop
+  ramp (never abrupt) for whichever motor is still healthy:
+  - **One motor stalls (first attempt):** reset it first, *then*
+    soft-stop-ramp the healthy motor (this order specifically, the
+    user's own call — confirm the stalled one is safe before touching
+    the other) → recovery sequence on the stalled motor only → retry
+    both (hard step, no ramp-up).
+  - **A motor stalls during the retry** (either one): reset it, **no
+    second recovery sequence** (existing "second stall = give up"
+    policy, now motor-agnostic) → soft-stop-ramp whichever is still
+    healthy → abort.
+  - **Both stall on the first attempt:** reset both, **no recovery
+    attempted at all** — the user's own call: "da stimmt was
+    grundsätzlich nicht" (something is fundamentally wrong), not a
+    per-motor problem. Abort.
+
+  `recovery_sequences.csv` gained a `motor_instance` field (also now
+  populated by the single-motor path) and a `"both_stalled"` phase for
+  the third case above (a diagnostic `hal`/`status` snapshot per
+  motor, no sequence). `p_delta`/`i_delta` (if given) go to both
+  motors identically, matching the same-`target_speed` decision.
 
   **Any pre-existing `recovery_sequences.csv` on the Pi must be cleared
   by hand before a schema-changed script runs** — this happened twice:

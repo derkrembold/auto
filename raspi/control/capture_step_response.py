@@ -166,6 +166,54 @@ or was interrupted before measurement -- that absence is itself a
 signal, not a hole. Deliberately a separate, never-rotated file from
 `LOG_PATH` above, meant to keep growing forever as training data for
 the planned learning/decision-tree work.
+
+**Dual-motor mode (added 2026-09-17, Issue #4): optional --motor1**
+(CLI flags are --motor0/--motor1, renamed same day from --motor/
+--motor2 -- see the __main__ section's own comment for why). If given,
+both motors are launched with the same target_speed (not
+independently settable, at least for this first version) -- sequential
+LIN writes (speed <motor> 0/speed <motor2> 0, then both targets), a
+real, documented millisecond-scale stagger, not literal simultaneity
+(LIN has one master). Both motors are sampled every tick; the CSV
+gains a second rpm column (rpm_a/rpm_b).
+
+Stall handling, agreed step by step with the user before building --
+**selectivity between the inner (this script's own) recovery and the
+outer (watchdog's background) stall check matters here**: the
+watchdog's own _check_stall() doesn't know a client-side recovery is
+already in progress, so the stalled motor is reset *before* logging or
+running recovery (not after) -- this both confirms the stop and clears
+speed_became_nonzero_at on the watchdog side, so its background check
+has nothing left to see for that instance during the recovery window
+(pulse/burst commands don't touch that bookkeeping either). The
+overcurrent and disconnect/idle-timeout safety nets stay fully
+independent throughout, regardless of this -- see
+raspi/watchdog/CLAUDE.md's Two-Layer Safety Check / §6.3 sections.
+
+Three cases, all ending with a soft-stop ramp (never an abrupt speed 0)
+for whichever motor is still healthy, before any stop/abort:
+
+- **One motor stalls on the first attempt:** read hal/status for the
+  stalled motor (diagnostic snapshot) -> reset it (now confirmed
+  stopped, watchdog stops watching it) -> soft-stop-ramp the healthy
+  motor down -> run the recovery sequence on the stalled motor only ->
+  read hal/status again, log the "sequence" row -> reset again (clean
+  slate, as in the single-motor path) -> retry: both motors speed 0 ->
+  speed target (hard step, no ramp-up).
+- **A motor stalls during the retry** (either one, even the one that
+  was fine the first time): reset it, but **no second recovery
+  sequence** -- this is the existing "second stall = give up" policy,
+  now applying regardless of which motor it is. Soft-stop-ramp
+  whichever motor is still healthy, log the "retry" row
+  (status_after_retry), abort (sys.exit()).
+- **Both motors stall on the first attempt:** reset both, no recovery
+  attempt at all -- the user's own call: "da stimmt was grundsaetzlich
+  nicht" (something is fundamentally wrong), not a per-motor problem
+  to recover from. Abort (sys.exit()).
+
+recovery_sequences.csv gained a motor_instance field (also now
+populated by the single-motor path, for consistency) to say which
+motor a row is about.
 """
 import argparse
 import csv
@@ -210,7 +258,7 @@ logger = logging.getLogger("capture_step_response")
 # was interrupted before measurement. That absence is itself a signal.
 RECOVERY_LOG_PATH = "recovery_sequences.csv"
 RECOVERY_LOG_FIELDS = [
-    "timestamp", "phase", "target_speed",
+    "timestamp", "phase", "target_speed", "motor_instance",
     "hal_before_sequence", "status_before_sequence", "sequence",
     "hal_after_sequence", "status_after_sequence",
     "rpm_1s", "rpm_1p5s", "status_after_retry",
@@ -295,6 +343,19 @@ def _read_rpm(conn, motor):
 def _read_current(conn, current_instance):
     match = CURRENT_RE.search(_send(conn, f"current {current_instance}"))
     return (match.group(1), match.group(2)) if match else (None, None)
+
+
+def _confirm_stall(conn, motor):
+    # rpm==0 alone isn't trusted -- confirm via a latched STALL_TIM_ERR,
+    # same reasoning as _run_one_attempt()'s single-motor stall check
+    # (matches the firmware's own ~700ms give-up point, comfortably
+    # before STALL_CHECK_DELAY_S). Factored out for _run_dual_attempt()
+    # below rather than reused inline in _run_one_attempt() -- avoids
+    # touching that already-validated single-motor path for this change.
+    status_reply = _send(conn, f"status {motor}")
+    sys_error_match = SYS_ERROR_RE.search(status_reply)
+    sys_error = int(sys_error_match.group(1)) if sys_error_match else None
+    return sys_error == STALL_TIM_ERR
 
 
 def _generate_recovery_sequence(rng=random):
@@ -449,6 +510,76 @@ def _run_one_attempt(conn, motor, current_instance, target_speed, sample_interva
     return rows, stalled, rpm_1s, rpm_1p5s
 
 
+def _run_dual_attempt(conn, motor_a, motor_b, current_instance, target_speed,
+                       sample_interval, current_sample_interval, duration):
+    # Dual-motor step attempt (Issue #4): speed 0 -> speed <target> for
+    # both motors -- sequential LIN writes (motor_a then motor_b, LIN
+    # has one master, no literal simultaneity, see module docstring).
+    # Samples rpm for both every tick; stall-checks both at
+    # STALL_CHECK_DELAY_S via _confirm_stall(). Mirrors the single-motor
+    # _run_one_attempt()'s two-checkpoint pattern (STALL_CHECK_DELAY_S/
+    # RPM_SAMPLE_2_S) doubled for two motors -- the second checkpoint
+    # exists to catch spurious Hall-chatter edges making a stalled rotor
+    # look like it moved (see STM32/CLAUDE.md), same reasoning as the
+    # single-motor path, so it isn't dropped here even though only the
+    # retry call's values actually get logged by the caller.
+    #
+    # Returns (rows, stalled_motor, rpm_1s_a, rpm_1s_b, rpm_1p5s_a,
+    # rpm_1p5s_b) where rows are (elapsed_ms, rpm_a, rpm_b,
+    # current_val1, current_val2) tuples and stalled_motor is one of
+    # None / motor_a / motor_b / "both". On any confirmed stall,
+    # sampling still runs long enough to capture the rpm_1p5s pair, then
+    # stops early -- no point sampling the full window for a hopeless
+    # retry.
+    _send(conn, f"speed {motor_a} 0")
+    _send(conn, f"speed {motor_b} 0")
+    _send(conn, f"speed {motor_a} {target_speed}")
+    _send(conn, f"speed {motor_b} {target_speed}")
+    start = time.monotonic()
+    next_current_sample = start
+    stall_checked = False
+    stalled_motor = None
+    rpm_1s_a = rpm_1s_b = None
+    rpm_1p5s_a = rpm_1p5s_b = None
+
+    rows = []
+    sample_count = int(duration / sample_interval)
+    for i in range(sample_count):
+        target_time = start + i * sample_interval
+        now = time.monotonic()
+        if target_time > now:
+            time.sleep(target_time - now)
+        rpm_a = _read_rpm(conn, motor_a)
+        rpm_b = _read_rpm(conn, motor_b)
+
+        current_val1 = current_val2 = ""
+        if time.monotonic() >= next_current_sample:
+            current_val1, current_val2 = _read_current(conn, current_instance)
+            next_current_sample += current_sample_interval
+
+        elapsed_ms = (time.monotonic() - start) * 1000
+        rows.append((elapsed_ms, rpm_a, rpm_b, current_val1, current_val2))
+
+        if not stall_checked and elapsed_ms >= STALL_CHECK_DELAY_S * 1000:
+            stall_checked = True
+            rpm_1s_a, rpm_1s_b = rpm_a, rpm_b
+            a_stalled = rpm_a == 0 and _confirm_stall(conn, motor_a)
+            b_stalled = rpm_b == 0 and _confirm_stall(conn, motor_b)
+            if a_stalled and b_stalled:
+                stalled_motor = "both"
+            elif a_stalled:
+                stalled_motor = motor_a
+            elif b_stalled:
+                stalled_motor = motor_b
+
+        if rpm_1p5s_a is None and elapsed_ms >= RPM_SAMPLE_2_S * 1000:
+            rpm_1p5s_a, rpm_1p5s_b = rpm_a, rpm_b
+            if stalled_motor is not None:
+                return rows, stalled_motor, rpm_1s_a, rpm_1s_b, rpm_1p5s_a, rpm_1p5s_b
+
+    return rows, stalled_motor, rpm_1s_a, rpm_1s_b, rpm_1p5s_a, rpm_1p5s_b
+
+
 def _soft_stop(conn, motor, target_speed, steps=STOP_RAMP_STEPS, duration=STOP_RAMP_DURATION):
     # A single abrupt `speed 0` after a sustained high speed was
     # observed live (2026-08-20) to stop the motor harder than a plain
@@ -467,11 +598,179 @@ def _soft_stop(conn, motor, target_speed, steps=STOP_RAMP_STEPS, duration=STOP_R
     _send(conn, f"speed {motor} 0")
 
 
+def _abort_both_stalled(conn, motor_a, motor_b, when):
+    # Both motors stalled at once (Issue #4) -- the user's own call:
+    # something is fundamentally wrong, not a per-motor problem to
+    # recover from, so no recovery sequence is attempted at all. Still
+    # capture a diagnostic hal/status snapshot per motor before
+    # resetting -- same "always log before wiping state" habit as the
+    # single-stall path, even though no "sequence" actually ran here
+    # (reuses the *_before_sequence field names for that snapshot
+    # rather than inventing new columns for this rarer case).
+    timestamp = datetime.datetime.now().isoformat()
+    for motor in (motor_a, motor_b):
+        hal = _send(conn, f"hal {motor}")
+        status = _send(conn, f"status {motor}")
+        _append_recovery_row({
+            "timestamp": timestamp,
+            "phase": "both_stalled",
+            "motor_instance": motor,
+            "hal_before_sequence": hal,
+            "status_before_sequence": status,
+        })
+        _send(conn, f"reset {motor}")
+    logger.info(f"both motors stalled {when} -- aborting, no recovery attempted")
+    sys.exit(f"both motors stalled {when} -- aborting, no usable capture")
+
+
+def _run_dual_motor(conn, motor_a, motor_b, current_instance, target_speed,
+                     sample_interval, current_sample_interval, duration):
+    # Orchestrates the three dual-motor stall/recovery cases from the
+    # module docstring (Issue #4), agreed step by step with the user
+    # before building any of it. Returns the final rows (from either a
+    # clean first attempt or a successful retry) for CSV printing, or
+    # exits via sys.exit() on the two abort cases (both-stalled, or a
+    # second stall during the retry).
+    rows, stalled_motor, _, _, _, _ = _run_dual_attempt(
+        conn, motor_a, motor_b, current_instance, target_speed,
+        sample_interval, current_sample_interval, duration)
+
+    if stalled_motor is None:
+        return rows
+
+    if stalled_motor == "both":
+        _abort_both_stalled(conn, motor_a, motor_b, "on the first attempt")
+
+    # Exactly one motor stalled -- recover it, ramp the other down.
+    healthy = motor_b if stalled_motor == motor_a else motor_a
+    seq_timestamp = datetime.datetime.now().isoformat()
+    hal_before = _send(conn, f"hal {stalled_motor}")
+    status_before = _send(conn, f"status {stalled_motor}")
+    # Reset the stalled motor FIRST -- confirms it's actually stopped,
+    # and clears speed_became_nonzero_at on the watchdog side so its
+    # background stall check has nothing left to see for this instance
+    # during the recovery window (see module docstring's Selectivity
+    # discussion -- pulse/burst commands don't touch that bookkeeping
+    # either, so it stays cleared throughout the sequence below). Only
+    # once the stalled motor is confirmed safe do we touch the healthy
+    # one -- the user's own explicit ordering.
+    _send(conn, f"reset {stalled_motor}")
+    _soft_stop(conn, healthy, target_speed)
+
+    sequence = _run_recovery_sequence(conn, stalled_motor)
+    hal_after = _send(conn, f"hal {stalled_motor}")
+    status_after = _send(conn, f"status {stalled_motor}")
+    _append_recovery_row({
+        "timestamp": seq_timestamp,
+        "phase": "sequence",
+        "target_speed": target_speed,
+        "motor_instance": stalled_motor,
+        "hal_before_sequence": hal_before,
+        "status_before_sequence": status_before,
+        "sequence": ";".join(sequence),
+        "hal_after_sequence": hal_after,
+        "status_after_sequence": status_after,
+    })
+
+    _send(conn, f"reset {stalled_motor}")
+    _send(conn, f"hal {stalled_motor}")
+
+    rows, stalled_again, rpm_1s_a, rpm_1s_b, rpm_1p5s_a, rpm_1p5s_b = _run_dual_attempt(
+        conn, motor_a, motor_b, current_instance, target_speed,
+        sample_interval, current_sample_interval, duration)
+
+    # Always log the retry's outcome, success or failure -- matches the
+    # single-motor path's unconditional status_after_retry read/log
+    # (that one always runs before its own "if stalled_again:" check).
+    if stalled_again is None:
+        status_after_retry = _send(conn, f"status {stalled_motor}")
+        retry_motor_instance = stalled_motor  # whichever one was recovered
+        rpm_1s = rpm_1s_a if stalled_motor == motor_a else rpm_1s_b
+        rpm_1p5s = rpm_1p5s_a if stalled_motor == motor_a else rpm_1p5s_b
+    elif stalled_again == "both":
+        status_after_retry = ""
+        retry_motor_instance = "both"
+        rpm_1s = f"{rpm_1s_a}/{rpm_1s_b}"
+        rpm_1p5s = f"{rpm_1p5s_a}/{rpm_1p5s_b}"
+    else:
+        status_after_retry = _send(conn, f"status {stalled_again}")
+        retry_motor_instance = stalled_again
+        rpm_1s = rpm_1s_a if stalled_again == motor_a else rpm_1s_b
+        rpm_1p5s = rpm_1p5s_a if stalled_again == motor_a else rpm_1p5s_b
+    _append_recovery_row({
+        "timestamp": seq_timestamp,
+        "phase": "retry",
+        "motor_instance": retry_motor_instance,
+        "rpm_1s": rpm_1s,
+        "rpm_1p5s": rpm_1p5s,
+        "status_after_retry": status_after_retry,
+    })
+
+    if stalled_again is None:
+        logger.info(f"recovery sequence recovered motor {stalled_motor}: {sequence}")
+        return rows
+
+    if stalled_again == "both":
+        logger.info(f"recovery sequence did not recover -- both motors stalled on retry: {sequence}")
+        _abort_both_stalled(conn, motor_a, motor_b, "on the retry")
+
+    # Exactly one motor stalled again during the retry -- could be the
+    # same one, could be the other. No second recovery sequence (this
+    # is the existing "second stall = give up" policy, now applying
+    # regardless of which motor it is) -- ramp whichever is still
+    # healthy, then abort.
+    still_healthy = motor_b if stalled_again == motor_a else motor_a
+    _send(conn, f"reset {stalled_again}")
+    _soft_stop(conn, still_healthy, target_speed)
+    logger.info(f"recovery sequence did not recover: {sequence} (stalled again: motor {stalled_again})")
+    sys.exit(f"stall persisted after recovery sequence {sequence} -- giving up, no usable capture")
+
+
+def _finish_motor(conn, motor, target_speed):
+    # Decision point (2026-09-09): only run the soft-stop ramp if the
+    # motor actually got moving -- otherwise the ramp's own nonzero
+    # speed commands re-arm controlvariableinput and restart the whole
+    # firmware stuck-detection sequence on a rotor that was never
+    # moving in the first place. Found live: a Mittelrast stall's
+    # "status" showed kickstart=6, not the 3 the stuck window range
+    # alone explains -- the extra 3 fired *during* the soft-stop ramp
+    # itself. Two independent "didn't really move" signals, either one
+    # is enough to skip: rpm well below target (not just nonzero -- a
+    # single Hall-count blip, like the rpm=25 seen during that same
+    # stall, isn't real movement either) and/or sysError already
+    # showing STALL_TIM_ERR (the firmware's own, more reliable
+    # confirmation that it gave up). Factored out (2026-09-17, Issue
+    # #4) so both the single- and dual-motor paths in run() share it,
+    # one call per motor either way.
+    _send(conn, f"hal {motor}")
+    rpm = _read_rpm(conn, motor)
+    status_reply = _send(conn, f"status {motor}")
+    sys_error_match = SYS_ERROR_RE.search(status_reply)
+    sys_error = int(sys_error_match.group(1)) if sys_error_match else None
+
+    moved_enough = rpm is not None and abs(rpm) >= STOP_RAMP_RPM_FRACTION * abs(target_speed)
+    no_stall_latched = sys_error is not None and sys_error != STALL_TIM_ERR
+    if moved_enough and no_stall_latched:
+        _soft_stop(conn, motor, target_speed)
+    else:
+        logger.info(f"skipping soft-stop ramp for motor {motor} -- rpm={rpm} "
+                    f"sys_error={sys_error} target_speed={target_speed}")
+        _send(conn, f"speed {motor} 0")
+
+
 def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
         sample_interval=SAMPLE_INTERVAL,
         current_sample_interval=CURRENT_SAMPLE_INTERVAL, duration=DURATION,
-        p_delta=None, i_delta=None, motor=0, current_instance=0):
+        p_delta=None, i_delta=None, motor=0, motor2=None, current_instance=0):
     logsetup.configure("capture_step_response", LOG_PATH, terminal_level=None)
+
+    # Fail before even connecting (2026-09-17, prompted by a live mixup:
+    # a run intended as dual-motor silently ran single-motor instead
+    # because --motor2/--motor1 was never given -- see the CLI section
+    # below for the flag-naming half of that fix). Testing the same
+    # physical instance as both "motor" and "motor2" is never sensible.
+    if motor2 is not None and motor2 == motor:
+        sys.exit(f"--motor0 and --motor1 must be different instances, both were {motor}")
 
     # One persistent connection for the whole run — see
     # validate_speed.py's same choice for why (one-shot connections
@@ -484,17 +783,51 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
         # whatever happened before. Also makes the "status" read at the
         # end below an exact before/after delta for *this* run, not an
         # ambiguous whole-session total.
-        _send(conn, f"reset {motor}")
+        #
+        # Reply checked (2026-09-17, same "abort before touching the
+        # motor further" pattern as the pi rejection check below) -- an
+        # out-of-range/invalid motor instance used to pass silently
+        # here and only surface much later as confusing blank/garbled
+        # CSV rows.
+        reset_reply = _send(conn, f"reset {motor}")
+        if not reset_reply.startswith("OK"):
+            sys.exit(f"reset rejected for motor {motor}, aborting before touching "
+                     f"the motor: {reset_reply}")
         # Starting Hall position (2026-09-09) -- logged only, lets a
         # stall/stiction event found later be correlated with exactly
         # where the rotor started (e.g. a known-bad Mittelrast, see
         # STM32/CLAUDE.md's Hall-chattering finding), not just guessed
         # at after the fact.
         _send(conn, f"hal {motor}")
+        if motor2 is not None:
+            reset_reply2 = _send(conn, f"reset {motor2}")
+            if not reset_reply2.startswith("OK"):
+                sys.exit(f"reset rejected for motor {motor2}, aborting before touching "
+                         f"the motor: {reset_reply2}")
+            _send(conn, f"hal {motor2}")
         if p_delta is not None or i_delta is not None:
             reply = _send(conn, f"pi {motor} {p_delta} {i_delta}")
             if not reply.startswith("OK"):
                 sys.exit(f"pi command rejected, aborting before touching the motor: {reply}")
+            # Same p_delta/i_delta on both motors (2026-09-17, Issue #4)
+            # -- matches the "same target_speed for both" decision, so
+            # a dual-motor run stays a like-for-like comparison rather
+            # than mixing two different gain settings into one capture.
+            if motor2 is not None:
+                reply2 = _send(conn, f"pi {motor2} {p_delta} {i_delta}")
+                if not reply2.startswith("OK"):
+                    sys.exit(f"pi command rejected for motor {motor2}, aborting before "
+                             f"touching the motor: {reply2}")
+
+        if motor2 is not None:
+            rows = _run_dual_motor(conn, motor, motor2, current_instance, target_speed,
+                                    sample_interval, current_sample_interval, duration)
+            print("elapsed_ms,rpm_a,rpm_b,current_val1,current_val2")
+            for elapsed_ms, rpm_a, rpm_b, current_val1, current_val2 in rows:
+                print(f"{elapsed_ms:.0f},{rpm_a},{rpm_b},{current_val1},{current_val2}")
+            _finish_motor(conn, motor, target_speed)
+            _finish_motor(conn, motor2, target_speed)
+            return
 
         rows, stalled, _, _ = _run_one_attempt(conn, motor, current_instance, target_speed,
                                                 sample_interval, current_sample_interval, duration)
@@ -515,6 +848,7 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
                 "timestamp": seq_timestamp,
                 "phase": "sequence",
                 "target_speed": target_speed,
+                "motor_instance": motor,
                 "hal_before_sequence": hal_before,
                 "status_before_sequence": status_before,
                 "sequence": ";".join(sequence),
@@ -542,6 +876,7 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
             _append_recovery_row({
                 "timestamp": seq_timestamp,
                 "phase": "retry",
+                "motor_instance": motor,
                 "rpm_1s": "" if rpm_1s is None else rpm_1s,
                 "rpm_1p5s": "" if rpm_1p5s is None else rpm_1p5s,
                 "status_after_retry": status_after_retry,
@@ -558,33 +893,28 @@ def run(address=SOCKET_ADDRESS, target_speed=TARGET_SPEED,
         for elapsed_ms, rpm, current_val1, current_val2 in rows:
             print(f"{elapsed_ms:.0f},{rpm},{current_val1},{current_val2}")
 
-        # Decision point (2026-09-09): only run the soft-stop ramp if
-        # the motor actually got moving -- otherwise the ramp's own
-        # nonzero speed commands re-arm controlvariableinput and
-        # restart the whole stuck-detection sequence on a rotor that
-        # was never moving in the first place. Found live: a Mittelrast
-        # stall's "status" showed kickstart=6, not the 3 the stuck
-        # window range alone explains -- the extra 3 fired *during* the
-        # soft-stop ramp itself. Two independent "didn't really move"
-        # signals, either one is enough to skip: rpm well below target
-        # (not just nonzero -- a single Hall-count blip, like the
-        # rpm=25 seen during that same stall, isn't real movement
-        # either) and/or sysError already showing STALL_TIM_ERR (the
-        # firmware's own, more reliable confirmation that it gave up).
-        _send(conn, f"hal {motor}")
-        rpm = _read_rpm(conn, motor)
-        status_reply = _send(conn, f"status {motor}")
-        sys_error_match = SYS_ERROR_RE.search(status_reply)
-        sys_error = int(sys_error_match.group(1)) if sys_error_match else None
+        _finish_motor(conn, motor, target_speed)
 
-        moved_enough = rpm is not None and abs(rpm) >= STOP_RAMP_RPM_FRACTION * abs(target_speed)
-        no_stall_latched = sys_error is not None and sys_error != STALL_TIM_ERR
-        if moved_enough and no_stall_latched:
-            _soft_stop(conn, motor, target_speed)
-        else:
-            logger.info(f"skipping soft-stop ramp -- rpm={rpm} sys_error={sys_error} "
-                        f"target_speed={target_speed}")
-            _send(conn, f"speed {motor} 0")
+
+class _OnceAction(argparse.Action):
+    # Rejects a repeated flag instead of silently keeping the last
+    # value (argparse's default behavior) -- added 2026-09-17 after a
+    # live mixup where an unclear/duplicated CLI invocation silently
+    # ran single-motor instead of the intended dual-motor mode (see
+    # run()'s motor2==motor check above for the other half of that
+    # fix). One Action instance is created per add_argument() call and
+    # reused for every occurrence of that flag on the command line, so
+    # a plain instance attribute is enough to track "have we seen this
+    # flag already" across calls.
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._seen = False
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if self._seen:
+            parser.error(f"{option_string} given more than once")
+        self._seen = True
+        setattr(namespace, self.dest, values)
 
 
 if __name__ == "__main__":
@@ -593,12 +923,21 @@ if __name__ == "__main__":
     parser.add_argument("--i-delta", type=float, default=None)
     parser.add_argument("--target-speed", type=int, default=TARGET_SPEED,
                          help=f"step target, +/- (default {TARGET_SPEED})")
-    parser.add_argument("--motor", type=int, default=0,
-                         help="motor instance to drive/read, 0-3 (default 0)")
+    # --motor0/--motor1 (renamed 2026-09-17 from --motor/--motor2, see
+    # Issue #4): explicit 0-indexed names matching the actual instance
+    # numbers, instead of one flag with no number and one that jumped
+    # straight to "2" -- that asymmetry contributed directly to a live
+    # mixup (an intended dual-motor run silently fell back to single-
+    # motor because --motor2 was never given, with no warning at all).
+    parser.add_argument("--motor0", type=int, default=0, action=_OnceAction,
+                         help="first motor instance to drive/read, 0-3 (default 0)")
+    parser.add_argument("--motor1", type=int, default=None, action=_OnceAction,
+                         help="second motor instance for dual-motor mode (Issue #4) -- "
+                              "omit for single-motor mode, same target_speed used for both")
     parser.add_argument("--current-instance", type=int, default=0,
                          help="currentsensor instance to read, 0-1 (default 0)")
     args = parser.parse_args()
     if (args.p_delta is None) != (args.i_delta is None):
         sys.exit("--p-delta and --i-delta must be given together, or not at all")
     run(p_delta=args.p_delta, i_delta=args.i_delta, target_speed=args.target_speed,
-        motor=args.motor, current_instance=args.current_instance)
+        motor=args.motor0, motor2=args.motor1, current_instance=args.current_instance)

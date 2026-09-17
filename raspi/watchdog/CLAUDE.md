@@ -619,6 +619,9 @@ discussion, step by step, before writing anything:
 - **Every script that talks to the watchdog directly now has a
   `--motor`/`motor=` parameter (default 0), updated the same session,
   right after the addressing layer itself** — `capture_step_response.py`
+  (renamed to `--motor0`/`--motor1` on 2026-09-17 when dual-motor mode
+  was added, see `raspi/CLAUDE.md`'s own entry for why; other scripts
+  below unaffected)
   (+ `--current-instance`, threaded through every send including every
   recovery-sequence strategy), `validate_speed.py` (+
   `--current-instance`), `validate_motor_currentsensor.py` (+
