@@ -67,3 +67,8 @@ lightsensor/firmware/*.ii
 lightsensor/firmware/*.s
 lightsensor/*.elf
 lightsensor/*.hex
+
+# IFM AL1950 IO-Link-master reference material (Issue #3, long-term) -
+# backed up locally from the Pi's /home/pi/IFM/, not added to the repo
+# yet - revisit once IFM integration actually starts.
+IFM/
