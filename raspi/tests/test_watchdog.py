@@ -460,7 +460,8 @@ def test_idle_check_does_nothing_right_after_a_command():
 def test_idle_timeout_stops_motor_when_stale():
     wd = Watchdog(DryRunLin())
     wd.on_connect()
-    wd.execute("hal 0")
+    wd.execute("speed 0 300")
+    wd.lin.writes.clear()
     wd.last_command_time -= (IDLE_TIMEOUT + 0.1)  # simulate elapsed time
     wd.check_idle()
     assert wd.stopped_for_idle is True
@@ -470,11 +471,50 @@ def test_idle_timeout_stops_motor_when_stale():
 def test_idle_timeout_only_stops_once_not_every_tick():
     wd = Watchdog(DryRunLin())
     wd.on_connect()
+    wd.execute("speed 0 300")
+    wd.lin.writes.clear()
     wd.last_command_time -= (IDLE_TIMEOUT + 0.1)
     wd.check_idle()
     wd.check_idle()
     wd.check_idle()
     assert len(wd.lin.writes) == 1  # not re-sent on every subsequent tick
+
+
+def test_disconnect_stops_every_known_motor_not_just_motor_0():
+    # Issue #17: on_disconnect() used to only stop MONITORED_MOTOR_
+    # INSTANCE (0) -- now stops every motor the watchdog currently
+    # knows about, same §6.3 reasoning as stall/overcurrent.
+    wd = Watchdog(DryRunLin())
+    wd.on_connect()
+    wd.execute("speed 0 300")
+    wd.execute("speed 1 -500")
+    wd.lin.writes.clear()
+    wd.on_disconnect()
+    motor0_wire = constants.cntl3mot | constants.motor_instances[0]
+    motor1_wire = constants.cntl3mot | constants.motor_instances[1]
+    assert wd.lin.writes == [
+        (motor0_wire, [0x00, 0x00]),
+        (motor1_wire, [0x00, 0x00]),
+    ]
+    assert wd.last_commanded_speed[0] == 0
+    assert wd.last_commanded_speed[1] == 0
+
+
+def test_idle_timeout_stops_every_known_motor_not_just_motor_0():
+    # Issue #17, same reasoning as the disconnect test above.
+    wd = Watchdog(DryRunLin())
+    wd.on_connect()
+    wd.execute("speed 0 300")
+    wd.execute("speed 1 -500")
+    wd.lin.writes.clear()
+    wd.last_command_time -= (IDLE_TIMEOUT + 0.1)
+    wd.check_idle()
+    motor0_wire = constants.cntl3mot | constants.motor_instances[0]
+    motor1_wire = constants.cntl3mot | constants.motor_instances[1]
+    assert wd.lin.writes == [
+        (motor0_wire, [0x00, 0x00]),
+        (motor1_wire, [0x00, 0x00]),
+    ]
 
 
 def test_new_connection_resets_idle_state():

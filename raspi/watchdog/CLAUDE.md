@@ -683,10 +683,13 @@ reaction. Designed by discussion, step by step, before any code:
     if only one is on" (since stopping an already-idle one is a no-op).
     `CURRENT_CHANNEL_TO_MOTOR_INSTANCE` only makes the log line say
     which motor's channel tripped it.
-  - `on_disconnect()`/`check_idle()` **deliberately NOT changed** — both
-    still call `_stop_motor(MONITORED_MOTOR_INSTANCE, ...)`, stopping
-    only instance 0. Raised explicitly during design, left open — not
-    part of this build.
+  - `on_disconnect()`/`check_idle()`: **done (2026-09-17, Issue #17)**
+    — both now also call `_stop_all_motors()` instead of stopping only
+    instance 0. Left out of the original §6.3 build deliberately, closed
+    as its own follow-up once flagged as the most safety-relevant gap
+    before joystick work starts (a joystick session becomes the IPC
+    client driving both motors — a crash/disconnect there needs to stop
+    both, not just motor 0).
 - **`_startup_reset()`** (new, called from `serve()` right after
   `Watchdog(lin)`, before the monitor thread starts): probes each
   instance in `STARTUP_PROBE_INSTANCES` (`(0, 1)` — deliberately not
@@ -767,9 +770,8 @@ coverage for the same reason documented in `raspi/tests/test_linbus.py`
 - Individual safety paths (disconnect detection, idle timeout, stall
   check) haven't been deliberately, separately exercised live yet — see
   Issue #16.
-- `on_disconnect()`/`check_idle()` only stop `MONITORED_MOTOR_INSTANCE`
-  (motor 0), unlike stall/overcurrent (both stop every known motor,
-  §6.3) — see Issue #17.
+- ~~`on_disconnect()`/`check_idle()` only stop `MONITORED_MOTOR_INSTANCE`~~
+  — **done (2026-09-17)**, see §6.3 above and Issue #17.
 - Current-stall *signature* check (observe-only) still scoped to
   `val1`/motor 0 only — see Issue #18.
 - `hal` (Hall data over LIN) might be useful for something beyond what

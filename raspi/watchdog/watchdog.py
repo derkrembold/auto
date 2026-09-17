@@ -365,7 +365,13 @@ class Watchdog:
         self.stopped_for_idle = False
 
     def on_disconnect(self):
-        self._stop_motor(MONITORED_MOTOR_INSTANCE, "client disconnected")
+        # Stops every known motor, not just MONITORED_MOTOR_INSTANCE (see
+        # Issue #17) -- same §6.3 reasoning as the stall/overcurrent
+        # triggers: a client disconnect doesn't care which motor was
+        # doing what, and a vehicle with one motor still driving because
+        # only the other stopped is exactly the "spin/lurch" scenario
+        # §6.3 was built to prevent.
+        self._stop_all_motors("client disconnected")
         self.last_command_time = None
 
     def _check_stall(self, instance, rpm_value):
@@ -639,8 +645,9 @@ class Watchdog:
             return
         elapsed = time.monotonic() - self.last_command_time
         if elapsed > IDLE_TIMEOUT:
-            self._stop_motor(MONITORED_MOTOR_INSTANCE,
-                              f"idle {elapsed:.1f}s with connection still open")
+            # Stops every known motor, not just MONITORED_MOTOR_INSTANCE
+            # -- see Issue #17, same reasoning as on_disconnect() above.
+            self._stop_all_motors(f"idle {elapsed:.1f}s with connection still open")
             self.stopped_for_idle = True
 
     def poll_rpm(self):
