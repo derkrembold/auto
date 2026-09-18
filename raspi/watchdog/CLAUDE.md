@@ -176,18 +176,36 @@ possible and build additively on top of it, specifically *because* it's
 already known to work. See root `CLAUDE.md`'s Two-Motor Vehicle
 Architecture section for the vehicle-level context this sits under.
 **Process 1 (Joystick) is tracked as Issue #19 — near-term, not
-long-term, the user expects this soon.** Processes 3/4 (Learning
-Algorithm, Webserver) plus the Logging Database are tracked together as
-long-term Issue #20.
+long-term, the user expects this soon.** Two features split off from
+#19's own design discussion, both building on it rather than part of
+its scope: **Issue #21** (user-triggered stall-recovery sequence —
+restrictive policy, a stall just stops both motors, no automatic
+recovery; the *user* then triggers a recovery sequence via a joystick
+button that only has an effect if a motor is actually, currently
+stalled) and **Issue #22** (stall feedback signal to the user —
+controller vibration / audio tone / LED, channel deliberately left
+open, not committed to LIN). Processes 3/4 (Learning Algorithm,
+Webserver) plus the Logging Database are tracked together as long-term
+Issue #20.
 
 **Four planned processes** (today: one `watchdog.py` process + one
-interactive `motorcontrol.py` client):
+interactive `motorcontrol.py` client). **`motorcontrol.py` and the
+Joystick process are mutually exclusive by design, not meant to run in
+parallel** — settled 2026-09-18, correcting the earlier "stays
+available in parallel" framing this section used to have. Two reasons,
+not just one: the watchdog's own accept loop (`serve()`'s `while True:
+with listener.accept() as conn: ...`) only ever services one connected
+client at a time anyway, and — the user's own, independent safety
+argument — two simultaneous command sources for the same motors is
+itself hazardous, regardless of what the implementation happens to
+support. The user starts one or the other, never both:
 ```
 Prozess 1: Joystick
-→ reads a Logitech controller over Bluetooth
+→ reads a Logitech F710 controller over its proprietary 2.4GHz USB
+  dongle (not Bluetooth — see Issue #19's design comment)
 → computes speed left/right (differential drive: vorwaerts ± lenkung)
-→ sends over IPC to the Watchdog (replaces motorcontrol.py's role for
-  driving, which stays available for manual/diagnostic commands)
+→ sends over IPC to the Watchdog, in place of motorcontrol.py for the
+  duration of the joystick session (see mutual-exclusivity note above)
 → logs
 
 Prozess 2: Watchdog (extends today's watchdog.py, not a rewrite)
@@ -199,8 +217,10 @@ Prozess 2: Watchdog (extends today's watchdog.py, not a rewrite)
 → monitors current over LIN (once the external current-sensor module
   exists, see root CLAUDE.md's Two-Motor Vehicle Architecture)
 → monitors the IFM sensors (MQTT or direct IP — TBD)
-→ runs the Stall/Stiction Response (see below) — or possibly Process 1,
-  not yet decided
+→ runs the Stall/Stiction Response (see below) — background
+  stall-stop stays the Watchdog's job; *triggering a recovery
+  sequence* is Process 1's job instead, on the user's own initiative
+  (Issue #21) — not automatic either way
 → logs
 
 Prozess 3: Learning Algorithm (Decision Tree)
