@@ -307,7 +307,11 @@ def test_execute_current_instance_1_is_accepted_and_resolves_a_different_wire_id
     # (see its own docstring) -- the reply content is identical for
     # instance 0 or 1, so this only confirms "current 1" is accepted and
     # dispatched, not stuck at "unknown command"/a validate() rejection.
-    assert wd.execute("current 1") == "OK ret=0 val1=-25.00 val2=-25.00"
+    # 0.00/0.00 is DryRunLin's dedicated current-neutral default (raw
+    # 512 = 2.5V = 0A) -- see linbus.DryRunLin.read()'s comment for why
+    # this isn't the generic zero-filled-bytes default other message
+    # types get.
+    assert wd.execute("current 1") == "OK ret=0 val1=0.00 val2=0.00"
     # The actual wire-id resolution itself (base pid | instance) is
     # exercised directly here, since DryRunLin.read() doesn't log reads
     # the way it logs writes.

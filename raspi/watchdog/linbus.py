@@ -319,6 +319,24 @@ class DryRunLin:
         wire_pid = address | instance
         if address in self.read_responses:
             data = self.read_responses[address]
+        elif address == constants.st0cur:
+            # Zero-filled bytes are a fine generic "nothing happening"
+            # default for every other message type (speed 0, hal state
+            # 0, status 0 = MOT_OK, errors 0 = none) -- but NOT for
+            # current: raw ADC 0 means 0V, and the ACS712's zero-current
+            # point is 2.5V (raw 512), not 0V. A zero-filled default here
+            # was silently decoding as -25.00A (see
+            # linbus._adc_to_amps()) -- comfortably past the watchdog's
+            # own 15A overcurrent hard stop, so plain dry-run testing
+            # with no injected current reply spuriously triggered a
+            # continuous stop-all loop every poll cycle. Found live
+            # 2026-09-21 during Issue #19 joystick calibration (the
+            # watchdog was running --live-less, i.e. dry-run, in the
+            # background). raw=512 for both channels -> 0.00A/0.00A, a
+            # genuinely neutral default. See get_current()'s packing
+            # comment for the (low byte, high 2 bits) layout this
+            # matches: 512 = 0x00, 0x02.
+            data = [0x00, 0x02, 0x00, 0x02]
         else:
             index = constants.pids.index(address)
             data = [0] * constants.messagebytes[index]

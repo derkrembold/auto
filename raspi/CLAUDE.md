@@ -421,6 +421,86 @@ other. Same caution applies to any future same-named files across
   `capture_step_response.log`, which rotates (one generation kept) —
   after ~2 more runs that trace is gone even though the CSV rows
   survive forever. See Issue #14.
+- `control/joystick.py` — joystick-driven dual-motor control (Issue
+  #19, built 2026-09-21), Process 1 from `watchdog/CLAUDE.md`'s
+  "Planned Multi-Process Architecture" section. Reads a Logitech
+  Wireless Gamepad F710 (proprietary 2.4GHz dongle, not Bluetooth) via
+  `pygame`, computes a differential-drive left/right speed pair, sends
+  it to the watchdog over the same persistent-IPC-connection model
+  `motorcontrol.py` uses. **Mutually exclusive with `motorcontrol.py`
+  by design** (decided 2026-09-18) — only one of the two is ever
+  running against the watchdog at once, both because the watchdog's
+  accept loop only services one client at a time and because two
+  simultaneous command sources for the same motors is itself hazardous.
+  Full design writeup (axis mapping formula, deadzone, dead-man
+  confirmation, ramp-down, direction-sign convention, calibration via
+  `--debug`) lives in the script's own module docstring, not duplicated
+  here.
+
+  **Defaults to `--simulate`-equivalent behavior — no `--live` flag
+  means no IPC connection is ever opened, every `speed <instance>
+  <value>` command that would be sent is only logged/printed instead.**
+  Mirrors `watchdog.py`'s own dry-run-by-default/`--live` convention —
+  same code-level reinforcement of Motor Execution Consent. `--live`
+  is required, every time, to actually drive real motors.
+
+  **`--left`/`--right` (motor instance, required) and `--left-dir`/
+  `--right-dir` (`cw`/`ccw`, required)** — same reasoning as
+  `capture_step_response.py`'s `--motor0`/`--motor1`: which physical
+  motor is mounted left/right, and which wire-sign means "forward" for
+  each, isn't knowable until after physical installation. Same
+  fail-fast validation pattern reused here too (`_OnceAction` for
+  duplicated flags, a same-instance check before anything else runs).
+
+  **`MAX_RPM` defaults to 1200, not the 1400 first discussed** —
+  changed 2026-09-18 to match the highest speed actually validated on
+  real hardware so far (`validate_speed.py`'s ramp topped out at 1200,
+  confirmed 2026-08-04).
+
+  **Dead-man confirmation: periodic re-press (10s default), not
+  continuous-hold** — a button edge, not a held state, since a frozen/
+  stale HID report (an open, untested question for this controller's
+  proprietary dongle) can't fake a fresh edge. Held at 0 before the
+  first press and any time the window expires. On expiry: a staged
+  ramp-down (`_ramp_down_both()`, its own small implementation, same
+  "duplicate rather than import across differently-lifecycled scripts"
+  reasoning as everywhere else this pattern is used — not
+  `capture_step_response.py`'s `_soft_stop()`), each motor ramping
+  independently from its own last commanded speed.
+
+  **Poll/send rate: 500ms for this first build, not the 100ms
+  originally discussed** — deliberately conservative to avoid
+  overloading the watchdog's sole-master LIN link. Every tick sends
+  unconditionally (live computed speed, or 0 while unconfirmed),
+  doubling as the watchdog's `IDLE_TIMEOUT` (20s) heartbeat. Lowering
+  this once real bus headroom is understood: **Issue #23**.
+
+  **Axis/button indices (`--axis-forward`/`--axis-steer`/
+  `--confirm-button`) are UNVERIFIED for this controller/mode** — the
+  old `/home/pi/LIN/lincomm.py` precedent used axis 4 under conditions
+  that may not carry over. `--debug` prints every raw axis value and
+  button state each tick specifically so the correct values can be
+  read off live and passed in, rather than assumed.
+
+  **Explicitly out of scope in this first build:** stall detection/
+  recovery during live driving (Issue #21 — restrictive policy, a
+  stall just stops, the user triggers recovery afterward) and any
+  controller/other feedback signal on a stall (Issue #22). Neither is
+  implemented yet.
+
+  Pure computation (`_compute_speeds`, `_apply_deadzone`, `_clamp`,
+  `_is_confirmed`, `_ramp_down_both`) is factored out of the pygame
+  event loop specifically so it's unit-testable without real hardware
+  — see `raspi/tests/test_joystick.py`. `pygame` itself is
+  import-guarded (`try/except ImportError`, same pattern
+  `motorcontrol.py` already uses for `readline`) since it isn't
+  installable via pip on the Windows/Python-3.14 dev machine as of
+  2026-09-21 (no prebuilt wheel yet) — confirmed present on the Pi
+  (1.9.4.post1) via `ssh`. **Not yet run against real hardware or even
+  a live pygame joystick read** — built and pytest-tested this session,
+  first real test (starting with `--simulate`-default runs, per the
+  user's explicit request to calibrate/verify before any `--live` use)
+  is the immediate next step.
 - `analyze_logs.py` — read-only static analysis over the four `.log`
   files above (built 2026-08-12, together with the `/analyze-logs`
   skill): flags unmatched `->` calls (the 2026-08-11 bus-hang
