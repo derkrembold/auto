@@ -496,11 +496,97 @@ other. Same caution applies to any future same-named files across
   `motorcontrol.py` already uses for `readline`) since it isn't
   installable via pip on the Windows/Python-3.14 dev machine as of
   2026-09-21 (no prebuilt wheel yet) — confirmed present on the Pi
-  (1.9.4.post1) via `ssh`. **Not yet run against real hardware or even
-  a live pygame joystick read** — built and pytest-tested this session,
-  first real test (starting with `--simulate`-default runs, per the
-  user's explicit request to calibrate/verify before any `--live` use)
-  is the immediate next step.
+  (1.9.4.post1) via `ssh`. **Live-tested on real hardware 2026-09-21**:
+  dead-man confirmation redesigned mid-session from periodic-button-
+  repress to a unified "did the drive speed or LT change" check (LT
+  turned out to be an analog axis, not a button) — verified first in
+  `--simulate` (correct timeout, ramp values, auto-reconfirm), then
+  `--live` (both motors rotated, direction logic consistent). See
+  Issue #19 (closed) for the full write-up. Axis calibration (right
+  stick, `--axis-forward 4`/`--axis-steer 3`/`--axis-lt 2`) captured in
+  the module docstring; final left/right sign and `--left-dir`/
+  `--right-dir` values are deliberately left for on-vehicle calibration.
+- `validate_lin_stress.py` — LIN bus stress/soak test (Issue #24, built
+  2026-09-22). Standalone, real hardware, not a pytest test case (see
+  Test Suite Policy below), but `run()` takes injectable `sleep_fn`/
+  `clock_fn` specifically so its own scheduling logic IS pytest-tested
+  against a fake clock (`raspi/tests/test_validate_lin_stress.py`),
+  without waiting the real 60s. Motivated by a real observation during
+  Issue #19's live test: one motor took nearly a second to visibly
+  start responding to a nonzero `speed` at the joystick's 500ms poll
+  rate — discussed and mostly attributed to normal PI-controller
+  torque-vs-error scaling at a low setpoint, but raised a second,
+  separate question worth testing directly: does LIN bus traffic volume
+  itself ever delay how quickly a command reaches the wire, since the
+  watchdog serializes all bus access (its own background poll + every
+  client command) through one lock?
+
+  **`speed 0` deliberately, never a nonzero value** — exercises the
+  real write path (sync/PID/data/checksum/echo-compare) under load
+  without ever moving the motor, keeping this close to risk-free
+  despite technically still being a `speed` command (one lightweight
+  y/N prompt at the start, not a full pre-flight checklist).
+
+  **Two independent, separately-parameterized cadences** — the whole
+  point being to isolate which device's LIN implementation is the
+  weaker link under load, not just stress everything at one rate
+  together: `--tick-rate` (required, no default) drives the main
+  battery every tick, for **both** motor instances: `speed <n> 0`,
+  `rpm <n>`, `status <n>` (6 transactions/tick). `--secondary-tick-rate`
+  (default 2.0s, deliberately decoupled from `--tick-rate`) drives
+  `hal` (both motors) plus `current`/`errors` (the current sensor) —
+  decoupled specifically because the current sensor's own onboard ADC
+  averaging window is already ~1s (see `CURRENT_SAMPLE_INTERVAL`
+  elsewhere in this file), so sampling it faster than that wouldn't
+  reveal anything new regardless of how aggressive the main load is.
+  Fixed 60s duration, not a CLI parameter — compare different rates by
+  re-running the script with a different value (one confirmation = one
+  run, same convention as `run_grid_row.py`), not an automatic sweep.
+
+  `reset` for both motors as the very first commands (clean baseline).
+  The current sensor has no reset verb at all (motor-only, see
+  `watchdog/CLAUDE.md`'s `MOTOR_INSTANCE_VERBS`) — its "reset" here is
+  just an initial `errors` read establishing this run's own starting
+  point, same idea applied to `status`'s timeout/checksum counters for
+  both motors (not assumed to already be exactly zero after `reset`).
+
+  **Failure/degradation detection reuses existing tools rather than
+  reinventing them**: a scheduling-lag WARNING is logged live if a tick
+  can't be started on time (the previous batch's round-trip already
+  exceeded the requested interval — degradation in its own right);
+  before/after deltas on firmware-side counters (motor `status`'s
+  timeout/checksum counts, current sensor's `errors` ring buffer) are
+  printed in the end-of-run summary as the authoritative check,
+  independent of whether the client noticed anything live; the full
+  command/reply trace goes to `validate_lin_stress.log` as always, for
+  `analyze_logs.py`/`/analyze-logs` to run over afterward the same way
+  it already does for every other `raspi/` log.
+
+  Prints CSV (`elapsed_ms,command,latency_ms,reply`) to stdout, one row
+  per LIN command — same "stdout reserved for CSV" convention as
+  `validate_speed.py`. The end-of-run summary goes to stderr so it
+  doesn't pollute the CSV stream (and is also logged, not just printed,
+  since a `... | tee run.csv` capture only gets stdout).
+
+  **`--duration` (default 60.0s, added 2026-09-22):** longer runs (a
+  10-minute soak was run the same day) can surface slow-onset
+  degradation a 60s run wouldn't — no extra risk either way since
+  `speed 0` never moves the motor regardless of how long it runs.
+
+  **Live-tested extensively 2026-09-22** (Issue #24) — 0.5s/0.25s/
+  0.1s/0.05s tick rates all clean (zero scheduling lag, zero firmware
+  counter deltas), plus a 10-minute soak at 0.05s/0.2s, plus 0.03s
+  deliberately crossing the theoretical floor (see this file's LIN
+  Protocol Timing section) to confirm it — schedule fell behind exactly
+  as predicted, with firmware counters still staying at zero throughout
+  (a scheduling-infeasibility finding, not a comms failure). Two real
+  bugs found and fixed live during this: `_is_ok_reply()`'s predecessor
+  only recognized `"ret=0"`-style replies, flagging every successful
+  bare-`"OK"` `speed`/`reset` reply as a false-positive warning; and
+  `input()`'s own prompt argument writes to stdout regardless of this
+  script's stderr convention, corrupting `run.csv`'s header line when
+  piped through `tee` (prompt text now printed to stderr explicitly,
+  `input()` called with no prompt of its own).
 - `analyze_logs.py` — read-only static analysis over the four `.log`
   files above (built 2026-08-12, together with the `/analyze-logs`
   skill): flags unmatched `->` calls (the 2026-08-11 bus-hang
@@ -547,6 +633,54 @@ spun. `pi` (also `Lin.write()`, same code path as `speed`) not
 separately tested but shares the exact same write logic. The echo/
 parity/checksum handling in both `Lin.write()` and `Lin.read()` is now
 real-hardware-confirmed, not just "best current understanding."
+
+**Theoretical per-message wire time and a tick-rate floor estimate
+(2026-09-22), worked out during Issue #24's LIN bus stress-test
+investigation** — see that issue for the full empirical run history
+this cross-checks against. `UART_BAUDRATE` is 19200; at 10 bits/byte
+(start+8 data+stop) that's **0.52ms/byte** of pure wire time. Every
+frame is sync+PID (2 header bytes) + payload + checksum (1 byte), so
+total wire bytes = payload+3. Payload sizes from `addresses.json`:
+
+| command | payload | frame bytes | wire time |
+|---|---|---|---|
+| `speed` (write) | 2 | 5 | 2.6ms |
+| `rpm` | 2 | 5 | 2.6ms |
+| `status` | 6 | 9 | 4.7ms |
+| `hal` | 3 | 6 | 3.1ms |
+| `current` | 4 | 7 | 3.65ms |
+| `errors` | 8 | 11 | 5.7ms |
+
+**Real observed per-command latencies (4.8-8.9ms typical, from Issue
+#24's actual runs) sit consistently ~1.5-2x above this pure-wire
+estimate** — attributed to the byte-by-byte write-then-read-echo
+pattern above costing a separate Python/OS serial syscall pair per
+byte, not the 19200 baud rate itself being the bottleneck. Scaling a
+full `speed`+`rpm`+`status` battery on both motors (≈19.8ms pure wire
+time) by that same overhead factor puts the real total around
+**30-40ms**, suggesting a structural floor for any tight polling loop
+(the watchdog's own background poll, a future joystick poll-rate
+increase per Issue #23, etc.) somewhere around **0.03-0.04s** — below
+that, a fixed-interval loop issuing a similar-sized command battery
+can't physically keep up regardless of anything else.
+
+**Confirmed empirically the same day (Issue #24):** 0.5s/0.25s/0.1s/
+0.05s all clean (zero scheduling lag, zero firmware-side counter
+deltas, latencies 4.8-8.9ms with no growth trend), including a 10-
+minute soak at 0.05s/0.2s with the same clean result. **0.03s crosses
+the estimated floor exactly as predicted** — the schedule falls behind
+immediately and continuously (1674 real cycles fit into 60s instead of
+the requested 2000, i.e. ~35.8ms/cycle actual — matching the 30-40ms
+estimate closely), yet the firmware-side counters stayed at zero the
+entire time. That distinction matters: **at 0.03s nothing on the bus
+or in the firmware is actually failing — the requested schedule is
+simply faster than physically achievable**, and the stress-test script
+correctly detects and reports exactly that (a scheduling-lag WARNING)
+rather than silently drifting or misreporting it as a comms error. The
+real floor sits somewhere between 0.03s (falls behind) and 0.05s
+(clean) — good enough precision for judging Issue #23's planned
+500ms → 100ms joystick poll-rate reduction, which sits comfortably
+above either bound.
 
 ## Open Points
 
