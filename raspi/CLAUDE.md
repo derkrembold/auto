@@ -468,19 +468,27 @@ other. Same caution applies to any future same-named files across
   `capture_step_response.py`'s `_soft_stop()`), each motor ramping
   independently from its own last commanded speed.
 
-  **Poll/send rate: 500ms for this first build, not the 100ms
-  originally discussed** — deliberately conservative to avoid
-  overloading the watchdog's sole-master LIN link. Every tick sends
-  unconditionally (live computed speed, or 0 while unconfirmed),
-  doubling as the watchdog's `IDLE_TIMEOUT` (20s) heartbeat. Lowering
-  this once real bus headroom is understood: **Issue #23**.
+  **Poll/send rate: 200ms, lowered from the initial 500ms 2026-09-22**
+  (Issue #23) — 500ms was the deliberately conservative starting value
+  before real bus headroom was known; Issue #24's LIN bus stress test
+  found the bus stays clean (zero scheduling lag, zero firmware
+  counter deltas) down to 0.05s, real floor between 0.03s and 0.05s —
+  so `POLL_INTERVAL_DEFAULT` was lowered to 0.2s, not all the way to
+  the 100ms originally discussed, by deliberate choice for headroom
+  against that measured floor. Every tick sends unconditionally (live
+  computed speed, or 0 while unconfirmed), doubling as the watchdog's
+  `IDLE_TIMEOUT` (20s) heartbeat.
 
-  **Axis/button indices (`--axis-forward`/`--axis-steer`/
-  `--confirm-button`) are UNVERIFIED for this controller/mode** — the
-  old `/home/pi/LIN/lincomm.py` precedent used axis 4 under conditions
-  that may not carry over. `--debug` prints every raw axis value and
-  button state each tick specifically so the correct values can be
-  read off live and passed in, rather than assumed.
+  **Axis calibration (`--axis-forward 4`/`--axis-steer 3`/`--axis-lt
+  2`) confirmed live 2026-09-21** — right stick only (left stick
+  unused for now), via repeated `--debug` captures then a real
+  `--live` test (both motors rotated, direction logic consistent). LT
+  turned out to be an analog axis on this controller, not a digital
+  button — see the dead-man confirmation entry above. `--debug` still
+  prints every raw axis value each tick, for recalibration if the
+  controller or its driver/mode ever changes. Final `--axis-steer`
+  sign and `--left-dir`/`--right-dir` values remain for on-vehicle
+  calibration (see the module docstring).
 
   **Explicitly out of scope in this first build:** stall detection/
   recovery during live driving (Issue #21 — restrictive policy, a

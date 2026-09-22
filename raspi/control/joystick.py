@@ -115,17 +115,21 @@ not an abrupt `speed 0`. Ramps each motor independently from its own
 last commanded speed (left/right can legitimately differ under
 differential drive).
 
-## Poll/send rate — 500ms for this first build, see Issue #23
+## Poll/send rate — 200ms, lowered from the initial 500ms (Issue #23)
 
 Every tick, whatever this loop currently wants each motor doing (live
 computed speed, or 0 while unconfirmed/ramping) is sent unconditionally
 — this also serves as the watchdog's own IDLE_TIMEOUT (20s) heartbeat,
 so a steadily-held stick position alone never risks an idle stop.
---poll-interval defaults to 0.5s, deliberately conservative for the
-first live build to avoid overloading the watchdog's sole-master LIN
-link (which also carries its own background rpm/current polling) —
-lowering this to 100ms once real bus headroom is understood is tracked
-as Issue #23, not part of this first build.
+500ms was the deliberately conservative starting value for the first
+live build (before real bus headroom was known). Issue #24's LIN bus
+stress test (2026-09-22) found the bus stays completely clean (zero
+scheduling lag, zero firmware-side counter deltas) down to 0.05s, with
+the real structural floor somewhere between 0.03s and 0.05s — so
+--poll-interval was lowered to **0.2s**, not all the way to the 100ms
+originally discussed in Issue #23, by deliberate choice: the user
+wants headroom against that measured floor, not to run right at the
+edge of what's been confirmed safe.
 
 ## Explicitly out of scope here
 
@@ -160,7 +164,7 @@ logger = logging.getLogger("joystick")
 MAX_RPM_DEFAULT = 1200
 DEADZONE_DEFAULT = 500
 CONFIRM_TIMEOUT_DEFAULT = 10.0
-POLL_INTERVAL_DEFAULT = 0.5  # see Issue #23 -- planned to drop to 0.1 later
+POLL_INTERVAL_DEFAULT = 0.2  # see Issue #23/#24 -- lowered from the initial 0.5, kept above the ~0.03-0.05s measured LIN floor for margin
 AXIS_FORWARD_DEFAULT = 4  # right stick, away-from-body axis -- see module docstring's calibration note
 AXIS_STEER_DEFAULT = 3    # right stick, left/right axis -- sign of left-vs-right not yet independently confirmed
 AXIS_LT_DEFAULT = 2       # left trigger -- dead-man confirmation signal, not a drive input

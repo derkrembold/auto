@@ -217,7 +217,7 @@ def test_parse_args_defaults_match_documented_values():
     assert args.max_rpm == 1200
     assert args.deadzone == 500
     assert args.confirm_timeout == 10.0
-    assert args.poll_interval == 0.5
+    assert args.poll_interval == 0.2
     assert args.axis_forward == 4
     assert args.axis_steer == 3
     assert args.axis_lt == 2
