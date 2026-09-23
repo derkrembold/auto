@@ -407,14 +407,17 @@ other. Same caution applies to any future same-named files across
   motors identically, matching the same-`target_speed` decision.
 
   **Any pre-existing `recovery_sequences.csv` on the Pi must be cleared
-  by hand before a schema-changed script runs** — this happened twice:
-  2026-09-10 the single-row schema became the two-phase one (column set
-  and `sequence`'s meaning both changed), and again the same day
-  `status_after_retry` was appended to the field list. `csv.DictWriter`
-  appends rows against the new field order regardless of what header
-  the old file already has, so mixing generations misaligns columns.
-  Only ever ~2 real rows existed at each change, so clearing costs
-  nothing.
+  by hand before a schema-changed script runs** — this happened three
+  times now: 2026-09-10 the single-row schema became the two-phase one
+  (column set and `sequence`'s meaning both changed), the same day
+  `status_after_retry` was appended to the field list, and 2026-09-23
+  a `source` field was added (see `joystick.py`'s entry below —
+  `RECOVERY_LOG_PATH`/`RECOVERY_LOG_FIELDS`/`_append_recovery_row` are
+  now genuinely shared between both scripts, imported by `joystick.py`
+  rather than duplicated). `csv.DictWriter` appends rows against the
+  new field order regardless of what header the old file already has,
+  so mixing generations misaligns columns. Only ever a handful of real
+  rows existed at each change, so clearing costs nothing.
 
   **Caveat found live 2026-09-09:** the *detailed* per-command LIN
   trace for a given recovery attempt lives only in
@@ -490,14 +493,51 @@ other. Same caution applies to any future same-named files across
   sign and `--left-dir`/`--right-dir` values remain for on-vehicle
   calibration (see the module docstring).
 
-  **Explicitly out of scope in this first build:** stall detection/
-  recovery during live driving (Issue #21 — restrictive policy, a
-  stall just stops, the user triggers recovery afterward) and any
-  controller/other feedback signal on a stall (Issue #22). Neither is
-  implemented yet.
+  **Stall recovery (Issue #21), built 2026-09-23.** Red **B** (button
+  index 1, calibrated live) fires a recovery attempt on a fresh press
+  (edge-detected, so it can't re-fire every tick while held) — but has
+  **no effect unless at least one motor is actually stalled**, checked
+  live via `status`'s latched `STALL_TIM_ERR`, same check
+  `capture_step_response.py`'s `_confirm_stall` uses. On a real stall:
+  `reset` the stalled motor(s) (selectivity, same reasoning as Issue
+  #4) → a recovery sequence from `GENTLE_STRATEGIES` — a deliberate
+  **subset** of `capture_step_response.py`'s own `STRATEGIES`, excluding
+  the full-power ones (`speed_max_*`/`burst_*`) rather than gating them
+  behind an extra confirmation prompt, since a human may be standing
+  right next to a real vehicle during a live attempt — run
+  **sequentially** if both motors are stalled, not simultaneously →
+  a joint verification step, `speed 800` on **both** motors together
+  for 1.5s with `rpm` sampled at 1.0s/1.5s checkpoints (mirrors
+  `capture_step_response.py`'s two-checkpoint Hall-chatter-false-
+  positive catch) — both motors driven together deliberately, even if
+  only one stalled, since #19's stop-all policy already left both at 0
+  and testing only one side would lurch a real vehicle asymmetrically
+  → logged to `recovery_sequences.csv` → control returns to the
+  joystick. The whole flow **blocks the main loop** (stick input fully
+  ignored for its ~2-3s duration, same pattern the ramp-down already
+  uses) with **no extra consent prompt** — runs entirely within the
+  already-`--live`-consented session.
+
+  `recovery_sequences.csv`'s schema is **imported from
+  `capture_step_response.py`, not duplicated** — the one deliberate
+  exception to this file's "duplicate small behavior across
+  differently-lifecycled scripts" pattern, since the CSV itself is a
+  genuinely shared, single growing dataset and two independently-
+  drifting field-list copies would misalign its columns. Gained a
+  `source` field (`"joystick"` vs blank/bench) the same day — see the
+  `recovery_sequences.csv` schema note above (Any pre-existing file
+  needs clearing by hand). **Not yet live-tested against a real
+  stall** — built and pytest-tested this session
+  (`raspi/tests/test_joystick.py`); real validation is the next step.
+
+  **Controller/other feedback signal on a stall is Issue #22** —
+  still not implemented; would pair naturally with #21 (the natural
+  cue that the recovery button is now "live").
 
   Pure computation (`_compute_speeds`, `_apply_deadzone`, `_clamp`,
-  `_is_confirmed`, `_ramp_down_both`) is factored out of the pygame
+  `_is_confirmed`, `_ramp_down_both`, `_is_stalled`,
+  `_generate_gentle_sequence`, `_run_gentle_sequence`,
+  `_handle_recovery_button`) is factored out of the pygame
   event loop specifically so it's unit-testable without real hardware
   — see `raspi/tests/test_joystick.py`. `pygame` itself is
   import-guarded (`try/except ImportError`, same pattern

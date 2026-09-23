@@ -256,12 +256,23 @@ logger = logging.getLogger("capture_step_response")
 #    (see the module docstring / STM32/CLAUDE.md).
 # A "sequence" row with no matching "retry" row = the retry broke or
 # was interrupted before measurement. That absence is itself a signal.
+#
+# Shared with raspi/control/joystick.py (Issue #21, added 2026-09-23) --
+# RECOVERY_LOG_PATH/RECOVERY_LOG_FIELDS/_append_recovery_row are
+# imported from here, not duplicated, since this file (its actual
+# content) is a genuinely shared, single growing dataset across both
+# tools, unlike the "duplicate small behavior" pattern used everywhere
+# else the two scripts' lifecycles diverge -- two independently-drifting
+# copies of the field list would misalign columns on whichever file gets
+# created first. `source` distinguishes which tool wrote a row ("bench"
+# for this script's own calls, which don't set it -- left blank rather
+# than touching every existing call site; "joystick" for joystick.py's).
 RECOVERY_LOG_PATH = "recovery_sequences.csv"
 RECOVERY_LOG_FIELDS = [
     "timestamp", "phase", "target_speed", "motor_instance",
     "hal_before_sequence", "status_before_sequence", "sequence",
     "hal_after_sequence", "status_after_sequence",
-    "rpm_1s", "rpm_1p5s", "status_after_retry",
+    "rpm_1s", "rpm_1p5s", "status_after_retry", "source",
 ]
 
 TARGET_SPEED = 1000

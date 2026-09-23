@@ -131,18 +131,73 @@ originally discussed in Issue #23, by deliberate choice: the user
 wants headroom against that measured floor, not to run right at the
 edge of what's been confirmed safe.
 
+## Recovery trigger (Issue #21) — user-initiated, nothing automatic
+
+The red **B** button (calibrated as --recovery-button, index 1 — see
+Issue #19/#21's calibration comments) fires a recovery attempt on
+press (edge-detected — a fresh press, not a held state, so it can't
+re-fire every tick while held). **A press has no effect unless at
+least one motor is actually stalled** (checked live via `status`'s
+latched STALL_TIM_ERR, same check `capture_step_response.py`'s
+`_confirm_stall` uses) — the core safety property from the original
+design.
+
+**Flow on a real stall:** reset the stalled motor(s) (selectivity —
+clears the watchdog's own stall bookkeeping before anything else
+touches it, same reasoning as Issue #4) → a recovery sequence from
+GENTLE_STRATEGIES on each stalled motor (sequentially if both are
+stalled, not simultaneously) → a joint verification step, `speed 800`
+on **both** motors together for 1.5s, sampling `rpm` at 1.0s and 1.5s
+checkpoints (mirrors `capture_step_response.py`'s `rpm_1s`/`rpm_1p5s`
+two-checkpoint pattern, including its Hall-chatter-false-positive
+catch via `status_after_retry`), then a staged ramp-down (reuses
+`_ramp_down_both()`, not an abrupt `speed 0` — both motors are
+genuinely running at speed here) → logged to `recovery_sequences.csv`
+→ control returns to the joystick. Both motors are driven together in
+the verification step, deliberately, even if only one stalled — #19's
+stop-all policy means both were already sitting at 0, and testing only
+the recovered side would visibly lurch/spin a real vehicle
+asymmetrically.
+
+**GENTLE_STRATEGIES is a subset of `capture_step_response.py`'s own
+`STRATEGIES` catalog — the full-power ones (`speed_max_plus`/
+`speed_max_minus`, `burst_cw`/`burst_ccw`) are deliberately excluded
+here**, not gated behind an extra confirmation prompt. Reasoning: a
+human may be standing right next to a real vehicle during a live
+recovery attempt, unlike the bench-rig context those aggressive
+strategies were designed for — a smaller, inherently gentler catalog
+resolves that concern without adding friction to an already-urgent
+action.
+
+**The whole flow blocks the main loop** — stick input is completely
+ignored for its ~2-3s duration, same pattern the dead-man ramp-down
+already uses. No extra consent prompt — runs entirely within the
+already-`--live`-consented joystick session.
+
+`recovery_sequences.csv`'s schema (`RECOVERY_LOG_PATH`/
+`RECOVERY_LOG_FIELDS`/`_append_recovery_row`) is imported from
+`capture_step_response.py`, not duplicated — see that file's own
+comment for why this one piece is a deliberate exception to the
+"duplicate small logic" pattern used everywhere else the two scripts'
+behavior diverges: the file itself is a single shared, growing
+dataset, and two independently-drifting field-list copies would
+misalign its columns.
+
 ## Explicitly out of scope here
 
-Stall detection/recovery during live driving is Issue #21 (restrictive
-policy: a stall just stops, the user triggers a recovery sequence
-afterward — nothing automatic). Controller/other feedback on a stall
-is Issue #22. Neither is implemented in this script yet.
+Controller/other feedback on a stall is Issue #22 — not implemented
+in this script yet.
 """
 import argparse
+import datetime
 import logging
+import random
+import re
 import sys
 import time
 from multiprocessing.connection import Client
+
+from capture_step_response import _append_recovery_row
 
 try:
     # Not installable via pip on this Windows/Python-3.14 dev machine as
@@ -178,6 +233,38 @@ DIRECTION_SIGN = {"cw": 1, "ccw": -1}
 MOTOR_INSTANCE_MIN = 0
 MOTOR_INSTANCE_MAX = 3
 
+# --- recovery trigger (Issue #21) -- see module docstring ---
+
+RECOVERY_BUTTON_DEFAULT = 1  # red B, calibrated live 2026-09-23
+
+# Mirrors STM32/firmware/Core/Inc/errors.h's STALL_TIM_ERR -- same
+# duplicated-by-hand constant as capture_step_response.py's own copy
+# (see that file's comment for why: no shared generation mechanism for
+# error codes the way addresses.json provides for PIDs).
+STALL_TIM_ERR = -65
+
+RPM_RE = re.compile(r"rpm=(-?\d+)")
+SYS_ERROR_RE = re.compile(r"sys_error=(-?\d+)")
+
+# Deliberate SUBSET of capture_step_response.py's STRATEGIES -- the
+# full-power ones (speed_max_plus/minus, burst_cw/ccw) are excluded
+# here, not gated behind an extra confirmation, see module docstring.
+GENTLE_STRATEGIES = {
+    "speed_plus": {"kind": "speed", "value": 500},
+    "speed_minus": {"kind": "speed", "value": -500},
+    "pulse_plus": {"kind": "pulse", "value": 1000},
+    "pulse_minus": {"kind": "pulse", "value": -1000},
+}
+SEQUENCE_MIN_LEN = 2
+SEQUENCE_MAX_LEN = 3
+SEQUENCE_STEP_PAUSE_S = 0.1  # minimum pause between any two sequence steps
+SPEED_STRATEGY_HOLD_S = 0.5  # how long a "speed" strategy holds before its speed-0 cleanup
+SEQUENCE_MAX_PULSE = 2  # per sequence, total -- same cap capture_step_response.py applies to its larger catalog
+
+VERIFY_SPEED = 800  # joint verification step, both motors, see module docstring
+VERIFY_CHECKPOINT_1_S = 1.0
+VERIFY_CHECKPOINT_2_S = 1.5
+
 
 class _OnceAction(argparse.Action):
     # A repeated CLI flag (e.g. two --left) would otherwise silently
@@ -194,21 +281,26 @@ class _OnceAction(argparse.Action):
 
 
 class _RealSender:
-    """Sends `speed <instance> <value>` over a persistent IPC connection
-    to the watchdog -- same connection-per-session model motorcontrol.py
-    uses, so the watchdog's is-the-supervisor-alive check (on_connect/
-    on_disconnect) works the same way here as it does for that script."""
+    """Sends commands over a persistent IPC connection to the watchdog --
+    same connection-per-session model motorcontrol.py uses, so the
+    watchdog's is-the-supervisor-alive check (on_connect/on_disconnect)
+    works the same way here as it does for that script."""
 
     def __init__(self, address):
         self._conn = Client(address, family='AF_UNIX')
 
-    def send_speed(self, instance, value):
-        command = f"speed {instance} {value}"
+    def send(self, command):
+        # Generic send (added 2026-09-23 for Issue #21's recovery flow --
+        # status/reset/hal/rpm/pulse, not just speed) -- send_speed()
+        # below is a thin wrapper kept for the main loop's existing calls.
         logger.info(f"-> {command}")
         self._conn.send(command)
         reply = self._conn.recv()
         logger.info(f"<- {reply}")
         return reply
+
+    def send_speed(self, instance, value):
+        return self.send(f"speed {instance} {value}")
 
     def close(self):
         self._conn.close()
@@ -218,10 +310,12 @@ class _SimulateSender:
     """Default sender -- never opens the IPC connection at all, just
     prints/logs the command that would have been sent."""
 
-    def send_speed(self, instance, value):
-        command = f"speed {instance} {value}"
+    def send(self, command):
         logger.info(f"[SIMULATE] {command}")
         return "SIMULATED"
+
+    def send_speed(self, instance, value):
+        return self.send(f"speed {instance} {value}")
 
     def close(self):
         pass
@@ -276,6 +370,147 @@ def _ramp_down_both(sender, left_instance, right_instance, left_speed, right_spe
         sleep_fn(step_interval)
 
 
+def _read_rpm(sender, motor):
+    match = RPM_RE.search(sender.send(f"rpm {motor}"))
+    return int(match.group(1)) if match else None
+
+
+def _is_stalled(sender, motor):
+    # Same check as capture_step_response.py's _confirm_stall() -- rpm==0
+    # alone isn't trusted, only a latched STALL_TIM_ERR counts.
+    status_reply = sender.send(f"status {motor}")
+    match = SYS_ERROR_RE.search(status_reply)
+    sys_error = int(match.group(1)) if match else None
+    return sys_error == STALL_TIM_ERR
+
+
+def _generate_gentle_sequence(rng=random):
+    """Same generation shape as capture_step_response.py's
+    _generate_recovery_sequence(), over the smaller GENTLE_STRATEGIES
+    catalog -- no burst/fullspeed categories here, so only the
+    no-immediate-repeat and per-sequence pulse cap apply."""
+    length = rng.randint(SEQUENCE_MIN_LEN, SEQUENCE_MAX_LEN)
+    names = list(GENTLE_STRATEGIES.keys())
+    while True:
+        sequence = []
+        pulse_count = 0
+        for _ in range(length):
+            candidates = names[:]
+            rng.shuffle(candidates)
+            picked = None
+            for name in candidates:
+                kind = GENTLE_STRATEGIES[name]["kind"]
+                if sequence and name == sequence[-1]:
+                    continue
+                if kind == "pulse" and pulse_count >= SEQUENCE_MAX_PULSE:
+                    continue
+                picked = name
+                break
+            if picked is None:
+                break  # dead end -- restart the whole sequence
+            sequence.append(picked)
+            if GENTLE_STRATEGIES[picked]["kind"] == "pulse":
+                pulse_count += 1
+        if len(sequence) == length:
+            return sequence
+
+
+def _run_gentle_sequence(sender, motor, sleep_fn=time.sleep, rng=random):
+    # Returns the exact command(s) sent, not just the strategy names --
+    # same reasoning as capture_step_response.py's _execute_strategy():
+    # the catalog's own values could change later, the log needs to
+    # capture what was actually tried.
+    sequence = _generate_gentle_sequence(rng)
+    commands = []
+    for name in sequence:
+        strategy = GENTLE_STRATEGIES[name]
+        if strategy["kind"] == "speed":
+            cmd = f"speed {motor} {strategy['value']}"
+            sender.send(cmd)
+            commands.append(cmd)
+            sleep_fn(SPEED_STRATEGY_HOLD_S)
+            stop_cmd = f"speed {motor} 0"
+            sender.send(stop_cmd)
+            commands.append(stop_cmd)
+        elif strategy["kind"] == "pulse":
+            cmd = f"pulse {motor} {strategy['value']}"
+            sender.send(cmd)
+            commands.append(cmd)
+        sleep_fn(SEQUENCE_STEP_PAUSE_S)
+    return sequence, commands
+
+
+def _handle_recovery_button(sender, left_instance, right_instance, sleep_fn=time.sleep, rng=random):
+    """The full Issue #21 flow. Returns True if a stall was found and
+    handled (caller resets its own speed-tracking state to 0), False if
+    the press was a no-op (nothing was stalled)."""
+    left_stalled = _is_stalled(sender, left_instance)
+    right_stalled = _is_stalled(sender, right_instance)
+    if not left_stalled and not right_stalled:
+        logger.info("recovery button pressed -- no stall detected, no-op")
+        return False
+
+    stalled = [i for i, is_it in ((left_instance, left_stalled), (right_instance, right_stalled)) if is_it]
+    logger.warning(f"recovery button pressed -- stalled motor(s): {stalled}")
+    seq_timestamp = datetime.datetime.now().isoformat()
+
+    for motor in stalled:
+        # Reset FIRST -- selectivity, same reasoning as Issue #4: clears
+        # the watchdog's own stall bookkeeping for this instance before
+        # anything else touches it, so its background stall check has
+        # nothing left to see during the sequence below.
+        hal_before = sender.send(f"hal {motor}")
+        status_before = sender.send(f"status {motor}")
+        sender.send(f"reset {motor}")
+        sequence, commands = _run_gentle_sequence(sender, motor, sleep_fn, rng)
+        hal_after = sender.send(f"hal {motor}")
+        status_after = sender.send(f"status {motor}")
+        _append_recovery_row({
+            "timestamp": seq_timestamp,
+            "phase": "sequence",
+            "motor_instance": motor,
+            "hal_before_sequence": hal_before,
+            "status_before_sequence": status_before,
+            "sequence": ";".join(commands),
+            "hal_after_sequence": hal_after,
+            "status_after_sequence": status_after,
+            "source": "joystick",
+        })
+
+    # Joint verification step, both motors together -- deliberately, even
+    # if only one stalled (see module docstring: #19's stop-all policy
+    # means both were already at 0, testing only one side would lurch a
+    # real vehicle asymmetrically).
+    sender.send_speed(left_instance, VERIFY_SPEED)
+    sender.send_speed(right_instance, VERIFY_SPEED)
+    sleep_fn(VERIFY_CHECKPOINT_1_S)
+    rpm_left_1s = _read_rpm(sender, left_instance)
+    rpm_right_1s = _read_rpm(sender, right_instance)
+    sleep_fn(VERIFY_CHECKPOINT_2_S - VERIFY_CHECKPOINT_1_S)
+    rpm_left_1p5s = _read_rpm(sender, left_instance)
+    rpm_right_1p5s = _read_rpm(sender, right_instance)
+    status_after_retry = f"{sender.send(f'status {left_instance}')}/{sender.send(f'status {right_instance}')}"
+    # Staged ramp-down, not an abrupt speed 0 -- both motors are
+    # genuinely running at VERIFY_SPEED here, and an abrupt stop after a
+    # sustained run was observed live (capture_step_response.py,
+    # 2026-08-20) to stop harder than a plain coast-down (the PI
+    # controller reacting to a sudden large negative error). Reuses the
+    # main loop's own _ramp_down_both() -- both motors happen to share
+    # the same starting speed here, unlike the dead-man timeout case.
+    _ramp_down_both(sender, left_instance, right_instance, VERIFY_SPEED, VERIFY_SPEED, sleep_fn=sleep_fn)
+
+    _append_recovery_row({
+        "timestamp": seq_timestamp,
+        "phase": "retry",
+        "motor_instance": "both",
+        "rpm_1s": f"{rpm_left_1s}/{rpm_right_1s}",
+        "rpm_1p5s": f"{rpm_left_1p5s}/{rpm_right_1p5s}",
+        "status_after_retry": status_after_retry,
+        "source": "joystick",
+    })
+    return True
+
+
 def _build_arg_parser():
     parser = argparse.ArgumentParser(
         description="Joystick-driven dual-motor control (Issue #19). "
@@ -298,6 +533,8 @@ def _build_arg_parser():
     parser.add_argument("--axis-lt", type=int, default=AXIS_LT_DEFAULT,
                          help="dead-man confirmation axis (left trigger) -- see module docstring")
     parser.add_argument("--lt-change-threshold", type=float, default=LT_CHANGE_THRESHOLD_DEFAULT)
+    parser.add_argument("--recovery-button", type=int, default=RECOVERY_BUTTON_DEFAULT,
+                         help="stall-recovery trigger (red B) -- see module docstring, Issue #21")
     parser.add_argument("--poll-interval", type=float, default=POLL_INTERVAL_DEFAULT)
     parser.add_argument("--joystick-index", type=int, default=JOYSTICK_INDEX_DEFAULT)
     parser.add_argument("--debug", action="store_true",
@@ -348,6 +585,12 @@ def run(args):
             pygame.quit()
             sender.close()
             sys.exit(1)
+    if not (0 <= args.recovery_button < num_buttons):
+        logger.error(f"--recovery-button={args.recovery_button} out of range for this controller "
+                     f"(0..{num_buttons - 1})")
+        pygame.quit()
+        sender.close()
+        sys.exit(1)
 
     left_sign = DIRECTION_SIGN[args.left_dir]
     right_sign = DIRECTION_SIGN[args.right_dir]
@@ -358,10 +601,27 @@ def run(args):
     prev_speed_right = 0
     prev_lt = 0.0
     last_confirm_time = None
+    recovery_button_was_pressed = False
 
     try:
         while True:
             pygame.event.pump()
+
+            recovery_pressed = bool(joystick.get_button(args.recovery_button))
+            recovery_edge = recovery_pressed and not recovery_button_was_pressed
+            recovery_button_was_pressed = recovery_pressed
+            if recovery_edge:
+                # Blocking -- stick input ignored for the ~2-3s this
+                # takes, same pattern the dead-man ramp-down already
+                # uses. Either way (handled or no-op), both motors are
+                # logically at 0 by the time this returns -- a real
+                # stall already had them there, and a handled one ends
+                # with an explicit speed 0 on both (see module docstring).
+                _handle_recovery_button(sender, args.left, args.right)
+                sent_speed_left = sent_speed_right = 0
+                prev_speed_left = prev_speed_right = 0
+                time.sleep(args.poll_interval)
+                continue
 
             forward = -joystick.get_axis(args.axis_forward)
             steer = joystick.get_axis(args.axis_steer)
