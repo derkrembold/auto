@@ -732,9 +732,6 @@ above either bound.
 
 ## Open Points
 
-- `watchdog/linbus.py` returns bare magic-number error codes
-  (`-1`/`-2`/`-3`/`-4`) from `Lin.write()`/`Lin.read()`. Replace with named
-  constants (or an enum) — see Issue #12.
 - **`validate_speed.py`/`capture_step_response.py` silently swallow
   `ret!=0` reads** (2026-08-12, part of the bus-hang investigation — see
   `STM32/CLAUDE.md`'s Open Points): `_read_rpm()`/`_read_current()`'s

@@ -95,6 +95,25 @@ def _log_pid_name(address):
     return constants.pid_names.get(address, hexbyte(address))
 
 
+# Named replacements for Lin.write()/Lin.read()/write_bad_checksum()'s
+# previously bare magic-number return codes (Issue #12). Every caller
+# across raspi/ only ever checked ret<0/ret!=0 (confirmed before this
+# change), never a specific value, so the numbering is redefined here
+# for clarity rather than preserved verbatim -- write()'s old -3 meant
+# "wrong direction" while read()'s old -3 meant "bad checksum", two
+# unrelated meanings that happened to share a number; they now have
+# distinct names/values. Unrelated to CURRENTSENSOR_ERROR_NAMES below,
+# which decodes the currentsensor firmware's own error history codes,
+# not these Python-side LIN-transaction return codes -- the numeric
+# overlap between the two is coincidental.
+ERR_UNKNOWN_PID = -1      # address not in constants.pids
+ERR_WRONG_LENGTH = -2     # write(): data doesn't match this message's declared byte count
+ERR_WRONG_DIRECTION = -3  # this pid is the other direction (e.g. write() called on a read-only message)
+ERR_ECHO_MISMATCH = -4    # a transmitted byte's single-wire echo didn't match (bus collision/corruption)
+ERR_TIMEOUT = -5          # read(): no response from the slave within the read timeout
+ERR_BAD_CHECKSUM = -6     # read(): slave's checksum byte didn't match the computed one
+
+
 class Lin:
 
     def __init__(self):
@@ -158,15 +177,15 @@ class Lin:
         # _current_wire_id() below for how callers resolve that.
         if address not in constants.pids:
             logger.warning("pid not known")
-            return -1
+            return ERR_UNKNOWN_PID
         index = constants.pids.index(address)
         mbytes = constants.messagebytes[index]
         if len(data) != mbytes:
             logger.warning("number of bytes wrong")
-            return -2
+            return ERR_WRONG_LENGTH
         if constants.sources[index] != "master":
             logger.warning("you must be master to write")
-            return -3
+            return ERR_WRONG_DIRECTION
 
         wire_pid = address | instance
 
@@ -182,16 +201,16 @@ class Lin:
                       f" data={data_str}")
 
         if not self.write_byte(constants.sync):
-            return -4
+            return ERR_ECHO_MISMATCH
         if not self.write_byte(self.addparity(wire_pid)):
-            return -4
+            return ERR_ECHO_MISMATCH
 
         for b in data:
             if not self.write_byte(b):
-                return -4
+                return ERR_ECHO_MISMATCH
 
         if not self.write_byte(self.checksum(data)):
-            return -4
+            return ERR_ECHO_MISMATCH
 
         return 0
 
@@ -199,12 +218,12 @@ class Lin:
         # See write() above for base-pid-vs-wire-pid/instance reasoning.
         if address not in constants.pids:
             logger.warning("pid not known")
-            return -1, []
+            return ERR_UNKNOWN_PID, []
         index = constants.pids.index(address)
         mbytes = constants.messagebytes[index]
         if constants.sources[index] == "master":
             logger.warning("you must be client to write")
-            return -2, []
+            return ERR_WRONG_DIRECTION, []
 
         wire_pid = address | instance
         name = _log_pid_name(address)
@@ -218,25 +237,25 @@ class Lin:
             return ret, data
 
         if not self.write_byte(constants.sync):
-            return _finish(-4, [])
+            return _finish(ERR_ECHO_MISMATCH, [])
         if not self.write_byte(self.addparity(wire_pid)):
-            return _finish(-4, [])
+            return _finish(ERR_ECHO_MISMATCH, [])
 
         data = []
         for _ in range(mbytes):
             response = self.ser.read(1)
             if len(response) != 1:
                 logger.warning("no response from slave (read timeout)")
-                return _finish(-5, data)
+                return _finish(ERR_TIMEOUT, data)
             data.append(response[0])
 
         response = self.ser.read(1)
         if len(response) != 1:
             logger.warning("no response from slave (checksum read timeout)")
-            return _finish(-5, data)
+            return _finish(ERR_TIMEOUT, data)
         if response[0] != self.checksum(data):
             logger.warning("checksum not right")
-            return _finish(-3, data)
+            return _finish(ERR_BAD_CHECKSUM, data)
 
         return _finish(0, data)
 
@@ -249,15 +268,15 @@ class Lin:
         # caller must use write() instead.
         if address not in constants.pids:
             logger.warning("pid not known")
-            return -1
+            return ERR_UNKNOWN_PID
         index = constants.pids.index(address)
         mbytes = constants.messagebytes[index]
         if len(data) != mbytes:
             logger.warning("number of bytes wrong")
-            return -2
+            return ERR_WRONG_LENGTH
         if constants.sources[index] != "master":
             logger.warning("you must be master to write")
-            return -3
+            return ERR_WRONG_DIRECTION
 
         wire_pid = address | instance
         bad_checksum = self.checksum(data) ^ 0xFF
@@ -267,16 +286,16 @@ class Lin:
                       f" data={data_str} (DELIBERATELY BAD CHECKSUM)")
 
         if not self.write_byte(constants.sync):
-            return -4
+            return ERR_ECHO_MISMATCH
         if not self.write_byte(self.addparity(wire_pid)):
-            return -4
+            return ERR_ECHO_MISMATCH
 
         for b in data:
             if not self.write_byte(b):
-                return -4
+                return ERR_ECHO_MISMATCH
 
         if not self.write_byte(bad_checksum):
-            return -4
+            return ERR_ECHO_MISMATCH
 
         return 0
 
