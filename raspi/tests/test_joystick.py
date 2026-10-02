@@ -6,9 +6,11 @@ import pytest
 from joystick import (
     _clamp, _apply_deadzone, _compute_speeds, _value_changed, _is_confirmed, _ramp_down_both,
     _read_rpm, _is_stalled, _generate_gentle_sequence, _run_gentle_sequence, _handle_recovery_button,
+    _new_kickstart_tracker, _update_kickstart_tracker, _read_status_fields, _poll_stall_feedback,
+    _open_rumble_device,
     parse_args, DIRECTION_SIGN, RAMP_STEPS, RAMP_DURATION,
     GENTLE_STRATEGIES, SEQUENCE_MIN_LEN, SEQUENCE_MAX_LEN, SEQUENCE_MAX_PULSE,
-    VERIFY_SPEED, STALL_TIM_ERR,
+    VERIFY_SPEED, STALL_TIM_ERR, STALL_WARN_THRESHOLD,
 )
 
 
@@ -21,8 +23,8 @@ class _FakeSender:
         return "SIMULATED"
 
 
-def _status_reply(sys_error=0):
-    return f"OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error={sys_error}"
+def _status_reply(sys_error=0, kickstart=0):
+    return f"OK ret=0 timeout=0 checksum=0 kickstart={kickstart} sys_error={sys_error}"
 
 
 class _FakeRecoverySender:
@@ -455,3 +457,383 @@ def test_handle_recovery_button_retry_row_has_motor_instance_both():
     retry_rows = [call.args[0] for call in fake_append.call_args_list if call.args[0]["phase"] == "retry"]
     assert len(retry_rows) == 1
     assert retry_rows[0]["motor_instance"] == "both"
+
+
+# --- _update_kickstart_tracker (Issue #22) --------------------------------
+
+def test_kickstart_tracker_first_reading_sets_baseline_no_warn():
+    tracker = _new_kickstart_tracker()
+    warned = _update_kickstart_tracker(tracker, rpm=0, kickstart_count=5)
+    assert warned is False
+    assert tracker["prev_kickstart"] == 5
+    assert tracker["accum"] == 0
+
+
+def test_kickstart_tracker_accumulates_delta_across_stuck_polls():
+    # Plain accumulation, well below threshold -- threshold-agnostic
+    # (doesn't hardcode STALL_WARN_THRESHOLD's actual value, see the
+    # next test for why that matters: a real live-testing session
+    # 2026-10-02 lowered it from 3 to 2, and a hardcoded version of
+    # this test broke silently at that point).
+    tracker = _new_kickstart_tracker()
+    _update_kickstart_tracker(tracker, rpm=0, kickstart_count=10)  # baseline
+    warned = _update_kickstart_tracker(tracker, rpm=0, kickstart_count=11)  # +1
+    assert warned is False
+    assert tracker["accum"] == 1
+
+
+def test_kickstart_tracker_warns_exactly_once_at_threshold():
+    tracker = _new_kickstart_tracker()
+    tracker["prev_kickstart"] = 0
+    tracker["accum"] = STALL_WARN_THRESHOLD - 1
+    warned_at_threshold = _update_kickstart_tracker(tracker, rpm=0, kickstart_count=1)  # +1 -> crosses threshold
+    assert warned_at_threshold is True
+    assert tracker["accum"] == STALL_WARN_THRESHOLD
+    warned_again = _update_kickstart_tracker(tracker, rpm=0, kickstart_count=2)
+    assert warned_again is False  # already warned this episode -- no re-fire every tick
+
+
+def test_kickstart_tracker_resets_accum_and_warned_on_rpm_nonzero():
+    tracker = _new_kickstart_tracker()
+    for count in (0, 1, 2, 3):
+        _update_kickstart_tracker(tracker, rpm=0, kickstart_count=count)  # reaches warned=True, accum=3
+    _update_kickstart_tracker(tracker, rpm=400, kickstart_count=3)  # motor confirmed turning again
+    assert tracker["accum"] == 0
+    assert tracker["warned"] is False
+    assert tracker["prev_kickstart"] == 3
+
+
+def test_kickstart_tracker_handles_mod_256_wraparound():
+    tracker = _new_kickstart_tracker()
+    _update_kickstart_tracker(tracker, rpm=0, kickstart_count=254)  # baseline
+    _update_kickstart_tracker(tracker, rpm=0, kickstart_count=255)  # +1, accum=1
+    warned = _update_kickstart_tracker(tracker, rpm=0, kickstart_count=1)  # wraps: 1-255+256=2, accum=3
+    assert tracker["accum"] == 3
+    assert warned is True
+
+
+def test_kickstart_tracker_skips_update_on_unparseable_status():
+    tracker = _new_kickstart_tracker()
+    _update_kickstart_tracker(tracker, rpm=0, kickstart_count=5)
+    warned = _update_kickstart_tracker(tracker, rpm=0, kickstart_count=None)
+    assert warned is False
+    assert tracker["prev_kickstart"] == 5  # unchanged, not poisoned by a failed read
+    assert tracker["accum"] == 0
+
+
+def test_kickstart_tracker_rpm_none_is_not_treated_as_confirmed_running():
+    # Codex I-0022 finding #3: `rpm != 0` was also True for rpm=None (a
+    # failed/unparseable read), silently wiping a real in-progress
+    # episode. rpm=None must fall through to the same stuck-
+    # accumulation path as rpm=0, not the confirmed-running reset.
+    tracker = _new_kickstart_tracker()
+    tracker["prev_kickstart"] = 0
+    tracker["accum"] = STALL_WARN_THRESHOLD - 1
+    warned = _update_kickstart_tracker(tracker, rpm=None, kickstart_count=1)
+    assert warned is True  # the delta from the still-valid kickstart_count wasn't lost
+    assert tracker["accum"] == STALL_WARN_THRESHOLD
+
+
+def test_kickstart_tracker_rpm_none_and_kickstart_none_leaves_episode_untouched():
+    tracker = _new_kickstart_tracker()
+    tracker["prev_kickstart"] = 0
+    tracker["accum"] = 1
+    warned = _update_kickstart_tracker(tracker, rpm=None, kickstart_count=None)
+    assert warned is False
+    assert tracker["accum"] == 1  # untouched, not reset and not accumulated
+
+
+# --- _read_status_fields (Issue #22) --------------------------------------
+
+def test_read_status_fields_parses_both_values():
+    sender = _FakeRecoverySender(replies={"status 0": _status_reply(sys_error=STALL_TIM_ERR, kickstart=4)})
+    sys_error, kickstart_count = _read_status_fields(sender, 0)
+    assert sys_error == STALL_TIM_ERR
+    assert kickstart_count == 4
+
+
+def test_read_status_fields_none_on_unparseable_reply():
+    sender = _FakeRecoverySender(replies={"status 0": "GARBAGE"})
+    sys_error, kickstart_count = _read_status_fields(sender, 0)
+    assert sys_error is None
+    assert kickstart_count is None
+
+
+# --- _poll_stall_feedback (Issue #22) --------------------------------------
+# Checks both motors every call -- real 200ms-per-motor sampling, the
+# Autor's final decision (2026-10-02, after an intermediate single-
+# motor-per-call version was tried and reverted, see _poll_stall_
+# feedback()'s own docstring for the full back-and-forth).
+
+def _ack_long(pending_long_trackers):
+    # Mirrors exactly what run() does after successfully firing the
+    # rumble (not what _poll_stall_feedback does -- it deliberately
+    # does NOT set this itself, see its docstring). Tests call this to
+    # simulate "the effect actually played," distinct from a tick where
+    # firing was suppressed (e.g. still busy) and this is skipped.
+    for tracker in pending_long_trackers:
+        tracker["long_fired"] = True
+
+
+def test_poll_stall_feedback_returns_none_when_healthy():
+    sender = _FakeRecoverySender(replies={
+        "rpm 0": "OK ret=0 rpm=400 (hex=0x0190)",
+        "rpm 1": "OK ret=0 rpm=400 (hex=0x0190)",
+    })
+    left_tracker, right_tracker = _new_kickstart_tracker(), _new_kickstart_tracker()
+    trigger, pending = _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)
+    assert trigger is None
+    assert pending == []
+
+
+def test_poll_stall_feedback_returns_long_on_confirmed_stall():
+    sender = _FakeRecoverySender(replies={
+        "rpm 0": "OK ret=0 rpm=0 (hex=0x0000)",
+        "status 0": _status_reply(sys_error=STALL_TIM_ERR),
+        "rpm 1": "OK ret=0 rpm=400 (hex=0x0190)",
+    })
+    left_tracker, right_tracker = _new_kickstart_tracker(), _new_kickstart_tracker()
+    trigger, pending = _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)
+    assert trigger == "long"
+    assert pending == [left_tracker]
+
+
+def test_poll_stall_feedback_long_fires_only_once_while_stall_stays_latched():
+    # Real bug found live 2026-10-02 (a genuine Mittelrast stall): with
+    # no "already fired" gating at all, sys_error staying latched
+    # (nothing resets it automatically) made this return "long" on
+    # every call, which run() turned into a near-continuous rumble
+    # instead of one alert. Same fix shape as "warned" already had for
+    # the short one -- but see the NEXT test for a second bug this
+    # first fix introduced.
+    sender = _FakeRecoverySender(replies={
+        "rpm 0": "OK ret=0 rpm=0 (hex=0x0000)",
+        "status 0": _status_reply(sys_error=STALL_TIM_ERR),
+        "rpm 1": "OK ret=0 rpm=400 (hex=0x0190)",
+    })
+    left_tracker, right_tracker = _new_kickstart_tracker(), _new_kickstart_tracker()
+    trigger, pending = _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)
+    assert trigger == "long"
+    _ack_long(pending)  # simulates run() successfully firing it
+    assert _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)[0] is None
+    assert _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)[0] is None
+
+
+def test_poll_stall_feedback_long_retries_if_not_acknowledged():
+    # Second real bug, found live the SAME session as the fix above:
+    # the first version set tracker["long_fired"] the moment the stall
+    # was merely OBSERVED, not once the rumble actually played. If that
+    # first observation landed while a short rumble was still
+    # busy-playing (run() suppresses firing in that case), the long
+    # alert was marked "already fired" regardless -- and then silently
+    # never retried for the rest of that stall episode, confirmed in
+    # joystick.log (a real stall with sys_error=-65 latched for 2.9s+
+    # produced zero "confirmed stall" log lines). Fixed by splitting
+    # detection (here) from acknowledgment (the caller, only on actual
+    # successful playback) -- simulated here by simply NOT calling
+    # _ack_long() between polls.
+    sender = _FakeRecoverySender(replies={
+        "rpm 0": "OK ret=0 rpm=0 (hex=0x0000)",
+        "status 0": _status_reply(sys_error=STALL_TIM_ERR),
+        "rpm 1": "OK ret=0 rpm=400 (hex=0x0190)",
+    })
+    left_tracker, right_tracker = _new_kickstart_tracker(), _new_kickstart_tracker()
+    trigger1, pending1 = _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)
+    assert trigger1 == "long"
+    # Not acknowledged (as if run() found the rumble still busy) --
+    # the next poll must still offer "long" again, not silently drop it.
+    trigger2, pending2 = _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)
+    assert trigger2 == "long"
+    assert pending2 == [left_tracker]
+
+
+def test_poll_stall_feedback_long_fires_again_after_stall_clears_and_relatches():
+    sender = _FakeRecoverySender(replies={
+        "rpm 0": ["OK ret=0 rpm=0 (hex=0x0000)", "OK ret=0 rpm=400 (hex=0x0190)",
+                  "OK ret=0 rpm=0 (hex=0x0000)"],
+        "status 0": [_status_reply(sys_error=STALL_TIM_ERR), _status_reply(sys_error=0),
+                     _status_reply(sys_error=STALL_TIM_ERR)],
+        "rpm 1": "OK ret=0 rpm=400 (hex=0x0190)",
+    })
+    left_tracker, right_tracker = _new_kickstart_tracker(), _new_kickstart_tracker()
+    trigger, pending = _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)
+    assert trigger == "long"
+    _ack_long(pending)
+    assert _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)[0] is None  # reset, motor running again
+    assert _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)[0] == "long"  # a genuinely new episode
+
+
+def test_poll_stall_feedback_right_motor_alone_can_trigger_long():
+    sender = _FakeRecoverySender(replies={
+        "rpm 0": "OK ret=0 rpm=400 (hex=0x0190)",
+        "rpm 1": "OK ret=0 rpm=0 (hex=0x0000)",
+        "status 1": _status_reply(sys_error=STALL_TIM_ERR),
+    })
+    left_tracker, right_tracker = _new_kickstart_tracker(), _new_kickstart_tracker()
+    trigger, pending = _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)
+    assert trigger == "long"
+    assert pending == [right_tracker]
+
+
+def test_poll_stall_feedback_returns_short_on_warn_threshold_crossing():
+    sender = _FakeRecoverySender(replies={
+        "rpm 0": "OK ret=0 rpm=0 (hex=0x0000)",
+        "status 0": _status_reply(kickstart=1),  # prev=0 -> delta=1, accum 2+1=3
+        "rpm 1": "OK ret=0 rpm=400 (hex=0x0190)",
+    })
+    left_tracker, right_tracker = _new_kickstart_tracker(), _new_kickstart_tracker()
+    left_tracker["prev_kickstart"] = 0
+    left_tracker["accum"] = STALL_WARN_THRESHOLD - 1
+    trigger, pending = _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)
+    assert trigger == "short"
+    assert pending == []
+
+
+def test_poll_stall_feedback_long_takes_priority_over_short_across_motors():
+    # Confirms the cross-motor priority Codex's I-0022 follow-up review
+    # found missing in the intermediate alternating version -- a
+    # confirmed stall on one motor must win even if the OTHER motor is
+    # the one crossing its own warn threshold in the same poll.
+    sender = _FakeRecoverySender(replies={
+        "rpm 0": "OK ret=0 rpm=0 (hex=0x0000)",
+        "status 0": _status_reply(sys_error=STALL_TIM_ERR, kickstart=1),
+        "rpm 1": "OK ret=0 rpm=0 (hex=0x0000)",
+        "status 1": _status_reply(kickstart=1),
+    })
+    left_tracker, right_tracker = _new_kickstart_tracker(), _new_kickstart_tracker()
+    left_tracker["prev_kickstart"] = 0
+    left_tracker["accum"] = STALL_WARN_THRESHOLD - 1
+    right_tracker["prev_kickstart"] = 0
+    right_tracker["accum"] = STALL_WARN_THRESHOLD - 1
+    assert _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)[0] == "long"
+
+
+def test_poll_stall_feedback_long_takes_priority_over_short_across_motors_mirrored():
+    # Mirror of the above with left/right swapped -- Codex's I-0022
+    # third-pass review (2026-10-02) suggested this as a follow-up so
+    # the priority check isn't only exercised with the left motor as
+    # the confirmed-stalled one.
+    sender = _FakeRecoverySender(replies={
+        "rpm 0": "OK ret=0 rpm=0 (hex=0x0000)",
+        "status 0": _status_reply(kickstart=1),
+        "rpm 1": "OK ret=0 rpm=0 (hex=0x0000)",
+        "status 1": _status_reply(sys_error=STALL_TIM_ERR, kickstart=1),
+    })
+    left_tracker, right_tracker = _new_kickstart_tracker(), _new_kickstart_tracker()
+    left_tracker["prev_kickstart"] = 0
+    left_tracker["accum"] = STALL_WARN_THRESHOLD - 1
+    right_tracker["prev_kickstart"] = 0
+    right_tracker["accum"] = STALL_WARN_THRESHOLD - 1
+    assert _poll_stall_feedback(sender, 0, 1, left_tracker, right_tracker)[0] == "long"
+
+
+# --- _open_rumble_device (Issue #22) -- Codex I-0022 finding #5 ------------
+# Device enumeration/open/capabilities must degrade gracefully, not raise,
+# regardless of what's actually installed in the environment running these
+# tests -- evdev/evdev_ecodes are explicitly patched in every case below
+# rather than relying on this dev machine's own "evdev not installed" state.
+
+class _FakeEcodes:
+    EV_FF = 0x50
+    FF_RUMBLE = 0x50
+
+
+class _FakeEvdevDevice:
+    def __init__(self, path, name="Logitech Gamepad F710", has_ff=True, caps_exc=None):
+        self.path = path
+        self.name = name
+        self._has_ff = has_ff
+        self._caps_exc = caps_exc
+        self.closed = False
+
+    def capabilities(self, verbose=False):
+        if self._caps_exc is not None:
+            raise self._caps_exc
+        return {_FakeEcodes.EV_FF: []} if self._has_ff else {}
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeEvdevModule:
+    """`entries` maps a device path to either a _FakeEvdevDevice (open
+    succeeds) or an Exception instance (InputDevice() raises it)."""
+
+    def __init__(self, entries, list_devices_exc=None):
+        self.entries = entries
+        self._list_devices_exc = list_devices_exc
+
+    def list_devices(self):
+        if self._list_devices_exc is not None:
+            raise self._list_devices_exc
+        return list(self.entries.keys())
+
+    def InputDevice(self, path):
+        entry = self.entries[path]
+        if isinstance(entry, Exception):
+            raise entry
+        return entry
+
+
+def test_open_rumble_device_none_when_evdev_unavailable():
+    with patch("joystick.evdev", None):
+        assert _open_rumble_device("Logitech Gamepad F710") is None
+
+
+def test_open_rumble_device_none_when_list_devices_fails():
+    fake_evdev = _FakeEvdevModule({}, list_devices_exc=OSError("no /dev/input"))
+    with patch("joystick.evdev", fake_evdev), patch("joystick.evdev_ecodes", _FakeEcodes):
+        assert _open_rumble_device("Logitech Gamepad F710") is None
+
+
+def test_open_rumble_device_skips_device_that_disappears_on_open():
+    good = _FakeEvdevDevice("/dev/input/event3")
+    fake_evdev = _FakeEvdevModule({
+        "/dev/input/event2": OSError("device vanished"),
+        "/dev/input/event3": good,
+    })
+    with patch("joystick.evdev", fake_evdev), patch("joystick.evdev_ecodes", _FakeEcodes), \
+            patch("joystick.evdev_ff") as fake_ff:
+        fake_ff.Effect.return_value = object()
+        good.upload_effect = lambda effect: 0
+        result = _open_rumble_device("Logitech Gamepad F710")
+    assert result is not None
+    device, short_id, long_id = result
+    assert device is good
+
+
+def test_open_rumble_device_closes_and_skips_device_with_failing_capabilities():
+    broken = _FakeEvdevDevice("/dev/input/event2", caps_exc=OSError("capability read failed"))
+    good = _FakeEvdevDevice("/dev/input/event3")
+    fake_evdev = _FakeEvdevModule({
+        "/dev/input/event2": broken,
+        "/dev/input/event3": good,
+    })
+    with patch("joystick.evdev", fake_evdev), patch("joystick.evdev_ecodes", _FakeEcodes), \
+            patch("joystick.evdev_ff") as fake_ff:
+        fake_ff.Effect.return_value = object()
+        good.upload_effect = lambda effect: 0
+        result = _open_rumble_device("Logitech Gamepad F710")
+    assert broken.closed is True
+    assert result is not None
+    assert result[0] is good
+
+
+def test_open_rumble_device_none_when_no_unique_match():
+    dev_a = _FakeEvdevDevice("/dev/input/event2", name="Other Controller")
+    dev_b = _FakeEvdevDevice("/dev/input/event3", name="Other Controller")
+    fake_evdev = _FakeEvdevModule({"/dev/input/event2": dev_a, "/dev/input/event3": dev_b})
+    with patch("joystick.evdev", fake_evdev), patch("joystick.evdev_ecodes", _FakeEcodes):
+        assert _open_rumble_device("Logitech Gamepad F710") is None
+
+
+def test_open_rumble_device_none_when_effect_upload_fails():
+    dev = _FakeEvdevDevice("/dev/input/event2")
+    dev.upload_effect = lambda effect: (_ for _ in ()).throw(OSError("upload failed"))
+    fake_evdev = _FakeEvdevModule({"/dev/input/event2": dev})
+    with patch("joystick.evdev", fake_evdev), patch("joystick.evdev_ecodes", _FakeEcodes), \
+            patch("joystick.evdev_ff") as fake_ff:
+        fake_ff.Effect.return_value = object()
+        result = _open_rumble_device("Logitech Gamepad F710")
+    assert result is None
+    assert dev.closed is True

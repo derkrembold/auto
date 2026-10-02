@@ -530,12 +530,194 @@ other. Same caution applies to any future same-named files across
   stall** — built and pytest-tested this session
   (`raspi/tests/test_joystick.py`); real validation is the next step.
 
-  **Controller/other feedback signal on a stall is Issue #22** —
-  still not implemented; would pair naturally with #21 (the natural
-  cue that the recovery button is now "live").
+  **Controller vibration feedback (Issue #22), built 2026-10-02.**
+  Feasibility confirmed first via a throwaway script: `python-evdev`
+  talks directly to the kernel's force-feedback interface, bypassing
+  `pygame` entirely (the Pi's installed 1.9.4.post1 predates
+  `Joystick.rumble()`; `evdev` installed via `pip3`, not `apt` —
+  Raspbian Buster's own package repo is fully EOL/404 as of
+  2026-09-28). `evdev` is import-guarded the same way `pygame` is, so
+  the module stays importable/testable locally regardless.
+
+  A continuous background check (`--stall-poll-interval`, **0.2s**
+  default — its own cadence, separate from the 200ms drive-send tick)
+  polls `rpm`+`status` for **both motors every tick** — a real,
+  not halved, 200ms-per-motor sampling rate (see the Codex review
+  write-up below for why this went back and forth) — and fires one of
+  two FF_RUMBLE effects, uploaded once at startup via
+  `_open_rumble_device()` (resolves the controller's evdev event-device
+  node by pygame-reported name + `EV_FF` capability match, confirmed
+  live against real hardware 2026-10-02): a short 1s warning once a
+  motor's kickstart attempts start piling up, a long 2s alert on a
+  confirmed, latched stall. **Deliberately tracks the *delta* of
+  `status`'s `kickstart_count` between polls, not its raw value** —
+  `kickStartCount` in `main.c` wraps mod 256 and is never reset except
+  by an explicit `reset`, so a fixed-threshold check on the raw value
+  would stay permanently tripped after a session's first stall; the
+  firmware-internal counter the kickstart threshold actually operates
+  on (`stuckwindowcount`) resets every healthy tick but isn't exposed
+  over LIN at all. See `_update_kickstart_tracker()`'s docstring and
+  the module docstring's "Stall feedback signal" section for the full
+  accumulator/reset/wraparound design. The long rumble takes priority
+  over a still-playing short one without any explicit interrupt — it
+  simply gets its turn once the short one's hardware-bounded duration
+  ends on its own, re-evaluated fresh at that point (no pending-state
+  tracking needed, agreed as the simpler of two discussed designs).
+
+  **Reviewed by Codex across three passes before first deploy (I-0022,
+  2026-10-02) — all findings addressed or explicitly resolved with the
+  Autor, see `issues/I-0022.md` for the full exchange:**
+  1. **(P1, first pass) The poll's `rpm`+`status` reads are blocking
+     IPC calls** — a non-responding motor could cost up to the LIN
+     read timeout per read, so polling both motors in one tick could
+     delay the next dead-man re-evaluation by several seconds. First
+     fix: `_poll_stall_feedback()` checked only ONE motor per call,
+     alternating across ticks, and the poll only ran while a nonzero
+     speed was actually commanded. **Codex's follow-up pass found this
+     silently halved the effective per-motor sampling rate back to
+     400ms regardless of `--stall-poll-interval`'s own value** (defeats
+     finding #6 below), and separately broke the original cross-motor
+     long-over-short priority within one poll (a new short warning on
+     motor B could delay an already-known confirmed stall on motor A).
+     **Final resolution, after discussion with the Autor:** reverted to
+     checking both motors every tick. The blocking risk this was meant
+     to bound is tied to a genuine bus/communication failure
+     (disconnected/unpowered/crashed controller, or a bus-level fault)
+     — **not** to an everyday stall: a stalled motor's firmware stays
+     fully LIN-responsive, `status`/`rpm` reads return immediately
+     regardless of rotor state, since `sysError = STALL_TIM_ERR` only
+     stops the control loop, not the UART/LIN dispatch. A genuine bus
+     failure is rare in practice (this project's own two prior bus-hang
+     bugs, 2026-08-11 and 2026-09-08, are both long fixed) and bounded
+     (~8s worst case, both motors unresponsive at once — not
+     unbounded) — judged an acceptable trade-off for real
+     200ms-per-motor resolution and for keeping the simpler,
+     non-alternating cross-motor priority logic. The poll still only
+     runs while a nonzero speed is actually commanded.
+  2. `rumble_busy_until` was stamped with a timestamp taken *before*
+     the (possibly slow) poll, not after — could let a second effect
+     start while the first was still genuinely playing. Fixed: a fresh
+     `time.monotonic()` is taken right after the poll completes.
+  3. `rpm != 0` was also `True` for `rpm=None` (a failed/unparseable
+     read) — `None != 0` in Python — silently wiping a real in-progress
+     episode on a transient read failure. Fixed: `rpm is not None and
+     rpm != 0`; `rpm=None` now falls through to the same
+     stuck-accumulation path as `rpm=0` instead.
+  4. Issue #21's recovery flow sends the stalled motor a `reset`
+     (zeroes `kickStartCount` in firmware), but the feedback trackers
+     didn't know — next poll's delta calc saw a large drop and wrapped
+     it into a huge spurious mod-256 delta. Fixed: both trackers are
+     rebaselined (`_new_kickstart_tracker()`) right after
+     `_handle_recovery_button()` returns, same place
+     `sent_speed_left/right` already get reset.
+  5. Device enumeration/open/capabilities-read in `_open_rumble_device()`
+     were outside any `try/except` (only effect upload was guarded) —
+     and the call site precedes `run()`'s own `try/finally`, so an
+     exception there would have aborted the whole session uncleanly,
+     contradicting the "vibration failures degrade silently" design.
+     Fixed: wrapped per-device, with proper cleanup of any
+     already-opened candidate before skipping it.
+  6. **The early-warning threshold's own justification was wrong.**
+     `STALL_WARN_THRESHOLD=3` was picked as "a bit over half" of what
+     an old `STM32/CLAUDE.md` note called a 5-pulse kickstart budget —
+     the actual current firmware (`KICKSTART_STUCK_LOWER_WINDOWS=4`..
+     `UPPER_WINDOWS=6` in `main.c`, reconfirmed 2026-10-02) only allows
+     3 pulses per episode, so threshold=3 meant the whole budget had to
+     be used before warning at all, leaving almost no lead time before
+     the confirmed-stall signal followed anyway. Addressed by
+     tightening `STALL_POLL_INTERVAL_DEFAULT` (0.4s → 0.2s) rather than
+     lowering the threshold — the Autor's explicit choice, closer to
+     the firmware's own ~100ms-per-window granularity. (Only actually
+     achieved once #1's resolution above restored real, non-alternated
+     per-motor sampling — otherwise 0.2s with alternation was a no-op
+     relative to the old 0.4s, see #1.)
+
+  **First `--live` deploy confirmed clean (2026-10-02):** a real
+  ~32s drive session (`joystick.log`/`watchdog.log` fetched and
+  checked afterward) showed `stall-feedback vibration ready on
+  /dev/input/event2 ('Logitech Gamepad F710')` — the evdev
+  device-resolution + effect-upload path works end to end on real
+  hardware, not just the earlier throwaway script. Both motors drove
+  in both directions, zero WARNINGs/ERRORs, no timing gaps >0.5s
+  anywhere (consistent with no real bus failure occurring). But
+  `sys_error`/`kickstart` stayed at 0 the entire session — no real
+  stall happened, so the actual trigger logic (both tiers) is still
+  unexercised, same gap Issue #21 has. **`STALL_WARN_THRESHOLD` lowered
+  3 → 2 the same day** (the Autor's choice, after confirming the known
+  manual Mittelrast-positioning trick from Issue #21's testing doesn't
+  reliably work for this either) — leaves at least one genuine
+  kickstart attempt as real margin, also directly addresses Codex's
+  finding #6 above better than the cadence change alone did. Two tests
+  that had accidentally hardcoded assumptions about the old value of 3
+  (not using the `STALL_WARN_THRESHOLD` constant) broke silently at
+  this change and were fixed to be threshold-agnostic.
+
+  **A real stall was reproduced live the same day (Mittelrast, same
+  technique as Issue #21's earlier testing) — and found a genuine bug
+  no code review had caught: the long rumble fired roughly every
+  `RUMBLE_LONG_MS` (~2s) continuously, not once.** Root cause: the
+  confirmed-stall check (`sys_error == STALL_TIM_ERR`) had no
+  "already fired" gating, unlike the short rumble's `warned` flag —
+  `sys_error` stays latched until an explicit `reset`, so once
+  `rumble_busy_until` cleared, the very next eligible poll tick saw the
+  same still-latched stall and fired again, every time. Confirmed via
+  `joystick.log`: 5 `"confirmed stall -- long rumble"` lines ~2-7s
+  apart while `sys_error=-65` held steady across 29 consecutive
+  `status` reads. Fixed: `_new_kickstart_tracker()` gained a
+  `long_fired` flag, set once "long" fires and cleared the moment
+  `sys_error` stops being `STALL_TIM_ERR` (an explicit reset happened)
+  — mirrors `warned`'s shape exactly. 2 new regression tests (fires
+  once while latched; fires again after a genuinely new episode).
+
+  **Re-deployed and tested again the same session — found a SECOND
+  bug, a direct side effect of the first fix.** `joystick.log` showed
+  the short rumble fire correctly once, but the long rumble never fired
+  at all despite `sys_error=-65` staying latched for 2.9s+ afterward.
+  Root cause: `long_fired` was set the moment the stall was merely
+  *observed* (inside `_poll_stall_feedback()`), not once the rumble
+  actually *played*. The very first observation of this stall landed
+  while the short rumble was still busy-playing — `run()` correctly
+  skipped firing "long" that tick (busy), but the tracker was already
+  marked "already fired" regardless, silently dropping the alert for
+  the rest of the episode. Fixed by splitting detection from
+  acknowledgment: `_poll_stall_feedback()` now returns `(trigger,
+  pending_long_trackers)` — a list of tracker(s) waiting for an
+  acknowledged long alert — and `run()` itself sets `long_fired = True`
+  only inside the branch where `_fire_rumble()` actually succeeds. A
+  tick where firing is suppressed (still busy) leaves the tracker
+  untouched, so the next tick retries correctly instead of having
+  silently given up. 3 more regression tests (including one that
+  explicitly does NOT acknowledge between two calls, confirming "long"
+  is still offered again). **This second fix is not yet re-deployed/
+  re-tested as of this writing** — see Issue #22 for current status.
+
+  Like `pygame`, missing/non-functional `evdev` degrades silently (a
+  logged WARNING, vibration disabled) rather than aborting the
+  session — unlike `pygame`, this is a non-safety-critical UX feature,
+  driving must keep working without it. Only active with `--live`
+  (no real `status`/`rpm` data exists to poll in `--simulate`).
+
+  Audio tone / LED / other feedback channels remain explicitly out of
+  scope — Issue #22 deliberately left the channel open, vibration was
+  just quickest to confirm feasible. Codex's third pass found no new
+  functional defects, only wording precisions (now reflected above and
+  in the module docstring: "200ms" is nominal, not a measured period;
+  the threshold/cadence combination is still best-effort, not a
+  guarantee; "~8s" is an approximation, not a hard client-side
+  deadline). **Live-tested against a real stall (2026-10-02, see
+  above)** — found and fixed two bugs in a row that code review missed
+  (the `long_fired` gating bug, then a second bug the gating fix itself
+  introduced); the second fix still needs its own live confirmation
+  (re-deploy, provoke another real stall, watch for exactly one rumble
+  not zero or a train of them) before this is considered settled. 27
+  new/changed cases in `raspi/tests/test_joystick.py` across all rounds
+  (341/341 total suite green as of the second fix) — see Issue #22 for
+  the current, authoritative status rather than assuming this
+  summary is fully up to date.
 
   Pure computation (`_compute_speeds`, `_apply_deadzone`, `_clamp`,
   `_is_confirmed`, `_ramp_down_both`, `_is_stalled`,
+  `_update_kickstart_tracker`, `_poll_stall_feedback`,
   `_generate_gentle_sequence`, `_run_gentle_sequence`,
   `_handle_recovery_button`) is factored out of the pygame
   event loop specifically so it's unit-testable without real hardware
