@@ -1,0 +1,1077 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Auto Systemhandbuch</title>
+<meta name="description" content="Funktionsweise, Komponenten und Bedienung des BLDC-Motor-Test- und Optimierungssystems">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: technisches Handbuch. Linke Inhaltsleiste (sticky ab 1000px), rechts Kapitel mit Pfad-Etikett,
+   Schaltplan-artige SVGs, "So benutzt du es"-Blöcke mit Kopier-Buttons. Kupfer = Leistungspfad/Akzent,
+   Petrol = Signal/LIN, Bernstein = Warnung, Rot = Stopp. */
+:root{
+  --bg:#F1F3F2; --surface:#FFFFFF; --ink:#15201B; --muted:#56645E; --line:#D0D8D4; --line-strong:#9AA8A1;
+  --copper:#A4511C; --copper-soft:#F4E4D8; --signal:#14706A; --signal-soft:#D9EEEB;
+  --warn:#9A6200; --warn-soft:#F6EAD0; --stop:#B3261E; --stop-soft:#F7DEDB; --ok:#2C7A31; --ok-soft:#DFF0DF;
+  --code-bg:#E6EBE8; --plan:#7A6FA8; --plan-soft:#E9E6F4;
+  --f-display:"Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0E1311; --surface:#161D1A; --ink:#E1E8E4; --muted:#94A39C; --line:#2A3631; --line-strong:#4A5A53;
+  --copper:#E58C55; --copper-soft:#3A2618; --signal:#52C2B6; --signal-soft:#15322F;
+  --warn:#E3A840; --warn-soft:#352A12; --stop:#F2766C; --stop-soft:#3C1A18; --ok:#72C476; --ok-soft:#183019;
+  --code-bg:#1C2622; --plan:#A99EDB; --plan-soft:#25213A; color-scheme: dark; } }
+:root[data-theme="dark"]{
+  --bg:#0E1311; --surface:#161D1A; --ink:#E1E8E4; --muted:#94A39C; --line:#2A3631; --line-strong:#4A5A53;
+  --copper:#E58C55; --copper-soft:#3A2618; --signal:#52C2B6; --signal-soft:#15322F;
+  --warn:#E3A840; --warn-soft:#352A12; --stop:#F2766C; --stop-soft:#3C1A18; --ok:#72C476; --ok-soft:#183019;
+  --code-bg:#1C2622; --plan:#A99EDB; --plan-soft:#25213A; color-scheme: dark; }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.6;margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:20px;padding-block:28px 80px;display:grid;grid-template-columns:1fr;gap:32px}
+@media (min-width:1000px){.wrap{grid-template-columns:220px minmax(0,1fr)}}
+nav.toc{display:none}
+@media (min-width:1000px){
+  nav.toc{display:block;position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;max-height:calc(100vh - 48px);overflow:auto;font-size:14px}
+}
+nav.toc .lbl{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px;counter-reset:t}
+nav.toc a{display:flex;gap:10px;color:var(--ink);text-decoration:none;padding:5px 8px;border-radius:4px}
+nav.toc a:hover,nav.toc a:focus-visible{background:var(--surface);outline:none}
+nav.toc a span{font-family:var(--f-mono);color:var(--copper);font-size:12px;min-width:1.6em;padding-top:2px}
+main{min-width:0}
+a{color:var(--signal)}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+
+/* Kopf */
+header.hero{padding-block:8px 28px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--copper)}
+h1{font-family:var(--f-display);font-variation-settings:"wdth" 112;font-weight:800;font-size:clamp(34px,6vw,58px);line-height:1.02;margin:10px 0 14px;text-wrap:balance;letter-spacing:-.01em}
+.lede{font-size:18px;max-width:68ch;color:var(--ink);margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{font-family:var(--f-mono);font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line-strong);color:var(--muted);background:var(--surface)}
+.chip.ok{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.chip.plan{border-color:var(--plan);color:var(--plan);background:var(--plan-soft)}
+.chip.warn{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+.chip.sig{border-color:var(--signal);color:var(--signal);background:var(--signal-soft)}
+
+/* Kapitel */
+section.ch{padding-block:44px 8px;border-bottom:1px solid var(--line)}
+section.ch:last-of-type{border-bottom:none}
+.ch-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-bottom:6px}
+.ch-num{font-family:var(--f-mono);font-size:13px;color:var(--copper)}
+h2{font-family:var(--f-display);font-variation-settings:"wdth" 108;font-weight:750;font-size:clamp(26px,3.6vw,36px);line-height:1.1;margin:0;text-wrap:balance}
+.path{font-family:var(--f-mono);font-size:12px;color:var(--muted);background:var(--code-bg);padding:2px 8px;border-radius:4px}
+h3{font-family:var(--f-display);font-variation-settings:"wdth" 104;font-weight:700;font-size:21px;margin:34px 0 8px;text-wrap:balance}
+h4{font-family:var(--f-body);font-weight:600;font-size:15px;margin:22px 0 6px;letter-spacing:.01em}
+p{max-width:72ch;margin:0 0 12px}
+.intro{font-size:17px;max-width:70ch;color:var(--ink)}
+.muted{color:var(--muted)}
+code,kbd{font-family:var(--f-mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:3px}
+ul.plain{max-width:72ch;padding-left:20px;margin:0 0 12px}
+ul.plain li{margin-bottom:4px}
+
+/* Raster aus Karten */
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));margin:16px 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px 18px;min-width:0}
+.card h4{margin-top:0}
+.card p{font-size:15px}
+.card .k{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+/* Diagramm-Container */
+figure.dia{margin:20px 0;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px;overflow-x:auto}
+figure.dia svg{display:block;width:100%;height:auto}
+figure.dia.wide svg{min-width:860px}
+figure.dia.mid svg{min-width:640px}
+figcaption{font-size:13px;color:var(--muted);margin-top:10px;max-width:80ch}
+
+/* SVG-Klassen (themefest) */
+.sv-box{fill:var(--surface);stroke:var(--line-strong);stroke-width:1.2}
+.sv-zone{fill:var(--bg);stroke:var(--line-strong);stroke-width:1.2}
+.sv-pi{fill:var(--signal-soft);stroke:var(--signal);stroke-width:1.4}
+.sv-cu{fill:var(--copper-soft);stroke:var(--copper);stroke-width:1.4}
+.sv-plan{fill:var(--plan-soft);stroke:var(--plan);stroke-width:1.2;stroke-dasharray:5 4}
+.sv-warn{fill:var(--warn-soft);stroke:var(--warn);stroke-width:1.2}
+.sv-stop{fill:var(--stop-soft);stroke:var(--stop);stroke-width:1.4}
+.sv-ok{fill:var(--ok-soft);stroke:var(--ok);stroke-width:1.2}
+.sv-t{fill:var(--ink);font-family:var(--f-body);font-size:13px}
+.sv-tb{fill:var(--ink);font-family:var(--f-display);font-weight:700;font-size:15px}
+.sv-tm{fill:var(--muted);font-family:var(--f-mono);font-size:11px}
+.sv-tc{fill:var(--ink);font-family:var(--f-mono);font-size:12px}
+.sv-tsig{fill:var(--signal);font-family:var(--f-mono);font-size:11.5px;font-weight:600}
+.sv-tcu{fill:var(--copper);font-family:var(--f-mono);font-size:11.5px;font-weight:600}
+.sv-tstop{fill:var(--stop);font-family:var(--f-mono);font-size:11.5px;font-weight:600}
+.sv-tplan{fill:var(--plan);font-family:var(--f-mono);font-size:11px}
+.sv-bus{stroke:var(--signal);stroke-width:4;fill:none;stroke-linecap:round}
+.sv-wire{stroke:var(--signal);stroke-width:2;fill:none}
+.sv-arrow{stroke:var(--ink);stroke-width:1.5;fill:none}
+.sv-arrow-m{stroke:var(--muted);stroke-width:1.3;fill:none}
+.sv-dash{stroke:var(--copper);stroke-width:1.6;fill:none;stroke-dasharray:6 4}
+.sv-grid{stroke:var(--line);stroke-width:1}
+.sv-fill-cu{fill:var(--copper)}
+.sv-fill-sig{fill:var(--signal)}
+.sv-fill-ink{fill:var(--ink)}
+.sv-fill-muted{fill:var(--line-strong)}
+.sv-fill-stop{fill:var(--stop)}
+.sv-fill-warn{fill:var(--warn)}
+
+/* Tabellen */
+.tbl{overflow-x:auto;margin:14px 0;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--bg)}
+tr:last-child td{border-bottom:none}
+td.mono,td code{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
+td code{background:none;padding:0}
+.num{font-variant-numeric:tabular-nums}
+
+/* Bedienblöcke */
+.howto{margin:18px 0;border:1px solid var(--signal);border-radius:6px;background:var(--surface);overflow:hidden}
+.howto > .hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 14px;background:var(--signal-soft);font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--signal);font-weight:600}
+.howto > .bd{padding:12px 14px}
+.howto ol,.howto ul{margin:0 0 10px;padding-left:20px;max-width:72ch}
+.howto li{margin-bottom:4px}
+.where{font-family:var(--f-mono);font-size:11px;padding:1px 7px;border-radius:3px;border:1px solid var(--line-strong);color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400}
+.cmd{position:relative;margin:8px 0 10px}
+.cmd pre{margin:0;background:var(--code-bg);border-radius:5px;padding:10px 82px 10px 12px;overflow-x:auto;font-family:var(--f-mono);font-size:13px;line-height:1.55;color:var(--ink)}
+.cmd .cp{position:absolute;top:6px;right:6px;font-family:var(--f-mono);font-size:11px;padding:4px 9px;border-radius:4px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);cursor:pointer}
+.cmd .cp:hover{border-color:var(--signal);color:var(--signal)}
+.cmt{color:var(--muted)}
+
+/* Hinweise */
+.note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:10px 14px;border-radius:0 5px 5px 0;margin:14px 0;max-width:80ch;font-size:15px}
+.note.stop{border-color:var(--stop);background:var(--stop-soft)}
+.note.plan{border-color:var(--plan);background:var(--plan-soft)}
+.note strong{font-weight:600}
+
+/* Fluss-Ketten (responsiv) */
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:6px;margin:12px 0}
+.flow .st{background:var(--surface);border:1px solid var(--line-strong);border-radius:5px;padding:7px 10px;font-size:13.5px;min-width:0;max-width:260px}
+.flow .st b{display:block;font-family:var(--f-mono);font-size:12px;font-weight:600;color:var(--signal)}
+.flow .st.cu b{color:var(--copper)}
+.flow .st.stp{border-color:var(--stop);background:var(--stop-soft)}
+.flow .st.stp b{color:var(--stop)}
+.flow .ar{align-self:center;color:var(--muted);font-family:var(--f-mono)}
+.lane{border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin:12px 0;background:var(--bg)}
+.lane .lt{font-family:var(--f-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+
+/* P/I-Stencil */
+.stencil-wrap{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start;margin:16px 0}
+.stencil{display:grid;grid-template-columns:auto repeat(3,64px);gap:4px;font-family:var(--f-mono);font-size:12px}
+.stencil .c{height:52px;display:grid;place-items:center;border:1px solid var(--line-strong);border-radius:4px;background:var(--surface);text-align:center;line-height:1.2}
+.stencil .c.ctr{background:var(--copper-soft);border-color:var(--copper);color:var(--copper);font-weight:600}
+.stencil .ax{display:grid;place-items:center;color:var(--muted);font-size:11px;padding:0 4px}
+.row9{display:flex;gap:6px;flex-wrap:wrap;font-family:var(--f-mono);font-size:11px}
+.row9 span{width:46px;height:40px;display:grid;place-items:center;border:1px solid var(--line-strong);border-radius:4px;background:var(--surface)}
+.row9 span.ctr{background:var(--copper-soft);border-color:var(--copper);color:var(--copper);font-weight:600}
+.row9 span.cap{background:var(--stop-soft);border-color:var(--stop);color:var(--stop)}
+
+.formula{font-family:var(--f-mono);font-size:13.5px;background:var(--code-bg);border-radius:5px;padding:12px 14px;overflow-x:auto;white-space:pre;line-height:1.6;margin:10px 0}
+
+footer{margin-top:40px;font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Inhalt">
+  <div class="lbl">Inhalt</div>
+  <ol>
+    <li><a href="#ueberblick"><span>01</span>Systemüberblick</a></li>
+    <li><a href="#sicherheit"><span>02</span>Sicherheitskonzept</a></li>
+    <li><a href="#lin"><span>03</span>LIN-Bus &amp; Adressen</a></li>
+    <li><a href="#watchdog"><span>04</span>Watchdog</a></li>
+    <li><a href="#clients"><span>05</span>Bedien-Clients</a></li>
+    <li><a href="#messung"><span>06</span>Mess- &amp; Testskripte</a></li>
+    <li><a href="#firmware"><span>07</span>STM32-Firmware</a></li>
+    <li><a href="#sensoren"><span>08</span>Sensor-Slaves</a></li>
+    <li><a href="#optimierung"><span>09</span>Optimierung &amp; Analyse</a></li>
+    <li><a href="#werkzeuge"><span>10</span>Werkzeuge &amp; Prozess</a></li>
+    <li><a href="#rezepte"><span>11</span>Typische Abläufe</a></li>
+    <li><a href="#offen"><span>12</span>Offene Punkte</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="eyebrow">Repo <code>auto</code> · Stand 7. Oktober 2026</div>
+  <h1>Auto Systemhandbuch</h1>
+  <p class="lede">Ein Raspberry Pi steuert über LIN-Bus zwei STM32-Motorcontroller für Bosch-BLDC-Motoren (1000 W). Ein unabhängiger Watchdog überwacht Drehzahl und Strom, ein Joystick fährt das Fahrzeug, und auf dem Windows-Rechner laufen Firmware-Build, Saleae-Messungen und die P/I-Parametersuche. Diese Seite erklärt jede Komponente, wie sie zusammenspielen und wie du sie benutzt.</p>
+  <div class="chips">
+    <span class="chip ok">gebaut &amp; auf Hardware bestätigt</span>
+    <span class="chip warn">gebaut, Hardware-Test offen</span>
+    <span class="chip plan">geplant</span>
+    <span class="chip sig">LIN 19 200 Bd</span>
+    <span class="chip">STM32H743 · ATmega328P · Pi</span>
+  </div>
+</header>
+
+<!-- 01 ─────────────────────────────────────────── -->
+<section class="ch" id="ueberblick">
+  <div class="ch-head"><span class="ch-num">01</span><h2>Systemüberblick</h2></div>
+  <p class="intro">Drei Rechner, ein Bus. Der Windows-Host baut und flasht Firmware und wertet Messungen aus. Der Pi ist reiner Ausführungsknoten ohne eigene KI: Er bekommt Skripte per SCP und wird per SSH gesteuert. Auf dem LIN-Bus spricht nur einer aktiv, nämlich der Watchdog-Prozess auf dem Pi.</p>
+
+  <figure class="dia wide">
+    <svg viewBox="0 0 1000 570" role="img" aria-label="Systemarchitektur: Windows-Host, Raspberry Pi mit Watchdog, LIN-Bus mit Motor- und Sensor-Slaves, Saleae-Abgriff">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="sv-fill-ink"/></marker>
+        <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="sv-fill-sig"/></marker>
+      </defs>
+      <!-- Windows Host -->
+      <rect x="20" y="20" width="270" height="335" rx="6" class="sv-zone"/>
+      <text x="36" y="46" class="sv-tb">Windows-Host</text>
+      <text x="36" y="63" class="sv-tm">Claude Code · Entwicklung · Messung</text>
+      <rect x="36" y="78" width="238" height="44" rx="4" class="sv-box"/>
+      <text x="48" y="96" class="sv-tc">build.sh · flash.sh</text>
+      <text x="48" y="112" class="sv-tm">arm-gcc + STM32_Programmer_CLI</text>
+      <rect x="36" y="130" width="238" height="44" rx="4" class="sv-box"/>
+      <text x="48" y="148" class="sv-tc">run_experiment · run_grid</text>
+      <text x="48" y="164" class="sv-tm">run_grid_row · P/I-Suche über SSH</text>
+      <rect x="36" y="182" width="238" height="44" rx="4" class="sv-box"/>
+      <text x="48" y="200" class="sv-tc">analysis/</text>
+      <text x="48" y="216" class="sv-tm">hall_rpm · grid_heatmap · Plots</text>
+      <rect x="36" y="234" width="238" height="44" rx="4" class="sv-box"/>
+      <text x="48" y="252" class="sv-tc">generate_addresses.py</text>
+      <text x="48" y="268" class="sv-tm">addresses.json → alle Tabellen</text>
+      <rect x="36" y="286" width="238" height="52" rx="4" class="sv-box"/>
+      <text x="48" y="304" class="sv-tc">saleae_mcp/server.py</text>
+      <text x="48" y="320" class="sv-tm">MCP → Logic 2 Automation</text>
+      <text x="48" y="333" class="sv-tm">(Port 10430)</text>
+
+      <!-- SSH arrow -->
+      <line x1="290" y1="150" x2="336" y2="150" class="sv-arrow" marker-end="url(#ah)"/>
+      <text x="292" y="140" class="sv-tm">SSH/SCP</text>
+
+      <!-- Raspberry Pi -->
+      <rect x="340" y="20" width="320" height="335" rx="6" class="sv-pi"/>
+      <text x="356" y="46" class="sv-tb">Raspberry Pi · motorpi.local</text>
+      <text x="356" y="63" class="sv-tm">/home/pi/auto/ (flach deployt)</text>
+      <rect x="356" y="78" width="92" height="46" rx="4" class="sv-box"/>
+      <text x="364" y="97" class="sv-tc">joystick</text>
+      <text x="364" y="113" class="sv-tm">F710-Gamepad</text>
+      <rect x="454" y="78" width="92" height="46" rx="4" class="sv-box"/>
+      <text x="462" y="97" class="sv-tc">motorctrl</text>
+      <text x="462" y="113" class="sv-tm">Kommando-CLI</text>
+      <rect x="552" y="78" width="92" height="46" rx="4" class="sv-box"/>
+      <text x="560" y="97" class="sv-tc">capture/</text>
+      <text x="560" y="113" class="sv-tm">validate_*</text>
+      <text x="356" y="140" class="sv-tm">genau EIN Client gleichzeitig</text>
+      <line x1="500" y1="124" x2="500" y2="156" class="sv-arrow" marker-end="url(#ah)"/>
+      <rect x="390" y="158" width="220" height="26" rx="13" class="sv-box"/>
+      <text x="402" y="176" class="sv-tc">IPC /tmp/motorwatchdog.sock</text>
+      <line x1="500" y1="184" x2="500" y2="200" class="sv-arrow" marker-end="url(#ah)"/>
+      <rect x="356" y="202" width="288" height="72" rx="4" class="sv-cu"/>
+      <text x="368" y="223" class="sv-tb">watchdog.py</text>
+      <text x="368" y="241" class="sv-tm">einziger LIN-Master · validiert Limits</text>
+      <text x="368" y="257" class="sv-tm">eigener Poll-Thread: rpm, Strom, Idle</text>
+      <line x1="500" y1="274" x2="500" y2="290" class="sv-arrow" marker-end="url(#ah)"/>
+      <rect x="356" y="292" width="288" height="48" rx="4" class="sv-box"/>
+      <text x="368" y="312" class="sv-tc">linbus.py → /dev/ttyS0</text>
+      <text x="368" y="329" class="sv-tm">Byte schreiben, Echo lesen, vergleichen</text>
+      <line x1="644" y1="316" x2="700" y2="316" class="sv-wire"/>
+
+      <!-- LIN bus -->
+      <line x1="700" y1="60" x2="700" y2="480" class="sv-bus"/>
+      <text x="708" y="500" class="sv-tsig">LIN · 1-Draht</text>
+
+      <!-- slaves -->
+      <rect x="740" y="40" width="240" height="92" rx="5" class="sv-plan"/>
+      <line x1="700" y1="86" x2="740" y2="86" class="sv-wire" stroke-dasharray="4 3"/>
+      <text x="754" y="64" class="sv-tb">Lichtsensor</text>
+      <text x="754" y="82" class="sv-tplan">geplant · ATmega328P</text>
+      <text x="754" y="98" class="sv-tm">PID cntl0lig 0x30 / st0lig 0x34</text>
+      <text x="754" y="114" class="sv-tm">noch ohne LIN-Adressierung</text>
+
+      <rect x="740" y="150" width="240" height="92" rx="5" class="sv-box"/>
+      <line x1="700" y1="196" x2="740" y2="196" class="sv-wire"/>
+      <text x="754" y="174" class="sv-tb">Stromsensor</text>
+      <text x="754" y="192" class="sv-tm">ATmega328P · 2× ACS712-20A</text>
+      <text x="754" y="208" class="sv-tm">val1 = Motor 0 · val2 = Motor 1</text>
+      <text x="754" y="224" class="sv-tm">Instanz 0 · ~1 s Mittelung</text>
+
+      <rect x="740" y="260" width="240" height="96" rx="5" class="sv-cu"/>
+      <line x1="700" y1="308" x2="740" y2="308" class="sv-wire"/>
+      <text x="754" y="284" class="sv-tb">STM32 · Motor 1</text>
+      <text x="754" y="302" class="sv-tm">STM32H743 · Jumper PB15 → Inst. 1</text>
+      <text x="754" y="318" class="sv-tm">6-Step-Kommutierung + PI</text>
+      <text x="754" y="340" class="sv-tcu">→ Bosch BLDC 1000 W</text>
+
+      <rect x="740" y="374" width="240" height="96" rx="5" class="sv-cu"/>
+      <line x1="700" y1="422" x2="740" y2="422" class="sv-wire"/>
+      <text x="754" y="398" class="sv-tb">STM32 · Motor 0</text>
+      <text x="754" y="416" class="sv-tm">Jumper PB14+PB15 → Instanz 0</text>
+      <text x="754" y="432" class="sv-tm">Trigger-Pin PB12 = „läuft“</text>
+      <text x="754" y="454" class="sv-tcu">→ Bosch BLDC 1000 W</text>
+
+      <!-- Saleae -->
+      <rect x="20" y="395" width="270" height="94" rx="6" class="sv-box"/>
+      <text x="36" y="420" class="sv-tb">Saleae Logic Pro 16</text>
+      <text x="36" y="438" class="sv-tm">Ch0–2 Hall H1–H3 · Ch3 Trigger</text>
+      <text x="36" y="454" class="sv-tm">10 MHz · nur Labor/Optimierung</text>
+      <text x="36" y="470" class="sv-tm">Ground Truth für LIN-rpm</text>
+      <line x1="155" y1="395" x2="155" y2="359" class="sv-arrow" marker-end="url(#ah)"/>
+      <text x="162" y="382" class="sv-tm">USB</text>
+      <path d="M155,489 V540 H860 V474" class="sv-dash"/>
+      <text x="420" y="532" class="sv-tcu">Hall-Abgriff, nicht-invasiv (Stecker J2)</text>
+
+      <!-- power note -->
+      <rect x="340" y="395" width="320" height="94" rx="6" class="sv-zone"/>
+      <text x="356" y="420" class="sv-tb">Energie</text>
+      <text x="356" y="438" class="sv-tm">8S LiFePO4 100 Ah (~20–29 V) + JK-BMS</text>
+      <text x="356" y="454" class="sv-tm">Motoren direkt an Akku-Spannung</text>
+      <text x="356" y="470" class="sv-tm">Victron 24/12 → Pi-Shield 12/5 V</text>
+    </svg>
+    <figcaption>Durchgezogene Petrol-Linie: LIN-Bus (Pi ist Master, alle anderen Slaves). Gestrichelt Kupfer: reiner Mess-Abgriff der Hall-Signale, keine Steuerverbindung. Firmware wird separat per ST-Link (SWD) vom Windows-Host geflasht.</figcaption>
+  </figure>
+
+  <h3>Die Komponenten auf einen Blick</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Ordner</th><th>Läuft auf</th><th>Aufgabe</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">raspi/watchdog/</td><td>Pi</td><td>Sicherheitsbarriere und einziger LIN-Master (<code>watchdog.py</code>, <code>linbus.py</code>)</td><td><span class="chip ok">bestätigt</span></td></tr>
+      <tr><td class="mono">raspi/control/</td><td>Pi</td><td>Clients: Kommando-CLI, Joystick, Sprungantwort, Validierungen, Stresstest</td><td><span class="chip ok">bestätigt</span></td></tr>
+      <tr><td class="mono">raspi/tests/</td><td>Windows/Pi</td><td>pytest-Suite gegen DryRunLin und Mocks, keine Hardware</td><td><span class="chip ok">grün</span></td></tr>
+      <tr><td class="mono">STM32/firmware/</td><td>STM32H743</td><td>Kommutierung, PI-Regler, Kickstart, LIN-Slave</td><td><span class="chip ok">bestätigt</span></td></tr>
+      <tr><td class="mono">currentsensor/</td><td>ATmega328P</td><td>LIN-Slave, zwei Stromkanäle, Fehler-Ringpuffer</td><td><span class="chip ok">bestätigt</span></td></tr>
+      <tr><td class="mono">lightsensor/</td><td>ATmega328P</td><td>Kursprojekt-Fragmente, baut, noch nicht am Bus</td><td><span class="chip plan">geplant</span></td></tr>
+      <tr><td class="mono">run_*.py</td><td>Windows</td><td>Ein Messpunkt, 3×3-Gitter, 9-Punkt-Reihe für die P/I-Suche</td><td><span class="chip ok">abgeschlossen</span></td></tr>
+      <tr><td class="mono">analysis/</td><td>Windows</td><td>Hall-Flanken → rpm, Heatmaps, Hall-Charakterisierung</td><td><span class="chip ok">bestätigt</span></td></tr>
+      <tr><td class="mono">saleae_mcp/</td><td>Windows</td><td>MCP-Server um die Saleae-Automation-API</td><td><span class="chip ok">bestätigt</span></td></tr>
+      <tr><td class="mono">addresses.json</td><td>Windows</td><td>Einzige Quelle für alle LIN-PIDs, erzeugt Python- und C-Tabellen</td><td><span class="chip ok">aktiv</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Ein Befehl auf seinem Weg</h3>
+  <p>Am Beispiel <code>speed 0 500</code> (Motor 0 auf 500 rpm):</p>
+  <div class="flow">
+    <div class="st"><b>1 · Client</b>motorcontrol.py oder joystick.py schickt den Text über den Unix-Socket</div><span class="ar">→</span>
+    <div class="st cu"><b>2 · validate()</b>Verb bekannt? Instanz 0–3? Wert in ±3000?</div><span class="ar">→</span>
+    <div class="st"><b>3 · Lock</b>Kein gleichzeitiger Bus-Zugriff mit dem Poll-Thread</div><span class="ar">→</span>
+    <div class="st"><b>4 · linbus</b>Frame <code>55 4C 01 F4 09</code>, jedes Byte mit Echo-Vergleich</div><span class="ar">→</span>
+    <div class="st cu"><b>5 · STM32</b>ISR erkennt PID, Checksumme OK → <code>controlvariableinput = 500</code></div><span class="ar">→</span>
+    <div class="st"><b>6 · Regelung</b>PI-Regler und Kommutierung drehen den Motor; Trigger-Pin geht HIGH</div>
+  </div>
+</section>
+
+<!-- 02 ─────────────────────────────────────────── -->
+<section class="ch" id="sicherheit">
+  <div class="ch-head"><span class="ch-num">02</span><h2>Sicherheitskonzept</h2></div>
+  <p class="intro">Grenzen stehen im Code, nicht in Prompts. Mehrere Schichten fangen unterschiedliche Fehler ab, und jede kann den Motor ohne die anderen stoppen. Bei einem Fehler an einem Motor stoppt der Watchdog immer <em>alle</em> bekannten Motoren, weil ein einseitig weiterfahrendes Differentialfahrzeug sich drehen oder ruckeln würde.</p>
+
+  <div class="tbl"><table>
+    <thead><tr><th>Schicht</th><th>Erkennt</th><th>Reaktion</th><th>Zeit</th></tr></thead>
+    <tbody>
+      <tr><td>Firmware: Kickstart-Abbruch</td><td>Sollwert ≠ 0, aber 7 × 100 ms lang rpm = 0</td><td>Sollwert und Integral auf 0, <code>sysError = −65</code> (STALL_TIM_ERR)</td><td class="num">~0,7 s</td></tr>
+      <tr><td>Firmware: Checksummen-Gate</td><td>Beschädigter Master-Write</td><td>Befehl wird verworfen, Zähler steigt</td><td class="num">sofort</td></tr>
+      <tr><td>Firmware: UART-Fehler-Callback</td><td>Overrun/Framing-Fehler auf dem Bus</td><td>Empfang neu scharf, Sollwert 0, <code>sysError = −8</code></td><td class="num">sofort</td></tr>
+      <tr><td>Firmware: Body-Timeout</td><td>Header kam, Body nicht (50 ms)</td><td>Empfang abbrechen, wieder auf Sync warten</td><td class="num">50 ms</td></tr>
+      <tr><td>Watchdog: Client getrennt</td><td>Socket geschlossen (Absturz, Ctrl-C, SSH weg)</td><td>Alle Motoren <code>speed 0</code></td><td class="num">sofort</td></tr>
+      <tr><td>Watchdog: Idle-Timeout</td><td>Verbindung offen, aber 20 s kein Befehl</td><td>Alle Motoren stoppen</td><td class="num">20 s</td></tr>
+      <tr><td>Watchdog: rpm-Stall</td><td>Sollwert ≠ 0, rpm = 0 nach 3 s Gnadenfrist</td><td>Alle Motoren stoppen</td><td class="num">3–4 s</td></tr>
+      <tr><td>Watchdog: Überstrom</td><td>|val1| oder |val2| &gt; 15 A</td><td>Alle Motoren stoppen</td><td class="num">1–3 s</td></tr>
+      <tr><td>Watchdog: Strom-Signatur</td><td>&gt; 0,15 A bei rpm = 0</td><td>Nur Log-Warnung, noch kein Stopp</td><td class="num">1 s</td></tr>
+      <tr><td>Mensch</td><td>Alles andere</td><td>Hand am Netzteil bzw. Akku-Trennung, besonders bei Sweeps</td><td>–</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note stop"><strong>Motor-Freigabe:</strong> Jeder Befehl, der einen Motor bewegen kann (Watchdog mit <code>--live</code>, Joystick mit <code>--live</code>, Mess-Skripte, Flashen mit Reset), braucht jedes Mal eine ausdrückliche Zustimmung im Moment. Ohne <code>--live</code> laufen Watchdog und Joystick als Trockenlauf und berühren den Bus nicht.</div>
+  <div class="note"><strong>Grenze der Stromüberwachung:</strong> Der 15-A-Stopp ist ein Schutz gegen <em>anhaltenden</em> Überstrom. Kurze Spitzen (eine blockierte Wicklung kann Hunderte Ampere ziehen) sättigen den Sensor und sind so nicht abfangbar. Der Shunt auf der STM32-Platine selbst ist durchgebrannt und überbrückt, interne Strommessung gibt es dort nicht.</div>
+</section>
+
+<!-- 03 ─────────────────────────────────────────── -->
+<section class="ch" id="lin">
+  <div class="ch-head"><span class="ch-num">03</span><h2>LIN-Bus &amp; Adressierung</h2><span class="path">addresses.json · generate_addresses.py · linbus.py</span></div>
+  <p class="intro">LIN läuft hier über einen Ein-Draht-Transceiver mit 19 200 Baud. Jedes gesendete Byte kommt als Echo zurück und muss gelesen und verglichen werden, sonst gerät der Master aus dem Takt. Die PID legt fest, ob der Master schreibt oder der Slave antwortet.</p>
+
+  <figure class="dia mid">
+    <svg viewBox="0 0 900 300" role="img" aria-label="Aufbau eines LIN-Frames mit Sync, PID, Daten und Checksumme">
+      <text x="20" y="28" class="sv-tb">Schreib-Frame „speed 0 500“  (Master → Motor 0)</text>
+      <!-- frame boxes -->
+      <rect x="20" y="44" width="120" height="58" rx="4" class="sv-pi"/>
+      <text x="80" y="70" text-anchor="middle" class="sv-tc">0x55</text>
+      <text x="80" y="90" text-anchor="middle" class="sv-tm">Sync</text>
+      <rect x="150" y="44" width="200" height="58" rx="4" class="sv-pi"/>
+      <text x="250" y="70" text-anchor="middle" class="sv-tc">0x4C</text>
+      <text x="250" y="90" text-anchor="middle" class="sv-tm">PID = 0x0C | Instanz | Parität</text>
+      <rect x="360" y="44" width="110" height="58" rx="4" class="sv-cu"/>
+      <text x="415" y="70" text-anchor="middle" class="sv-tc">0x01</text>
+      <text x="415" y="90" text-anchor="middle" class="sv-tm">Daten 0 (MSB)</text>
+      <rect x="480" y="44" width="110" height="58" rx="4" class="sv-cu"/>
+      <text x="535" y="70" text-anchor="middle" class="sv-tc">0xF4</text>
+      <text x="535" y="90" text-anchor="middle" class="sv-tm">Daten 1 (LSB)</text>
+      <rect x="600" y="44" width="130" height="58" rx="4" class="sv-box"/>
+      <text x="665" y="70" text-anchor="middle" class="sv-tc">0x09</text>
+      <text x="665" y="90" text-anchor="middle" class="sv-tm">Checksumme</text>
+      <!-- echo row -->
+      <text x="20" y="128" class="sv-tm">Echo:</text>
+      <g class="sv-tsig">
+        <text x="80" y="128" text-anchor="middle">↩ ok</text><text x="250" y="128" text-anchor="middle">↩ ok</text>
+        <text x="415" y="128" text-anchor="middle">↩ ok</text><text x="535" y="128" text-anchor="middle">↩ ok</text><text x="665" y="128" text-anchor="middle">↩ ok</text>
+      </g>
+      <text x="745" y="70" class="sv-tm">Abweichung →</text>
+      <text x="745" y="86" class="sv-tstop">ret −4</text>
+
+      <!-- PID bit breakdown -->
+      <text x="20" y="176" class="sv-tb">PID-Byte im Detail</text>
+      <g>
+        <rect x="20" y="190" width="58" height="44" rx="3" class="sv-box"/><text x="49" y="212" text-anchor="middle" class="sv-tc">P1</text><text x="49" y="227" text-anchor="middle" class="sv-tm">bit 7</text>
+        <rect x="82" y="190" width="58" height="44" rx="3" class="sv-box"/><text x="111" y="212" text-anchor="middle" class="sv-tc">P0</text><text x="111" y="227" text-anchor="middle" class="sv-tm">bit 6</text>
+        <rect x="150" y="190" width="234" height="44" rx="3" class="sv-cu"/><text x="267" y="212" text-anchor="middle" class="sv-tc">ID5 ID4 ID3 ID2</text><text x="267" y="227" text-anchor="middle" class="sv-tm">Nachrichtentyp (Block à 4 PIDs)</text>
+        <rect x="390" y="190" width="120" height="44" rx="3" class="sv-pi"/><text x="450" y="212" text-anchor="middle" class="sv-tc">ID1 ID0</text><text x="450" y="227" text-anchor="middle" class="sv-tm">Instanz 0–3</text>
+      </g>
+      <text x="540" y="204" class="sv-tm">P0 = ID0 ⊕ ID1 ⊕ ID2 ⊕ ID4</text>
+      <text x="540" y="222" class="sv-tm">P1 = ¬(ID1 ⊕ ID3 ⊕ ID4 ⊕ ID5)</text>
+      <text x="540" y="246" class="sv-tm">Beispiel: rpm von Motor 1</text>
+      <text x="540" y="262" class="sv-tc">0x18 | 0x01 = 0x19 → Draht 0x99</text>
+      <text x="20" y="272" class="sv-tm">Checksumme: Bytes addieren, Übertrag über 0xFF zurückaddieren, Ergebnis invertieren.</text>
+      <text x="20" y="290" class="sv-tm">0x01 + 0xF4 = 0x1F5 → 0xF6 → ¬ = 0x09</text>
+    </svg>
+    <figcaption>Bei einem Lese-Frame sendet der Master nur Sync und PID. Danach antwortet der Slave mit den Datenbytes und seiner Checksumme, die der Master nachrechnet (Abweichung: <code>ret −6</code>, keine Antwort in 2 s: <code>ret −5</code>).</figcaption>
+  </figure>
+
+  <h3>PID-Tabelle</h3>
+  <p>Jeder Nachrichtentyp belegt einen Block aus 4 PIDs. Die untersten zwei Bits sind die Instanz. Die Firmware ist auf allen Motorplatinen identisch; welche Instanz eine Platine ist, entscheiden die Jumper an PB14/PB15 beim Booten (ohne Jumper: Instanz 3).</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Name</th><th>Basis-PID</th><th>Bytes</th><th>Richtung</th><th>Bedeutung</th><th>Watchdog-Verb</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">cntl0mot</td><td class="mono">0x00</td><td class="num">2</td><td>Master → Motor</td><td>P- und I-Delta (je int8 × 0,01)</td><td class="mono">pi</td></tr>
+      <tr><td class="mono">cntl1mot</td><td class="mono">0x04</td><td class="num">2</td><td>Master → Motor</td><td>Ein offener Kommutierungspuls (int16)</td><td class="mono">pulse, burst</td></tr>
+      <tr><td class="mono">cntl2mot</td><td class="mono">0x08</td><td class="num">6</td><td>Master → Motor</td><td>Reset: Sollwert, Integral, Zähler, sysError</td><td class="mono">reset</td></tr>
+      <tr><td class="mono">cntl3mot</td><td class="mono">0x0C</td><td class="num">2</td><td>Master → Motor</td><td>Drehzahl-Sollwert (int16, big-endian)</td><td class="mono">speed</td></tr>
+      <tr><td class="mono">st0mot</td><td class="mono">0x10</td><td class="num">3</td><td>Motor → Master</td><td>Hall-Bits H1, H2, H3</td><td class="mono">hal</td></tr>
+      <tr><td class="mono">st1mot</td><td class="mono">0x14</td><td class="num">2</td><td>Motor → Master</td><td>Temperatur (ADC roh)</td><td class="mono">temp</td></tr>
+      <tr><td class="mono">st2mot</td><td class="mono">0x18</td><td class="num">2</td><td>Motor → Master</td><td>rpm (int16, Raster 25)</td><td class="mono">rpm</td></tr>
+      <tr><td class="mono">st3mot</td><td class="mono">0x1C</td><td class="num">6</td><td>Motor → Master</td><td>Timeout- und Checksummenzähler, Kickstart-Zähler, sysError</td><td class="mono">status, kickcount</td></tr>
+      <tr><td class="mono">cntl0cur</td><td class="mono">0x20</td><td class="num">2</td><td>Master → Strom</td><td>LED-Test, Fehlerspeicher-Inject/Reset, Sabotage-Flag für Selbsttest</td><td class="mono">selftest</td></tr>
+      <tr><td class="mono">st0cur</td><td class="mono">0x24</td><td class="num">4</td><td>Strom → Master</td><td>Zwei 10-Bit-ADC-Werte (val1, val2)</td><td class="mono">current</td></tr>
+      <tr><td class="mono">st1cur</td><td class="mono">0x28</td><td class="num">8</td><td>Strom → Master</td><td>Letzte 8 Fehlercodes</td><td class="mono">errors</td></tr>
+      <tr><td class="mono">cntl0lig</td><td class="mono">0x30</td><td class="num">2</td><td>Master → Licht</td><td>reserviert</td><td>–</td></tr>
+      <tr><td class="mono">st0lig</td><td class="mono">0x34</td><td class="num">4</td><td>Licht → Master</td><td>reserviert</td><td>–</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Eine Quelle, vier Ausgaben</h3>
+  <div class="flow">
+    <div class="st cu"><b>addresses.json</b>PIDs, Bytes, Richtung, Instanzen</div><span class="ar">→</span>
+    <div class="st"><b>generate_addresses.py</b>läuft auf Windows</div><span class="ar">→</span>
+    <div class="st"><b>raspi/control/linaddresses.py</b>Master-Sicht inkl. <code>pid_names</code></div>
+    <div class="st"><b>STM32/…/addresses.h</b>identisch für alle Slaves</div>
+    <div class="st"><b>currentsensor/firmware/addresses.h</b></div>
+    <div class="st"><b>addresses.md</b>belegte und freie Blöcke</div>
+  </div>
+  <div class="howto"><div class="hd">So benutzt du es <span class="where">Windows · Repo-Root</span></div><div class="bd">
+    <ol><li>Nur <code>addresses.json</code> bearbeiten, die erzeugten Dateien nie von Hand.</li>
+    <li>Generator laufen lassen. <code>build.sh</code> bricht ab, wenn <code>addresses.json</code> neuer ist als <code>addresses.h</code>.</li>
+    <li>Danach Firmware bauen/flashen und den Pi neu deployen, damit beide Seiten dieselbe Tabelle haben.</li></ol>
+    <div class="cmd"><pre>python generate_addresses.py</pre><button class="cp" type="button">Kopieren</button></div>
+  </div></div>
+
+  <h3>Fehlercodes von <code>linbus.py</code></h3>
+  <div class="tbl"><table>
+    <thead><tr><th>ret</th><th>Name</th><th>Bedeutung</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">0</td><td class="mono">–</td><td>Erfolg</td></tr>
+      <tr><td class="mono">−1</td><td class="mono">ERR_UNKNOWN_PID</td><td>PID nicht in der Tabelle</td></tr>
+      <tr><td class="mono">−2</td><td class="mono">ERR_WRONG_LENGTH</td><td>Datenlänge passt nicht zur Nachricht</td></tr>
+      <tr><td class="mono">−3</td><td class="mono">ERR_WRONG_DIRECTION</td><td>Schreiben auf eine Lese-PID oder umgekehrt</td></tr>
+      <tr><td class="mono">−4</td><td class="mono">ERR_ECHO_MISMATCH</td><td>Echo stimmt nicht (Kollision, Störung)</td></tr>
+      <tr><td class="mono">−5</td><td class="mono">ERR_TIMEOUT</td><td>Slave antwortet nicht innerhalb von 2 s (nicht vorhanden, gehalten, stromlos)</td></tr>
+      <tr><td class="mono">−6</td><td class="mono">ERR_BAD_CHECKSUM</td><td>Checksumme der Slave-Antwort falsch</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Timing</h3>
+  <p>Ein Byte braucht 0,52 ms auf dem Draht. Ein <code>speed</code>-Frame (5 Byte) also 2,6 ms, <code>status</code> (9 Byte) 4,7 ms. Gemessen werden pro Befehl 4,8 bis 8,9 ms, weil jedes Byte einen eigenen Schreib- und Lese-Aufruf kostet. Der Stresstest (Issue #24) hat gezeigt: Ein Paket aus <code>speed</code>, <code>rpm</code> und <code>status</code> für beide Motoren läuft bis 50 ms Takt sauber; bei 30 ms kommt der Zeitplan nicht mehr hinterher, ohne dass Bus oder Firmware Fehler zeigen.</p>
+</section>
+
+<!-- 04 ─────────────────────────────────────────── -->
+<section class="ch" id="watchdog">
+  <div class="ch-head"><span class="ch-num">04</span><h2>Watchdog</h2><span class="path">raspi/watchdog/watchdog.py · linbus.py</span></div>
+  <p class="intro">Der Watchdog ist ein eigener Prozess und der einzige, der <code>/dev/ttyS0</code> öffnet. Er entscheidet nicht, <em>was</em> der Motor tun soll, sondern prüft jeden Befehl gegen feste Grenzen, legt ihn auf den Bus und überwacht parallel den Motor auf eigene Faust.</p>
+
+  <div class="lane">
+    <div class="lt">Haupt-Thread · ein Client gleichzeitig</div>
+    <div class="flow">
+      <div class="st"><b>listener.accept()</b>Client verbindet → Idle-Uhr startet</div><span class="ar">→</span>
+      <div class="st"><b>conn.recv()</b>ein Textbefehl</div><span class="ar">→</span>
+      <div class="st cu"><b>validate()</b>Syntax, Instanz, Wertebereich; sonst <code>ERR …</code></div><span class="ar">→</span>
+      <div class="st"><b>with lock: _dispatch()</b>linbus-Aufruf, Stall-Buchführung</div><span class="ar">→</span>
+      <div class="st"><b>conn.send()</b><code>OK …</code> mit Messwerten</div>
+    </div>
+    <div class="flow">
+      <div class="st stp"><b>EOFError</b>Client weg</div><span class="ar">→</span>
+      <div class="st stp"><b>on_disconnect()</b>alle bekannten Motoren <code>speed 0</code></div>
+    </div>
+  </div>
+  <div class="lane">
+    <div class="lt">monitor()-Thread · jede Sekunde · überlebt jeden Einzelfehler</div>
+    <div class="flow">
+      <div class="st"><b>check_idle()</b>&gt; 20 s still bei offener Verbindung → Stopp</div><span class="ar">→</span>
+      <div class="st"><b>poll_rpm()</b>Motor 0 immer, andere nur wenn Sollwert ≠ 0</div><span class="ar">→</span>
+      <div class="st cu"><b>_check_stall()</b>rpm = 0 nach 3 s Gnadenfrist → Stopp</div><span class="ar">→</span>
+      <div class="st cu"><b>poll_current()</b>&gt; 15 A → Stopp · 0,15 A bei rpm 0 → nur Log</div>
+    </div>
+  </div>
+  <div class="lane">
+    <div class="lt">Beim Start · _startup_reset()</div>
+    <div class="flow">
+      <div class="st"><b>status 0, status 1</b>wer antwortet? alter Zustand wird geloggt</div><span class="ar">→</span>
+      <div class="st"><b>reset</b>bedingungslos für jede antwortende Instanz</div><span class="ar">→</span>
+      <div class="st"><b>Buchführung</b>beide Motoren sind ab Sekunde 0 „bekannt“</div>
+    </div>
+  </div>
+
+  <h3>Feste Grenzen</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Konstante</th><th>Wert</th><th>Warum</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">SPEED_MIN/MAX</td><td class="mono num">±3000</td><td>Sicherheitsgrenze unter dem physikalischen Maximum</td></tr>
+      <tr><td class="mono">PULSE_SPEED_MIN/MAX</td><td class="mono num">±1274</td><td>Ab 1275 µs (GLOBALRATE) tut <code>driveState()</code> nichts mehr</td></tr>
+      <tr><td class="mono">PI_DELTA_MIN/MAX</td><td class="mono num">−1,28…1,27</td><td>Exakt der Bereich der int8×100-Kodierung</td></tr>
+      <tr><td class="mono">MOTOR / CURRENT_INSTANCE</td><td class="mono num">0–3 / 0–1</td><td>Reservierte Kapazität im Adressschema</td></tr>
+      <tr><td class="mono">IDLE_TIMEOUT</td><td class="mono num">20 s</td><td>Menschen tippen mit Pausen</td></tr>
+      <tr><td class="mono">RPM_POLL_INTERVAL</td><td class="mono num">1 s</td><td>Takt des Überwachungs-Threads</td></tr>
+      <tr><td class="mono">STALL_GRACE_PERIOD</td><td class="mono num">3 s</td><td>Anlauf und Haftreibung nach 0 → ≠ 0</td></tr>
+      <tr><td class="mono">OVERCURRENT_STOP_THRESHOLD</td><td class="mono num">15 A</td><td>Im linearen Bereich des ACS712 (Sättigung ~20 A), knapp unter dem Nennstrom von ~16–17 A</td></tr>
+      <tr><td class="mono">CURRENT_STALL_THRESHOLD</td><td class="mono num">0,15 A</td><td>Abstand zum Offset-Unterschied der Sensorchips</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Befehlsreferenz</h3>
+  <p><code>&lt;m&gt;</code> = Motorinstanz 0–3, <code>&lt;s&gt;</code> = Stromsensor-Instanz 0–1. Die Instanz ist immer Pflicht, es gibt keinen Standardwert.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Befehl</th><th>Wirkung</th><th>Antwort (Beispiel)</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">speed &lt;m&gt; &lt;v&gt;</td><td>Drehzahl-Sollwert setzen, 0 = Stopp</td><td class="mono">OK</td></tr>
+      <tr><td class="mono">pi &lt;m&gt; &lt;dp&gt; &lt;di&gt;</td><td>KP = 0,19 + dp, KI = 0,44 + di. Immer relativ zum Firmware-Standard, nie kumulativ</td><td class="mono">OK</td></tr>
+      <tr><td class="mono">pulse &lt;m&gt; &lt;v&gt;</td><td>Ein offener Kommutierungsschritt ohne PI-Regler</td><td class="mono">OK</td></tr>
+      <tr><td class="mono">burst &lt;m&gt; v1 p1 v2 p2</td><td>Puls v1, p1 ms warten, Puls v2, p2 ms warten (Losreißen aus der Mittelrast)</td><td class="mono">OK</td></tr>
+      <tr><td class="mono">reset &lt;m&gt;</td><td>Firmware-Zustand löschen, Motor steht danach</td><td class="mono">OK</td></tr>
+      <tr><td class="mono">rpm &lt;m&gt;</td><td>Drehzahl lesen</td><td class="mono">OK ret=0 rpm=500 (hex=0x01f4)</td></tr>
+      <tr><td class="mono">hal &lt;m&gt;</td><td>Hall-Zustand lesen</td><td class="mono">OK ret=0 data=['0x00','0x01','0x00']</td></tr>
+      <tr><td class="mono">temp &lt;m&gt;</td><td>Temperatur-ADC lesen</td><td class="mono">OK ret=0 temp=…</td></tr>
+      <tr><td class="mono">status &lt;m&gt;</td><td>Zähler und sysError</td><td class="mono">OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65</td></tr>
+      <tr><td class="mono">kickcount &lt;m&gt;</td><td>Nur der Kickstart-Zähler (mod 256)</td><td class="mono">OK ret=0 kickcount=3</td></tr>
+      <tr><td class="mono">current &lt;s&gt;</td><td>Strom beider Kanäle in A</td><td class="mono">OK ret=0 val1=2.34 val2=0.05</td></tr>
+      <tr><td class="mono">errors &lt;s&gt;</td><td>Fehler-Ringpuffer des Stromsensors</td><td class="mono">OK ret=0 codes=[…] names=['CHK',…]</td></tr>
+      <tr><td class="mono">selftest</td><td>4-teiliger Selbsttest für Motor 0 + Sensor 0 (~2 s): Fehlerspeicher, Sensor-Checksumme, Bus-Hang, Motor-Checksumme, Reset</td><td class="mono">OK inject_ret=0 …</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="howto"><div class="hd">So benutzt du es <span class="where">Pi · /home/pi/auto</span></div><div class="bd">
+    <ol>
+      <li>Watchdog in einem eigenen Terminal starten. Ohne <code>--live</code> ist es ein Trockenlauf mit <code>DryRunLin</code>: jedes Byte wird nur ausgegeben.</li>
+      <li><code>--debug</code> zeigt den kompletten LIN-Trace auch im Terminal. In <code>watchdog.log</code> steht er immer, unabhängig vom Flag. Das Log wird bei jedem Start einmal rotiert (<code>watchdog.log.1</code>).</li>
+      <li>Dann genau einen Client verbinden: <code>motorcontrol.py</code> <em>oder</em> <code>joystick.py</code> <em>oder</em> ein Mess-Skript.</li>
+    </ol>
+    <div class="cmd"><pre><span class="cmt"># sicher: kein Buszugriff</span>
+python3 watchdog.py
+
+<span class="cmt"># echter Bus (Freigabe nötig), Trace im Terminal</span>
+python3 watchdog.py --live --debug</pre><button class="cp" type="button">Kopieren</button></div>
+  </div></div>
+</section>
+
+<!-- 05 ─────────────────────────────────────────── -->
+<section class="ch" id="clients">
+  <div class="ch-head"><span class="ch-num">05</span><h2>Bedien-Clients</h2><span class="path">raspi/control/</span></div>
+  <p class="intro">Clients sprechen nie direkt mit dem Bus, sondern halten eine dauerhafte Verbindung zum Watchdog. Bricht sie ab, stoppt der Watchdog sofort. Deshalb nutzen alle Skripte eine einzige Verbindung für die ganze Sitzung und nicht pro Befehl eine neue.</p>
+
+  <h3>motorcontrol.py · Kommando-Konsole</h3>
+  <p>Eine kleine interaktive Konsole mit Pfeiltasten-Historie. Jede Zeile wird unverändert an den Watchdog geschickt; Befehl und Antwort landen zusätzlich in <code>motorcontrol.log</code>. Für Skripte gibt es <code>send_command()</code>, das eine Verbindung pro Befehl öffnet (Achtung: das Schließen stoppt dann jeweils den Motor).</p>
+  <div class="howto"><div class="hd">So benutzt du es <span class="where">Pi · zweites Terminal</span></div><div class="bd">
+    <div class="cmd"><pre>python3 motorcontrol.py
+motorcontrol&gt; status 0
+motorcontrol&gt; speed 0 500
+motorcontrol&gt; rpm 0
+motorcontrol&gt; current 0
+motorcontrol&gt; speed 0 0
+motorcontrol&gt; exit</pre><button class="cp" type="button">Kopieren</button></div>
+    <p class="muted">Nach einer längeren Fahrt besser in Stufen herunterfahren (z. B. 500 → 300 → 100 → 0): ein abruptes <code>speed 0</code> bremst härter als Auslaufen.</p>
+  </div></div>
+
+  <h3>joystick.py · Fahren mit dem Logitech F710</h3>
+  <p>Liest den rechten Stick über <code>pygame</code>, rechnet daraus Differentialantrieb und schickt alle 200 ms für beide Motoren einen <code>speed</code>-Befehl. Das dient gleichzeitig als Herzschlag gegen den 20-s-Idle-Timeout. Läuft nie parallel zu <code>motorcontrol.py</code>.</p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="k">Mischung</div>
+      <div class="formula">vor   = −achse[4]   (Stick weg vom Körper = +)
+lenk  =  achse[3]
+links = clamp(vor + lenk) · 1200 · Richtung_L
+rechts= clamp(vor − lenk) · 1200 · Richtung_R
+|wert| &lt; 500 → 0   (Deadzone in Drahteinheiten)</div>
+    </div>
+    <div class="card">
+      <div class="k">Totmann-Prinzip</div>
+      <p>Jede Änderung der Fahrgeschwindigkeit oder ein Zucken am linken Trigger (LT, Achse 2, &gt; 0,05) bestätigt für 10 s. Läuft das Fenster ab, fahren beide Motoren in 5 Stufen über 1 s auf 0. Ein eingefrorenes Funksignal hält alle Achsen konstant und läuft deshalb sicher ab.</p>
+    </div>
+    <div class="card">
+      <div class="k">Rote Taste B · Recovery</div>
+      <p>Wirkt nur, wenn ein Motor wirklich <code>sys_error = −65</code> meldet. Dann: <code>reset</code> des blockierten Motors, 2–3 sanfte Schritte (±500 speed, ±1000 pulse), Prüffahrt beider Motoren mit 800 für 1,5 s, Rampe auf 0, Eintrag in <code>recovery_sequences.csv</code>.</p>
+    </div>
+    <div class="card">
+      <div class="k">Vibration als Rückmeldung</div>
+      <p>Alle 0,2 s <code>rpm</code> und <code>status</code> beider Motoren. Steigt der Kickstart-Zähler in einer Blockade um ≥ 2: kurze Vibration (1 s). Bestätigte Blockade: lange Vibration (2 s), einmal pro Episode. Läuft über <code>evdev</code>; fehlt es, wird ohne Vibration gefahren.</p>
+    </div>
+  </div>
+
+  <div class="howto"><div class="hd">So benutzt du es <span class="where">Pi · Watchdog läuft mit --live</span></div><div class="bd">
+    <ol>
+      <li>Erst ohne <code>--live</code> starten: es wird nichts gesendet, nur angezeigt, was gesendet <em>würde</em>. Mit <code>--debug</code> siehst du jede Achse und Taste, gut zum Kalibrieren.</li>
+      <li><code>--left/--right</code> = welche Motorinstanz links/rechts sitzt, <code>--left-dir/--right-dir</code> = ob das Vorzeichen gedreht werden muss (<code>cw</code> nein, <code>ccw</code> ja). Alle vier sind Pflicht.</li>
+      <li>Für echte Fahrt <code>--live</code> anhängen. Fährt los, sobald du den Stick bewegst.</li>
+    </ol>
+    <div class="cmd"><pre><span class="cmt"># Probelauf ohne Motorbewegung</span>
+python3 joystick.py --left 0 --right 1 --left-dir cw --right-dir ccw --debug
+
+<span class="cmt"># echte Fahrt (Freigabe nötig)</span>
+python3 joystick.py --left 0 --right 1 --left-dir cw --right-dir ccw --live</pre><button class="cp" type="button">Kopieren</button></div>
+    <p class="muted">Weitere Optionen: <code>--max-rpm</code> (1200), <code>--deadzone</code> (500), <code>--confirm-timeout</code> (10), <code>--poll-interval</code> (0,2), <code>--stall-poll-interval</code> (0,2), <code>--axis-forward/--axis-steer/--axis-lt</code>, <code>--recovery-button</code>, <code>--joystick-index</code>.</p>
+  </div></div>
+</section>
+
+<!-- 06 ─────────────────────────────────────────── -->
+<section class="ch" id="messung">
+  <div class="ch-head"><span class="ch-num">06</span><h2>Mess- &amp; Testskripte</h2><span class="path">raspi/control/ · raspi/analyze_logs.py</span></div>
+  <p class="intro">Alle Mess-Skripte laufen auf dem Pi gegen einen laufenden <code>--live</code>-Watchdog, schreiben ihre Messdaten als CSV auf stdout und das Protokoll in eine eigene <code>.log</code>-Datei. Die CSV musst du selbst umleiten, sonst ist sie weg.</p>
+
+  <h3>capture_step_response.py · Sprungantwort</h3>
+  <p>Das Arbeitspferd der P/I-Suche: ein Sprung von 0 auf 1000 rpm, 7 s lang alle 200 ms <code>rpm</code>, jede Sekunde <code>current</code>. Erkennt Blockaden selbst und versucht einmal, den Motor zu befreien.</p>
+
+  <figure class="dia wide">
+    <svg viewBox="0 0 960 250" role="img" aria-label="Zeitablauf der Sprungantwort-Messung">
+      <!-- axis -->
+      <line x1="120" y1="200" x2="920" y2="200" class="sv-arrow-m"/>
+      <g class="sv-tm">
+        <text x="120" y="218" text-anchor="middle">0 s</text><text x="220" y="218" text-anchor="middle">1</text>
+        <text x="320" y="218" text-anchor="middle">2</text><text x="420" y="218" text-anchor="middle">3</text>
+        <text x="520" y="218" text-anchor="middle">4</text><text x="620" y="218" text-anchor="middle">5</text>
+        <text x="720" y="218" text-anchor="middle">6</text><text x="820" y="218" text-anchor="middle">7</text>
+        <text x="920" y="218" text-anchor="middle">8</text>
+      </g>
+      <g class="sv-grid"><line x1="220" y1="40" x2="220" y2="200"/><line x1="320" y1="40" x2="320" y2="200"/><line x1="420" y1="40" x2="420" y2="200"/><line x1="520" y1="40" x2="520" y2="200"/><line x1="620" y1="40" x2="620" y2="200"/><line x1="720" y1="40" x2="720" y2="200"/><line x1="820" y1="40" x2="820" y2="200"/></g>
+      <!-- pre-step -->
+      <rect x="20" y="40" width="94" height="66" rx="4" class="sv-box"/>
+      <text x="30" y="58" class="sv-tc">reset</text>
+      <text x="30" y="74" class="sv-tc">hal</text>
+      <text x="30" y="90" class="sv-tc">pi dp di</text>
+      <text x="30" y="122" class="sv-tm">Vorlauf</text>
+      <!-- rpm curve -->
+      <path d="M120,180 L120,180 C140,180 145,72 160,62 C175,54 185,48 200,56 C215,64 225,44 240,50 C255,56 270,52 300,53 L820,53" class="sv-wire"/>
+      <line x1="120" y1="53" x2="820" y2="53" class="sv-grid" stroke-dasharray="3 3"/>
+      <text x="826" y="57" class="sv-tsig">1000 rpm Sollwert</text>
+      <!-- sample ticks -->
+      <g class="sv-fill-sig">
+        <circle cx="140" cy="194" r="2"/><circle cx="160" cy="194" r="2"/><circle cx="180" cy="194" r="2"/><circle cx="200" cy="194" r="2"/><circle cx="220" cy="194" r="2"/><circle cx="240" cy="194" r="2"/><circle cx="260" cy="194" r="2"/><circle cx="280" cy="194" r="2"/><circle cx="300" cy="194" r="2"/><circle cx="320" cy="194" r="2"/><circle cx="340" cy="194" r="2"/><circle cx="360" cy="194" r="2"/><circle cx="380" cy="194" r="2"/><circle cx="400" cy="194" r="2"/><circle cx="420" cy="194" r="2"/><circle cx="440" cy="194" r="2"/><circle cx="460" cy="194" r="2"/><circle cx="480" cy="194" r="2"/><circle cx="500" cy="194" r="2"/><circle cx="520" cy="194" r="2"/><circle cx="540" cy="194" r="2"/><circle cx="560" cy="194" r="2"/><circle cx="580" cy="194" r="2"/><circle cx="600" cy="194" r="2"/><circle cx="620" cy="194" r="2"/><circle cx="640" cy="194" r="2"/><circle cx="660" cy="194" r="2"/><circle cx="680" cy="194" r="2"/><circle cx="700" cy="194" r="2"/><circle cx="720" cy="194" r="2"/><circle cx="740" cy="194" r="2"/><circle cx="760" cy="194" r="2"/><circle cx="780" cy="194" r="2"/><circle cx="800" cy="194" r="2"/><circle cx="820" cy="194" r="2"/>
+      </g>
+      <g class="sv-fill-cu"><rect x="216" y="186" width="8" height="8"/><rect x="316" y="186" width="8" height="8"/><rect x="416" y="186" width="8" height="8"/><rect x="516" y="186" width="8" height="8"/><rect x="616" y="186" width="8" height="8"/><rect x="716" y="186" width="8" height="8"/><rect x="816" y="186" width="8" height="8"/></g>
+      <text x="126" y="236" class="sv-tm">● rpm alle 200 ms   ■ current jede Sekunde</text>
+      <!-- stall check marker -->
+      <line x1="220" y1="30" x2="220" y2="200" class="sv-dash"/>
+      <rect x="226" y="86" width="200" height="56" rx="4" class="sv-warn"/>
+      <text x="236" y="104" class="sv-tc">Bei 1 s: rpm = 0 und −65?</text>
+      <text x="236" y="120" class="sv-tm">→ reset, Recovery-Sequenz,</text>
+      <text x="236" y="135" class="sv-tm">  ganzer Sprung einmal neu</text>
+      <!-- soft stop -->
+      <path d="M820,53 L840,53 L840,78 L860,78 L860,104 L880,104 L880,130 L900,130 L900,156 L920,156 L920,180" class="sv-wire" stroke-dasharray="3 2"/>
+      <text x="836" y="176" class="sv-tm">Soft-Stop</text>
+      <text x="836" y="190" class="sv-tm">5 Stufen/1 s</text>
+    </svg>
+    <figcaption>Der Soft-Stop läuft nur, wenn mindestens die halbe Zieldrehzahl erreicht wurde und kein Stall gemeldet ist; sonst würden die absteigenden Sollwerte die Blockadeerkennung neu auslösen. Eine zweite Blockade im Wiederholungsversuch bricht ab.</figcaption>
+  </figure>
+
+  <div class="grid">
+    <div class="card"><div class="k">Recovery-Katalog</div><p><code>speed0</code>, <code>speed_plus/minus</code> (±500), <code>speed_max_plus/minus</code> (±1000), <code>pulse_plus/minus</code> (±1000), <code>burst_cw/ccw</code>. Zufällig 2–3 Schritte, höchstens 1 burst, 2 pulse, 1 Vollgas, keine direkte Wiederholung, ≥ 100 ms Pause.</p></div>
+    <div class="card"><div class="k">Zwei Motoren</div><p>Mit <code>--motor1</code> laufen beide mit demselben Ziel. Blockiert einer: erst reset, dann den gesunden per Rampe stoppen, Recovery nur am blockierten, beide wiederholen. Blockieren beide: Abbruch ohne Recovery. <span class="chip warn">Hardware-Test offen</span></p></div>
+    <div class="card"><div class="k">Trainingsdaten</div><p>Jeder Recovery-Versuch schreibt zwei Zeilen in <code>recovery_sequences.csv</code> (Phase <code>sequence</code> und <code>retry</code>, verbunden über den Zeitstempel). Die Datei wird nie rotiert. Bei Schemaänderung von Hand leeren.</p></div>
+  </div>
+
+  <div class="howto"><div class="hd">So benutzt du es <span class="where">Pi · Watchdog --live</span></div><div class="bd">
+    <div class="cmd"><pre><span class="cmt"># Standard: Motor 0, Firmware-Gains, Ziel 1000</span>
+python3 capture_step_response.py &gt; sprung.csv
+
+<span class="cmt"># mit P/I-Delta und zweitem Motor</span>
+python3 capture_step_response.py --p-delta 0.02 --i-delta 0.0 --motor0 0 --motor1 1 &gt; sprung_dual.csv</pre><button class="cp" type="button">Kopieren</button></div>
+    <p class="muted">Weitere Optionen: <code>--target-speed</code> (±), <code>--current-instance</code>. Ein abgelehntes <code>pi</code> bricht ab, bevor der Motor angefasst wird. Danach mit dem Skill <code>/plot-step-response</code> als Diagramm darstellen.</p>
+  </div></div>
+
+  <h3>Weitere Skripte</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Skript</th><th>Was es tut</th><th>Aufruf</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">validate_speed.py</td><td>Rampe 0 → 400 → 800 → 1200 → … → −1200 → 0, nach jedem Schritt 3 s warten und <code>rpm</code> + <code>current</code> lesen. Prüft, ob <code>speed</code> wirklich rpm bedeutet.</td><td class="mono">python3 validate_speed.py --motor 0 &gt; ramp.csv</td></tr>
+      <tr><td class="mono">validate_motor_currentsensor.py</td><td>Regressionstest Motor + Stromsensor am selben Bus: 0 → 500 → 1000 → 500 → 0, jeweils <code>current</code>, <code>hal</code>, <code>rpm</code></td><td class="mono">python3 validate_motor_currentsensor.py</td></tr>
+      <tr><td class="mono">validate_lin_stress.py</td><td>Buslast-Test mit <code>speed 0</code> (bewegt nichts): pro Takt <code>speed/rpm/status</code> für beide Motoren, langsamer <code>hal/current/errors</code>. Meldet Zeitplan-Verzug und Zählerdifferenzen.</td><td class="mono">python3 validate_lin_stress.py --tick-rate 0.1 | tee stress.csv</td></tr>
+      <tr><td class="mono">characterize_hall_positions.py</td><td>Findet je Hall-Position die Losbrech-Pulsstärke (750 → 1100 in 25er-Schritten). Einmal von Hand positionieren, dann fährt es ein Rotorviertel selbst ab.</td><td class="mono">python3 characterize_hall_positions.py</td></tr>
+      <tr><td class="mono">analyze_logs.py</td><td>Liest Logs offline (Windows): hängende Aufrufe ohne Antwort, <code>ret ≠ 0</code>, Latenz &gt; 50 ms, falsche Datenlängen, WARNING/ERROR, Lücken &gt; 1,5 s im Poll-Takt. Exit-Code 1 bei Befund.</td><td class="mono">python raspi/analyze_logs.py runs/x/watchdog.log</td></tr>
+      <tr><td class="mono">lincomm.py</td><td>Alter, ursprünglicher LIN-Code (direkter Buszugriff, importiert pygame/numpy). Nur Referenz, wird nicht deployt.</td><td class="muted">nicht benutzen</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 07 ─────────────────────────────────────────── -->
+<section class="ch" id="firmware">
+  <div class="ch-head"><span class="ch-num">07</span><h2>STM32-Firmware</h2><span class="path">STM32/firmware/Core/Src/main.c</span></div>
+  <p class="intro">Ein STM32H743 pro Motor. Die Hauptschleife wechselt zwischen zwei Aufgaben: solange keine LIN-Nachricht vollständig ist, regelt und kommutiert sie den Motor; kommt eine Nachricht an, wird sie ausgewertet und die Schleife beginnt von vorn. Den Empfang erledigt eine Interrupt-Routine im Hintergrund.</p>
+
+  <figure class="dia wide">
+    <svg viewBox="0 0 960 470" role="img" aria-label="Hauptschleife und Interrupt-Routinen der STM32-Firmware">
+      <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="sv-fill-ink"/></marker></defs>
+      <!-- boot -->
+      <rect x="20" y="20" width="250" height="56" rx="4" class="sv-box"/>
+      <text x="32" y="42" class="sv-tc">Boot</text>
+      <text x="32" y="60" class="sv-tm">PB14/PB15 lesen → hwbits (Instanz)</text>
+      <line x1="145" y1="76" x2="145" y2="100" class="sv-arrow" marker-end="url(#ah2)"/>
+      <!-- for loop top -->
+      <rect x="20" y="102" width="250" height="44" rx="4" class="sv-pi"/>
+      <text x="32" y="122" class="sv-tc">for(;;)</text>
+      <text x="32" y="138" class="sv-tm">UART-Empfang für 2 Header-Bytes scharf</text>
+      <line x1="145" y1="146" x2="145" y2="168" class="sv-arrow" marker-end="url(#ah2)"/>
+      <!-- while box -->
+      <rect x="20" y="170" width="560" height="168" rx="6" class="sv-cu"/>
+      <text x="32" y="192" class="sv-tb">while (!bodyrecvd) · Regelschleife</text>
+      <rect x="34" y="204" width="260" height="40" rx="3" class="sv-box"/>
+      <text x="44" y="221" class="sv-tc">driveStep(picontrol(soll, rpm))</text>
+      <text x="44" y="236" class="sv-tm">Hall lesen, eine Phase für 1275 µs</text>
+      <rect x="304" y="204" width="262" height="40" rx="3" class="sv-box"/>
+      <text x="314" y="221" class="sv-tc">updateramp(false)</text>
+      <text x="314" y="236" class="sv-tm">Sollwert ohne Rampe übernehmen</text>
+      <rect x="34" y="252" width="260" height="74" rx="3" class="sv-box"/>
+      <text x="44" y="270" class="sv-tc">alle 100 ms (TIM4):</text>
+      <text x="44" y="286" class="sv-tm">rpm = 25 · hallCounter</text>
+      <text x="44" y="301" class="sv-tm">hallCounter = 0</text>
+      <text x="44" y="316" class="sv-tm">driveKickStart(soll, rpm)</text>
+      <rect x="304" y="252" width="262" height="74" rx="3" class="sv-box"/>
+      <text x="314" y="270" class="sv-tc">Body-Timeout 50 ms?</text>
+      <text x="314" y="286" class="sv-tm">Header da, Body nicht →</text>
+      <text x="314" y="301" class="sv-tm">Empfang abbrechen,</text>
+      <text x="314" y="316" class="sv-tm">bodyTimeoutCount++</text>
+      <line x1="300" y1="338" x2="300" y2="360" class="sv-arrow" marker-end="url(#ah2)"/>
+      <!-- dispatch -->
+      <rect x="20" y="362" width="560" height="96" rx="6" class="sv-box"/>
+      <text x="32" y="382" class="sv-tb">Dispatch · nur bei Checksumme OK und eigener Instanz</text>
+      <g>
+        <rect x="32" y="394" width="130" height="52" rx="3" class="sv-pi"/><text x="42" y="413" class="sv-tc">cntl0mot</text><text x="42" y="430" class="sv-tm">KP, KI setzen</text>
+        <rect x="168" y="394" width="130" height="52" rx="3" class="sv-pi"/><text x="178" y="413" class="sv-tc">cntl1mot</text><text x="178" y="430" class="sv-tm">ein driveStep()</text>
+        <rect x="304" y="394" width="130" height="52" rx="3" class="sv-pi"/><text x="314" y="413" class="sv-tc">cntl2mot</text><text x="314" y="430" class="sv-tm">alles zurücksetzen</text>
+        <rect x="440" y="394" width="130" height="52" rx="3" class="sv-pi"/><text x="450" y="413" class="sv-tc">cntl3mot</text><text x="450" y="430" class="sv-tm">Sollwert + PB12</text>
+      </g>
+      <path d="M20,410 H8 V124 H18" class="sv-arrow-m" marker-end="url(#ah2)"/>
+      <!-- ISRs -->
+      <rect x="620" y="20" width="320" height="230" rx="6" class="sv-zone"/>
+      <text x="634" y="44" class="sv-tb">HAL_UART_RxCpltCallback</text>
+      <text x="634" y="62" class="sv-tm">läuft im Interrupt, parallel zur Schleife</text>
+      <text x="634" y="88" class="sv-tc">Header: 0x55 + PID?</text>
+      <text x="646" y="108" class="sv-tm">Master-Write → Body empfangen</text>
+      <text x="646" y="126" class="sv-tm">eigene Status-PID (Instanz passt) →</text>
+      <text x="658" y="142" class="sv-tm">fillbody() + Checksumme senden</text>
+      <text x="646" y="160" class="sv-tm">fremde PID → mitlesen (Sync halten)</text>
+      <text x="634" y="186" class="sv-tc">Body komplett:</text>
+      <text x="646" y="204" class="sv-tm">bodyrecvd = true → Schleife endet</text>
+      <text x="634" y="230" class="sv-tm">Daten: rx_body · Antwort: tx_body</text>
+      <rect x="620" y="266" width="320" height="86" rx="6" class="sv-stop"/>
+      <text x="634" y="288" class="sv-tb">HAL_UART_ErrorCallback</text>
+      <text x="634" y="306" class="sv-tm">Overrun/Framing: Flags löschen,</text>
+      <text x="634" y="322" class="sv-tm">Sollwert 0, sysError = −8,</text>
+      <text x="634" y="338" class="sv-tm">Abort + Empfang neu scharf</text>
+      <rect x="620" y="368" width="320" height="90" rx="6" class="sv-zone"/>
+      <text x="634" y="390" class="sv-tb">EXTI Hall-Interrupt</text>
+      <text x="634" y="408" class="sv-tm">stm32h7xx_it.c: jede Hall-Flanke</text>
+      <text x="634" y="424" class="sv-tm">→ hallCounter++ (über directionMatrix)</text>
+      <text x="634" y="440" class="sv-tm">24 Flanken = 1 Umdrehung</text>
+    </svg>
+    <figcaption>Die Regelschleife ist während des Wartens auf LIN-Bytes immer aktiv. Der kritische Moment ist der Dispatch: dort ist der Header-Empfang kurz nicht scharf. Deshalb macht jeder Handler nur sehr wenig (höchstens einen 1275-µs-Schritt); längere Puls-Folgen laufen als <code>burst</code> auf der Pi-Seite.</figcaption>
+  </figure>
+
+  <h3>Kommutierung</h3>
+  <p>Klassische 6-Schritt-Blockkommutierung. <code>driveStep()</code> liest die drei Hall-Eingänge PC0–PC2 und bestromt die Phase für den <em>nächsten</em> Zustand. Vorwärts (positiver Sollwert) laufen die Zustände aufsteigend, rückwärts absteigend.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Hall H1 H2 H3</th><th>Zustand</th><th>CW: bestromt</th><th>Phasen</th><th>CCW: bestromt</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">0 0 1</td><td class="num">0</td><td class="mono">1</td><td>A low, C high</td><td class="mono">2</td></tr>
+      <tr><td class="mono">0 1 1</td><td class="num">1</td><td class="mono">2</td><td>B low, C high</td><td class="mono">3</td></tr>
+      <tr><td class="mono">0 1 0</td><td class="num">2</td><td class="mono">3</td><td>B low, A high</td><td class="mono">4</td></tr>
+      <tr><td class="mono">1 1 0</td><td class="num">3</td><td class="mono">4</td><td>C low, A high</td><td class="mono">5</td></tr>
+      <tr><td class="mono">1 0 0</td><td class="num">4</td><td class="mono">5</td><td>C low, B high</td><td class="mono">0</td></tr>
+      <tr><td class="mono">1 0 1</td><td class="num">5</td><td class="mono">0</td><td>A low, B high</td><td class="mono">1</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Die Spalte „Phasen“ gehört zum bestromten Zustand der CW-Spalte. Bekannte Problemstelle: die „Mittelrast“ zwischen Zustand 2 (010) und 3 (110), in der der Motor reproduzierbar hängen bleibt.</p>
+
+  <figure class="dia mid">
+    <svg viewBox="0 0 900 170" role="img" aria-label="Ein Kommutierungsschritt von 1275 Mikrosekunden">
+      <text x="20" y="26" class="sv-tb">Ein driveState()-Schritt bei Stellgröße 400</text>
+      <rect x="20" y="44" width="8" height="46" class="sv-fill-warn"/>
+      <rect x="28" y="44" width="226" height="46" class="sv-fill-cu"/>
+      <rect x="254" y="44" width="494" height="46" class="sv-zone"/>
+      <text x="16" y="110" class="sv-tm">10 µs</text>
+      <text x="40" y="72" class="sv-tc" style="fill:var(--surface)">EIN · 400 µs</text>
+      <text x="270" y="72" class="sv-tc">AUS · 1275 − 400 = 875 µs</text>
+      <line x1="20" y1="124" x2="748" y2="124" class="sv-arrow-m"/>
+      <text x="20" y="142" class="sv-tm">0</text><text x="748" y="142" text-anchor="end" class="sv-tm">1275 µs (GLOBALRATE)</text>
+      <text x="770" y="56" class="sv-tm">Bootstrap laden:</text>
+      <text x="770" y="72" class="sv-tm">beide Low-Sides kurz an</text>
+      <text x="770" y="100" class="sv-tm">Tastgrad ≈ 400/1275</text>
+      <text x="770" y="116" class="sv-tm">≈ 31 %</text>
+    </svg>
+    <figcaption>Die Stellgröße des PI-Reglers ist direkt die Einschaltzeit in µs. Begrenzt auf ±1175 (CONTROLLIMIT = GLOBALRATE − 100). Etwa 785 Schritte pro Sekunde.</figcaption>
+  </figure>
+
+  <h3>PI-Regler</h3>
+  <div class="formula">e = soll − rpm
+u = KP · e + KI · DT · ∫e        KP = 0,19 + dp    KI = 0,44 + di    DT = 1,275 ms
+|u| &gt; 1175 → u begrenzen, Integral nur weiterführen, wenn der Fehler es verkleinert (Anti-Windup)
+soll = 0   → Integral = 0, u = 0</div>
+  <p>Die Standardwerte 0,19/0,44 sind das Ergebnis der abgeschlossenen P/I-Suche vom 10.09.2026 (vorher 0,15/0,40, etwa 27 % besseres ISE). <code>rpm</code> ist auf Vielfache von 25 gerastert, weil in 100-ms-Fenstern ganze Hall-Flanken gezählt werden.</p>
+
+  <h3>Kickstart und Blockade-Erkennung</h3>
+  <p>Jedes 100-ms-Fenster mit Sollwert ≠ 0 und rpm = 0 zählt <code>stuckwindowcount</code> hoch. Dreht sich der Motor wieder, geht der Zähler auf 0.</p>
+  <figure class="dia mid">
+    <svg viewBox="0 0 900 150" role="img" aria-label="Kickstart-Fenster: 3 Wartefenster, 3 Pulsfenster, dann Stall-Fehler">
+      <g>
+        <rect x="20" y="30" width="110" height="56" rx="3" class="sv-box"/><text x="75" y="54" text-anchor="middle" class="sv-tc">1</text><text x="75" y="72" text-anchor="middle" class="sv-tm">warten</text>
+        <rect x="136" y="30" width="110" height="56" rx="3" class="sv-box"/><text x="191" y="54" text-anchor="middle" class="sv-tc">2</text><text x="191" y="72" text-anchor="middle" class="sv-tm">warten</text>
+        <rect x="252" y="30" width="110" height="56" rx="3" class="sv-box"/><text x="307" y="54" text-anchor="middle" class="sv-tc">3</text><text x="307" y="72" text-anchor="middle" class="sv-tm">warten</text>
+        <rect x="368" y="30" width="110" height="56" rx="3" class="sv-warn"/><text x="423" y="54" text-anchor="middle" class="sv-tc">4</text><text x="423" y="72" text-anchor="middle" class="sv-tm">Kick-Puls</text>
+        <rect x="484" y="30" width="110" height="56" rx="3" class="sv-warn"/><text x="539" y="54" text-anchor="middle" class="sv-tc">5</text><text x="539" y="72" text-anchor="middle" class="sv-tm">Kick-Puls</text>
+        <rect x="600" y="30" width="110" height="56" rx="3" class="sv-warn"/><text x="655" y="54" text-anchor="middle" class="sv-tc">6</text><text x="655" y="72" text-anchor="middle" class="sv-tm">Kick-Puls</text>
+        <rect x="716" y="30" width="164" height="56" rx="3" class="sv-stop"/><text x="798" y="54" text-anchor="middle" class="sv-tc">7+</text><text x="798" y="72" text-anchor="middle" class="sv-tstop">STALL_TIM_ERR −65</text>
+      </g>
+      <text x="20" y="112" class="sv-tm">je 100 ms · Kick-Puls = ein driveStep mit KICKSTART_SPEED = 127 (~10 % Tastgrad) · kickStartCount++ (mod 256)</text>
+      <text x="20" y="132" class="sv-tm">ab Fenster 7: Sollwert = 0, Integral = 0 · bleibt verriegelt bis zum nächsten „reset“</text>
+    </svg>
+    <figcaption>Der Kick-Puls ist bewusst schwach. Mit 800 (~63 % Tastgrad) brannten am 08.09.2026 zwei MOSFETs einer Halbbrücke durch. Das eigentliche Befreien aus der Mittelrast übernimmt die Pi-Seite mit <code>burst</code> oder einem Neustart mit höherem Sollwert.</figcaption>
+  </figure>
+
+  <h3>Status-Antwort st3mot</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Byte</th><th>Inhalt</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">0–1</td><td><code>bodyTimeoutCount</code>: Nachrichten, deren Body nie kam</td></tr>
+      <tr><td class="mono">2</td><td><code>checksumErrorCount</code>: abgelehnte, eigene Master-Writes</td></tr>
+      <tr><td class="mono">3</td><td><code>kickStartCount</code> (mod 256, nur durch <code>reset</code> genullt)</td></tr>
+      <tr><td class="mono">4</td><td><code>sysError</code>: 0 = OK, −8 = LIN-Empfangsfehler, −65 = Blockade</td></tr>
+      <tr><td class="mono">5</td><td>frei (0)</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="howto"><div class="hd">So benutzt du es <span class="where">Windows · Git Bash</span></div><div class="bd">
+    <ol>
+      <li><strong>Bauen</strong>: immer <code>make clean</code> + Neubau mit dem in STM32CubeIDE eingebauten arm-gcc. Ausgabe <code>STM32/firmware/Debug/demoboard.elf</code>, Meldungen auch in <code>STM32/build.log</code>.</li>
+      <li><strong>Flashen</strong> (Freigabe nötig): schreibt und verifiziert über ST-Link/SWD. Ohne <code>--reset</code> bleibt der Controller danach angehalten, bis du SW2 drückst. <code>--reset</code> startet sofort und ist eine eigene Freigabe.</li>
+      <li>Meldet der Programmer „Unable to get core ID“: Platine einmal stromlos machen und erneut flashen. Die Spannungsanzeige 0,01 V ist immer so und sagt nichts.</li>
+    </ol>
+    <div class="cmd"><pre>bash STM32/build.sh
+bash STM32/flash.sh
+bash STM32/flash.sh --reset</pre><button class="cp" type="button">Kopieren</button></div>
+    <p class="muted">Alternativ die Skills <code>/build-stm32</code> und <code>/flash-stm32</code>.</p>
+  </div></div>
+</section>
+
+<!-- 08 ─────────────────────────────────────────── -->
+<section class="ch" id="sensoren">
+  <div class="ch-head"><span class="ch-num">08</span><h2>Sensor-Slaves</h2><span class="path">currentsensor/ · lightsensor/</span></div>
+  <div class="grid">
+    <div class="card">
+      <div class="k">Stromsensor · ATmega328P</div>
+      <h4>Zwei Kanäle, ein Board</h4>
+      <p>Zwei ACS712-20A-Hallsensoren an ADC 2 und 3. Ein Timer-1-Interrupt misst abwechselnd beide Kanäle und mittelt über ein ~1-s-Fenster. Über LIN gehen die rohen 10-Bit-Werte; der Pi rechnet in Ampere um, weil der AVR keine Gleitkomma-Einheit hat.</p>
+      <div class="formula">I = (roh · 5 V / 1024 − 2,5 V) / 0,1 V/A
+roh 512 → 0 A</div>
+      <p>Eigener Fehler-Ringpuffer (8 Codes: SYN, PAR, PID, MSI, CHK, TIM, IND, NUM), lesbar mit <code>errors 0</code>. Checksummen-Gate für <code>cntl0cur</code>. Liest seine Instanz-Jumper noch nicht (Issue #1), ist fest Instanz 0.</p>
+    </div>
+    <div class="card">
+      <div class="k">Lichtsensor · ATmega328P</div>
+      <h4>Startpunkt aus dem Kursprojekt</h4>
+      <p>Firmware-Fragmente aus dem DCPS-Kursprojekt. Baut (<code>light.hex</code>), hat aber noch keine LIN-Adresstabelle und keine Checksummen-Prüfung. PIDs sind reserviert. Echte Umsetzung: Issue #11.</p>
+      <span class="chip plan">geplant</span>
+    </div>
+  </div>
+  <div class="howto"><div class="hd">So benutzt du es <span class="where">Windows</span></div><div class="bd">
+    <p>Beide AVR-Projekte bauen mit ihrem eigenen <code>Makefile</code> (avr-gcc). Geflasht wird von Hand, dafür gibt es im Repo kein Werkzeug. Lesen über den Watchdog: <code>current 0</code>, <code>errors 0</code>, <code>selftest</code>.</p>
+    <div class="cmd"><pre>make -C currentsensor/firmware</pre><button class="cp" type="button">Kopieren</button></div>
+  </div></div>
+</section>
+
+<!-- 09 ─────────────────────────────────────────── -->
+<section class="ch" id="optimierung">
+  <div class="ch-head"><span class="ch-num">09</span><h2>Optimierung &amp; Analyse</h2><span class="path">run_experiment.py · run_grid.py · run_grid_row.py · analysis/ · saleae_mcp/</span></div>
+  <p class="intro">Diese Skripte laufen auf Windows und fernsteuern den Pi über SSH. Sie rufen dort <code>capture_step_response.py</code> mit verschiedenen P/I-Deltas auf, holen die CSVs zurück und bewerten sie. Die P/I-Suche ist seit 10.09.2026 abgeschlossen; die Werkzeuge bleiben für spätere Messungen unter Last.</p>
+
+  <h3>Die drei Runner</h3>
+  <div class="stencil-wrap">
+    <div>
+      <h4>run_grid.py · 3×3-Gitter</h4>
+      <div class="stencil" aria-label="3 mal 3 Gitter um den Standardpunkt">
+        <div class="ax"></div><div class="ax">P−</div><div class="ax">P 0</div><div class="ax">P+</div>
+        <div class="ax">I+</div><div class="c">−p,+i</div><div class="c">0,+i</div><div class="c">+p,+i</div>
+        <div class="ax">I 0</div><div class="c">−p,0</div><div class="c ctr">0,0<br>Standard</div><div class="c">+p,0</div>
+        <div class="ax">I−</div><div class="c">−p,−i</div><div class="c">0,−i</div><div class="c">+p,−i</div>
+      </div>
+    </div>
+    <div style="min-width:0;flex:1 1 300px">
+      <h4>run_grid_row.py · 9 Punkte auf einer Achse</h4>
+      <div class="row9" aria-label="Neun Punkte symmetrisch um Null">
+        <span>−4s</span><span>−3s</span><span>−2s</span><span>−1s</span><span class="ctr">0</span><span>+1s</span><span>+2s</span><span>+3s</span><span>+4s</span>
+      </div>
+      <p class="muted" style="margin-top:10px">Eine Achse variiert, die andere bleibt fest. Harte Sperre: kein Punkt mit P-Delta &gt; 0,10, weil dort hörbares Ruppeln begann.</p>
+      <h4>run_experiment.py · ein Punkt mit Saleae</h4>
+      <p class="muted">Checkliste, Saleae im Trigger-Modus scharf, Motorlauf, bis zu 3 Wiederholungen bei Fehltrigger durch EMV, Log-Prüfung, Plot Hall-rpm gegen LIN-rpm.</p>
+    </div>
+  </div>
+
+  <h3>Bewertung</h3>
+  <div class="grid">
+    <div class="card"><div class="k">ISE · Regelgüte</div><div class="formula">ISE = Σ (1000 − rpm)²</div><p>Große Abweichungen zählen überproportional. Bestimmt den „besten Punkt“ und dessen Diagramm.</p></div>
+    <div class="card"><div class="k">MSSD · Rauheit</div><div class="formula">MSSD = mittel (rpm[i+1] − rpm[i])²</div><p>Fängt Pendeln, das ISE nicht sieht. Zwei Fenster: die ersten 2 s und die vollen 7 s.</p></div>
+    <div class="card"><div class="k">Auswahlregel</div><p>P so hoch wie die Rauheit zulässt (mehr P bringt Dämpfung unter Last). I nur so hoch wie nötig gegen bleibende Abweichung, mit Reserve für die späteren ~50 kg Fahrzeuglast.</p></div>
+  </div>
+
+  <div class="howto"><div class="hd">So benutzt du es <span class="where">Windows · Repo-Root · Watchdog auf dem Pi --live</span></div><div class="bd">
+    <ol>
+      <li>Hand am Netzteil bzw. an der Akku-Trennung bleiben: eine Zustimmung deckt das ganze Gitter oder die ganze Reihe ab.</li>
+      <li>Ohne Argumente fragen die Skripte interaktiv nach den Werten.</li>
+      <li>Ergebnisse landen in <code>runs/&lt;zeitstempel&gt;_grid/</code> bzw. <code>_row/</code>: pro Punkt CSV + Log, <code>grid_results.csv</code>, Diagramm des besten Punkts, <code>watchdog.log</code>.</li>
+      <li>Abbruch mit Ctrl-C: Das Skript schickt zusätzlich <code>speed 0</code> und notiert, nach welchem Punkt abgebrochen wurde.</li>
+    </ol>
+    <div class="cmd"><pre><span class="cmt"># ein Punkt mit Saleae (Logic 2 mit Automation auf Port 10430)</span>
+python run_experiment.py 0.02 0.0
+
+<span class="cmt"># 3×3 um den Standard: |p_delta| |i_delta|</span>
+python run_grid.py 0.04 0.04
+
+<span class="cmt"># Reihe: Achse, fester Wert der anderen Achse, Schrittweite</span>
+python run_grid_row.py p 0.0 0.02
+
+<span class="cmt"># mehrere Läufe zu Heatmaps zusammenführen</span>
+python analysis/grid_heatmap.py runs/2026-08-25_xxxx_grid runs/2026-08-25_yyyy_row</pre><button class="cp" type="button">Kopieren</button></div>
+  </div></div>
+
+  <h3>Saleae und Hall-Auswertung</h3>
+  <p><code>analysis/hall_rpm.py</code> entprellt die rohen Hall-Flanken (Spitzen kürzer als 1 µs sind EMV beim Schalten der MOSFETs), zählt 24 Flanken pro Umdrehung und bildet 100-ms-Fenster, direkt vergleichbar mit der Firmware. <code>has_sustained_high()</code> unterscheidet einen echten Trigger (Sekunden HIGH) von einer Störspitze. Die zeitliche Ausrichtung beider Quellen läuft über die steigende Flanke des Trigger-Pins, die mit dem <code>speed</code>-Befehl zusammenfällt.</p>
+  <p><code>saleae_mcp/server.py</code> stellt Claude Code die Saleae als Werkzeuge bereit: <code>list_devices</code>, <code>start_capture</code> (manual, timed, trigger), <code>wait_for_capture_or_timeout</code>, <code>stop_capture</code>, <code>export_capture</code>, <code>save_capture</code>, <code>close_capture</code>. Voraussetzung: Logic 2 läuft mit aktiviertem Automation-Server.</p>
+  <div class="note"><strong>Aktuell:</strong> Der MCP-Server <code>saleae</code> konnte in dieser Sitzung nicht verbinden. In <code>.mcp.json</code> zeigen Python- und Server-Pfad auf <code>C:\Users\rembo\…</code>; auf diesem Rechner liegt das Repo unter einem anderen Benutzer. Pfade anpassen, dann Claude Code neu starten.</div>
+</section>
+
+<!-- 10 ─────────────────────────────────────────── -->
+<section class="ch" id="werkzeuge">
+  <div class="ch-head"><span class="ch-num">10</span><h2>Werkzeuge &amp; Prozess</h2><span class="path">raspi/deploy.sh · raspi/tests/ · .claude/skills/ · issues/</span></div>
+  <div class="grid">
+    <div class="card"><div class="k">Deploy</div><p><code>raspi/deploy.sh</code> kopiert alle Pi-Skripte flach nach <code>/home/pi/auto/</code>, mit 3 Versuchen pro Aufruf gegen wackeliges mDNS. Führt nichts aus. Die zweite CLAUDE.md heißt dort <code>watchdog-CLAUDE.md</code>.</p></div>
+    <div class="card"><div class="k">Tests</div><p>Jede Änderung unter <code>raspi/control</code> oder <code>raspi/watchdog</code> braucht vorher einen grünen <code>pytest raspi/tests/</code>. Getestet wird Logik mit DryRunLin und Mocks, nicht echtes Motorverhalten.</p></div>
+    <div class="card"><div class="k">Skills</div><p><code>/build-stm32</code>, <code>/flash-stm32</code>, <code>/deploy-raspi</code>, <code>/run-raspi-validation</code>, <code>/saleae-trigger-capture</code>, <code>/plot-step-response</code>, <code>/plot-saleae-step-response</code>, <code>/analyze-logs</code>.</p></div>
+    <div class="card"><div class="k">Review mit Codex</div><p>GitHub-Issues sind der Status. Pro Issue eine Datei <code>issues/I-000N.md</code>: Claude schreibt, Codex prüft nur und setzt <code>review: done</code>, der Autor entscheidet. Details in <code>PROCESS.md</code> und <code>AGENTS.md</code>.</p></div>
+  </div>
+  <div class="howto"><div class="hd">So benutzt du es <span class="where">Windows · Repo-Root</span></div><div class="bd">
+    <div class="cmd"><pre>pytest raspi/tests/
+bash raspi/deploy.sh
+ssh pi@motorpi.local</pre><button class="cp" type="button">Kopieren</button></div>
+  </div></div>
+</section>
+
+<!-- 11 ─────────────────────────────────────────── -->
+<section class="ch" id="rezepte">
+  <div class="ch-head"><span class="ch-num">11</span><h2>Typische Abläufe</h2></div>
+  <div class="grid">
+    <div class="card">
+      <div class="k">Rezept A</div><h4>Motor von Hand testen</h4>
+      <ol class="plain">
+        <li>Akku/Netzteil an, Instanz-Jumper prüfen.</li>
+        <li>Pi: <code>python3 watchdog.py --live</code></li>
+        <li>Zweites Terminal: <code>python3 motorcontrol.py</code></li>
+        <li><code>status 0</code> → <code>speed 0 500</code> → <code>rpm 0</code> → stufenweise auf <code>0</code></li>
+        <li>Windows: <code>/analyze-logs</code></li>
+      </ol>
+    </div>
+    <div class="card">
+      <div class="k">Rezept B</div><h4>Fahrzeug fahren</h4>
+      <ol class="plain">
+        <li>Watchdog <code>--live</code> starten.</li>
+        <li>Joystick einmal ohne <code>--live</code> mit <code>--debug</code> prüfen.</li>
+        <li>Mit <code>--live</code> fahren. Für Konstantfahrt ab und zu LT antippen.</li>
+        <li>Blockade: Vibration → rote Taste B.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <div class="k">Rezept C</div><h4>Firmware ändern</h4>
+      <ol class="plain">
+        <li><code>main.c</code> bearbeiten; bei Adressen erst <code>addresses.json</code> + Generator.</li>
+        <li><code>bash STM32/build.sh</code></li>
+        <li>Freigabe → <code>bash STM32/flash.sh</code>, dann SW2 drücken.</li>
+        <li><code>selftest</code> und kurzer <code>speed</code>-Test.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <div class="k">Rezept D</div><h4>Pi-Code ändern</h4>
+      <ol class="plain">
+        <li>Im Repo ändern, nie direkt auf dem Pi.</li>
+        <li><code>pytest raspi/tests/</code> muss grün sein.</li>
+        <li><code>bash raspi/deploy.sh</code></li>
+        <li>Watchdog neu starten (der alte läuft sonst mit dem alten Code).</li>
+      </ol>
+    </div>
+    <div class="card">
+      <div class="k">Rezept E</div><h4>Sprungantwort messen</h4>
+      <ol class="plain">
+        <li>Watchdog <code>--live</code>.</li>
+        <li><code>python3 capture_step_response.py &gt; runs/x.csv</code></li>
+        <li>CSV holen, <code>/plot-step-response</code>.</li>
+        <li>Mit Saleae: <code>/saleae-trigger-capture</code> bzw. <code>run_experiment.py</code>.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <div class="k">Rezept F</div><h4>Bus prüfen</h4>
+      <ol class="plain">
+        <li><code>selftest</code> in motorcontrol (≈ 2 s, bewegt nichts).</li>
+        <li><code>validate_lin_stress.py --tick-rate 0.1</code></li>
+        <li>Zusammenfassung auf stderr: Verzug und Zählerdifferenzen müssen 0 sein.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- 12 ─────────────────────────────────────────── -->
+<section class="ch" id="offen">
+  <div class="ch-head"><span class="ch-num">12</span><h2>Offene Punkte &amp; Auffälligkeiten</h2></div>
+  <p class="intro">Was beim Lesen des Codes aufgefallen ist oder laut Doku noch aussteht.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Bereich</th><th>Punkt</th><th>Art</th></tr></thead>
+    <tbody>
+      <tr><td>joystick.py</td><td>Zweiter Fix der Langvibration (Erkennung vs. Bestätigung getrennt) ist noch nicht mit einer echten Blockade bestätigt (Issue #22). Recovery-Taste B noch nie gegen echte Blockade getestet (Issue #21).</td><td><span class="chip warn">HW-Test</span></td></tr>
+      <tr><td>capture_step_response.py</td><td>Zwei-Motor-Modus (<code>--motor1</code>) nur mit pytest getestet (Issue #4).</td><td><span class="chip warn">HW-Test</span></td></tr>
+      <tr><td>watchdog.py</td><td>Strom-Stall-Signatur nur beobachtend und nur für val1/Motor 0 (Issue #18). <code>selftest</code> fest auf Motor 0/Sensor 0.</td><td><span class="chip">offen</span></td></tr>
+      <tr><td>watchdog.py</td><td>Was stoppt den Motor, wenn der Watchdog-Prozess selbst ausfällt? (Issue #15). Einzelne Schutzpfade nie gezielt einzeln getestet (Issue #16).</td><td><span class="chip">offen</span></td></tr>
+      <tr><td>Mess-Skripte</td><td>Fehlgeschlagene Lesungen landen als „None“ in der CSV statt Alarm zu geben (Issue #13).</td><td><span class="chip">offen</span></td></tr>
+      <tr><td>Firmware</td><td>Keine Plausibilitätsgrenze für KP/KI und keine Rückmeldung der aktiven Werte (Issue #6). Funktionen <code>driveStepKickStart*</code> sind toter Code.</td><td><span class="chip">offen</span></td></tr>
+      <tr><td>watchdog.py</td><td>Kommentar zu <code>OVERCURRENT_STOP_THRESHOLD</code> sagt, 15 A liege „klar über“ dem Nennstrom von ~16–17 A. Rechnerisch liegt es darunter; bei Volllast könnte der Stopp auslösen. Schwelle oder Kommentar prüfen.</td><td><span class="chip warn">prüfen</span></td></tr>
+      <tr><td>STM32/flash.sh</td><td>Kommentar nennt als Standard <code>BringUpBoard.elf</code>, der Code nutzt korrekt <code>demoboard.elf</code>.</td><td><span class="chip">Kleinigkeit</span></td></tr>
+      <tr><td>Pfade</td><td><code>.mcp.json</code>, <code>build.sh</code> (make.exe) und die Doku verweisen auf <code>C:\Users\rembo\…</code>. Auf diesem Rechner prüfen.</td><td><span class="chip warn">prüfen</span></td></tr>
+      <tr><td>Fahrzeug</td><td>Mehrprozess-Architektur, Lern-Algorithmus, SQLite-Log, Web-UI, IFM-Sensorik, GPS/ROS.</td><td><span class="chip plan">geplant</span></td></tr>
+    </tbody>
+  </table></div>
+  <footer>Erstellt aus dem Quellcode und den CLAUDE.md-Dateien des Repos <code>auto</code> (Commit c60dcb3), Stand 7. Oktober 2026.</footer>
+</section>
+</main>
+</div>
+
+<script>
+document.querySelectorAll('.cmd').forEach(function(box){
+  var btn = box.querySelector('.cp'), pre = box.querySelector('pre');
+  if(!btn || !pre) return;
+  btn.addEventListener('click', function(){
+    var lines = pre.innerText.split('\n').filter(function(l){ return !/^\s*#/.test(l); });
+    var text = lines.join('\n').replace(/^motorcontrol> /gm,'').trim();
+    function done(msg){ btn.textContent = msg; setTimeout(function(){ btn.textContent = 'Kopieren'; }, 1400); }
+    try {
+      navigator.clipboard.writeText(text).then(function(){ done('Kopiert'); }, function(){ selectPre(); done('Markiert'); });
+    } catch(e){ selectPre(); done('Markiert'); }
+    function selectPre(){ var r = document.createRange(); r.selectNodeContents(pre); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+  });
+});
+</script>
+
+</body></html>
