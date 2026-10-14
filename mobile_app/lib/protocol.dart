@@ -2,10 +2,34 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 
-const serviceUuid = 'bc790001-6a35-4c63-9419-00d9e185a101';
-const challengeUuid = 'bc790002-6a35-4c63-9419-00d9e185a101';
-const commandUuid = 'bc790003-6a35-4c63-9419-00d9e185a101';
-const statusUuid = 'bc790004-6a35-4c63-9419-00d9e185a101';
+const defaultHost = '10.42.0.1';
+const defaultPort = 8765;
+
+/// One length byte, then the payload. Pi frames start with a kind byte:
+/// `C` challenge, `S` status, `E` UTF-8 rejection reason.
+List<int> encodeFrame(List<int> payload) {
+  if (payload.length > 255) throw RangeError('Frame zu lang');
+  return [payload.length, ...payload];
+}
+
+class FrameDecoder {
+  final _buffer = <int>[];
+
+  /// Returns every complete payload; incomplete bytes stay buffered.
+  List<List<int>> add(List<int> bytes) {
+    _buffer.addAll(bytes);
+    final frames = <List<int>>[];
+    while (_buffer.isNotEmpty && _buffer.length > _buffer[0]) {
+      final size = _buffer[0];
+      frames.add(_buffer.sublist(1, 1 + size));
+      _buffer.removeRange(0, 1 + size);
+    }
+    if (_buffer.length > 512) {
+      throw const FormatException('Ungültiger Datenstrom');
+    }
+    return frames;
+  }
+}
 
 List<int> parseKey(String text) {
   final cleaned = text.trim().replaceAll(RegExp(r'[\s-]'), '');
@@ -29,7 +53,7 @@ List<int> parseKey(String text) {
 class SessionProtocol {
   SessionProtocol(this.key, this.nonce) {
     if (key.length != 16 || nonce.length != 16) {
-      throw const FormatException('Ungültige Bluetooth-Sitzung');
+      throw const FormatException('Ungültige Sitzung');
     }
   }
   final List<int> key;
@@ -94,5 +118,23 @@ class VehicleStatus {
     2 => 'WIRD ANGEHALTEN',
     3 => 'STÖRUNG',
     _ => 'GESTOPPT',
+  };
+
+  /// What the driver should do; null while everything is fine.
+  String? get problem => switch (error) {
+    0 => ready ? null : 'Warte auf Motoren …',
+    1 => 'Verbindung oder Eingabe ausgeblieben. Erneut Start drücken.',
+    4 =>
+      ready
+          ? 'Motoren wieder erreichbar. Start drücken.'
+          : 'Motoren nicht erreichbar. Motorsicherung und Stromversorgung prüfen – '
+                'Start wird automatisch frei, sobald sie antworten.',
+    5 =>
+      ready
+          ? 'Motor drehte nicht (Sicherung aus oder blockiert). '
+                'Sicherung prüfen, dann erneut Start.'
+          : 'Motor drehte nicht. Motorsteuerung wird zurückgesetzt …',
+    _ =>
+      'Störung am Pi (Hardware/Überstrom). Vor Ort prüfen und Dienst neu starten.',
   };
 }

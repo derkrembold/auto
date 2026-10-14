@@ -11,7 +11,7 @@ from multiprocessing.connection import Listener
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from bridge import WatchdogClient, worker
-from control_core import Config, Control, ARMED, FAULT
+from control_core import Config, Control, ARMED, DISARMED, ERR_MOTOR_STALLED
 
 
 def main():
@@ -28,6 +28,8 @@ def main():
                         command = conn.recv(); commands.append(command)
                         if command.startswith("status"):
                             conn.send("OK ret=0 sys_error=%d" % (-65 if fail.is_set() else 0))
+                        elif command.startswith("reset"):
+                            fail.clear(); conn.send("OK")  # firmware reset clears the latched stall
                         elif command.startswith("current"):
                             conn.send("OK ret=0 val1=0.05 val2=0.08")
                         else:
@@ -51,10 +53,18 @@ def main():
         time.sleep(.25)
         assert "speed 0 700" in commands and "speed 1 -700" in commands, commands
         fail.set()
+        deadline = time.monotonic() + 3
+        while "reset 0" not in commands and time.monotonic() < deadline:
+            time.sleep(.02)
+        while not control.ready and time.monotonic() < deadline:
+            time.sleep(.02)
+        assert control.ready and control.state == DISARMED and control.error == ERR_MOTOR_STALLED, commands
+        tail = commands[commands.index("speed 0 700"):]
+        assert "speed 0 0" in tail and "reset 0" in tail, tail
+        shutdown.set()
         engine.join(timeout=2); fake.join(timeout=1); listener.close()
-        assert control.state == FAULT and "DISCONNECTED" in commands, commands
         assert commands[-1] == "DISCONNECTED"
-        print("PASS: real Unix IPC to private fake watchdog, both motor commands and fault disconnect")
+        print("PASS: real Unix IPC to private fake watchdog, both motor commands, stall stop, reset, re-enable")
 
 
 if __name__ == "__main__":

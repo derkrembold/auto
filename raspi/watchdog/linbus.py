@@ -511,7 +511,8 @@ def get_motor_status(lin, instance):
     # functions are left as-is for their existing callers (selftest()'s
     # provocation checks only ever cared about the timeout/checksum
     # counts). data[4] = sysError (main.c's MOT_OK=0/STALL_TIM_ERR=-65/
-    # etc., from errors.h -- signed, two's-complement, unlike the plain
+    # LIN_RCV_ERR=-8/LIN_COMM_LOST_ERR=-9 (firmware stopped itself after
+    # 3.5s without any LIN header, 2026-10-14)/etc., from errors.h -- signed, two's-complement, unlike the plain
     # unsigned counters), data[5] = reserved, always 0.
     ret, data = lin.read(constants.st3mot, instance=_motor_wire_id(instance))
     if ret < 0:

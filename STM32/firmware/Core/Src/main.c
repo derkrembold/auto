@@ -114,6 +114,15 @@ volatile int8_t sysError = 0;
 
 
 #define LIN_BODY_TIMEOUT_MS 50
+/* Kommunikations-Failsafe (2026-10-14): Kommt so lange kein einziger
+ * LIN-Header (Sync 0x55, egal an welchen Slave), ist entweder der
+ * Master weg oder der eigene UART-Empfang haengt. Dann nie mit dem
+ * letzten Sollwert weiterfahren: stoppen, sysError setzen, Empfang neu
+ * aufsetzen. Live-Vorfall: ein Motor antwortete nicht mehr und fuhr
+ * nach Watchdog-Absturz weiter. 3500 ms liegt ueber dem normalen
+ * Watchdog-Pollabstand (1 s Pause + ein 2-s-Lese-Timeout). */
+#define LIN_COMM_TIMEOUT_MS 3500
+volatile uint32_t lastHeaderTick = 0;
 /* Anzahl aufeinanderfolgender 100ms-rpm-Fenster mit rpm==0 (bei
  * ungleich-0-Kommando), bevor ein Kick versucht wird.
  * 4 * 100ms = 400ms, siehe analysis/grid_search_log.md, 2026-08-26. */
@@ -280,6 +289,21 @@ int main(void)
 			  bodyTimedOut = true;
 			  bodyrecvd = true;  // bricht die while-Schleife ab
 			  bodyTimeoutCount++;
+		  }
+
+		  if ((HAL_GetTick() - lastHeaderTick) > LIN_COMM_TIMEOUT_MS) {
+			  if (controlvariableinput != 0) {
+				  controlvariableinput = 0;
+				  integral = 0;
+				  sysError = LIN_COMM_LOST_ERR;
+				  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);  // Trigger-Pin wie bei speed 0
+			  }
+			  // Haengenden Empfang neu aufsetzen (wie HAL_UART_ErrorCallback).
+			  HAL_UART_AbortReceive(&huart4);
+			  headerrecvd = false;
+			  bodysent = false;
+			  HAL_UART_Receive_IT(&huart4, rx_header, 2);
+			  lastHeaderTick = HAL_GetTick();
 		  }
 
 		  if(HAL_GPIO_ReadPin (GPIOE, GPIO_PIN_5) ==  GPIO_PIN_RESET)
@@ -755,6 +779,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	//messagerecvd = false;
 	if (headerrecvd == false && bodyrecvd == false) {
 		if (rx_header[0] == 0x55) {
+			lastHeaderTick = HAL_GetTick();  // Master lebt, Empfang funktioniert
 			uint8_t address = rx_header[1] & 0x3c;
 			int8_t linindex = getindex(address);
 			if (linindex >= 0) {

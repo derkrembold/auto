@@ -504,6 +504,40 @@ def test_disconnect_stops_every_known_motor_not_just_motor_0():
     assert wd.last_commanded_speed[1] == 0
 
 
+def test_stop_all_writes_every_stop_under_one_lock_hold():
+    # 2026-10-14 live incident: the lock was released between motors,
+    # the monitor thread slipped in a 2s timed-out read of the dead
+    # motor 1, and motor 1's stop went out 2s late. All stop writes must
+    # happen inside one acquisition.
+    wd = Watchdog(DryRunLin())
+    wd.execute("speed 0 300")
+    wd.execute("speed 1 -500")
+
+    class CountingLock:
+        def __init__(self, inner):
+            self.inner, self.acquired, self.held = inner, 0, False
+        def __enter__(self):
+            self.inner.acquire()
+            self.acquired += 1
+            self.held = True
+        def __exit__(self, *exc):
+            self.held = False
+            self.inner.release()
+
+    lock = CountingLock(wd.lock)
+    wd.lock = lock
+    held_during_writes = []
+    original_write = wd.lin.write
+    def write(address, data, **kwargs):
+        held_during_writes.append(lock.held)
+        return original_write(address, data, **kwargs)
+    wd.lin.write = write
+    wd._stop_all_motors("test")
+    assert lock.acquired == 1
+    assert held_during_writes == [True, True]
+    assert wd.last_commanded_speed == {0: 0, 1: 0}
+
+
 def test_idle_timeout_stops_every_known_motor_not_just_motor_0():
     # Issue #17, same reasoning as the disconnect test above.
     wd = Watchdog(DryRunLin())

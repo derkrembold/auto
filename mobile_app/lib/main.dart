@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'protocol.dart';
 import 'vehicle_link.dart';
 
 void main() {
@@ -38,6 +39,7 @@ class _ControlScreenState extends State<ControlScreen>
     with WidgetsBindingObserver {
   late final VehicleLink link;
   final accessCode = TextEditingController();
+  final host = TextEditingController(text: defaultHost);
   Timer? timer;
   StreamSubscription<dynamic>? gamepad;
   bool armed = false, held = false, useGamepad = false, stopping = false;
@@ -167,6 +169,7 @@ class _ControlScreenState extends State<ControlScreen>
     link.removeListener(_refresh);
     link.dispose();
     accessCode.dispose();
+    host.dispose();
     super.dispose();
   }
 
@@ -230,39 +233,35 @@ class _ControlScreenState extends State<ControlScreen>
                               ),
                             ),
                             const SizedBox(height: 12),
-                            FilledButton.tonalIcon(
-                              onPressed: link.connecting ? null : link.scan,
-                              icon: const Icon(Icons.bluetooth_searching),
-                              label: Text(
-                                link.scanning
-                                    ? 'Erneut suchen'
-                                    : 'MotorPi suchen',
+                            TextField(
+                              controller: host,
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              keyboardType: TextInputType.url,
+                              decoration: const InputDecoration(
+                                labelText: 'Adresse des Pi',
+                                border: OutlineInputBorder(),
                               ),
                             ),
-                            for (final device in link.devices.values)
-                              Card(
-                                child: ListTile(
-                                  leading: const Icon(Icons.directions_car),
-                                  title: Text(
-                                    device.name.isEmpty
-                                        ? 'MotorPi'
-                                        : device.name,
-                                  ),
-                                  subtitle: Text(device.id),
-                                  trailing: const Icon(Icons.chevron_right),
-                                  onTap: link.connecting
-                                      ? null
-                                      : () => link.connect(
-                                          device,
-                                          accessCode.text,
-                                        ),
-                                ),
-                              ),
+                            const SizedBox(height: 12),
+                            FilledButton.tonalIcon(
+                              onPressed: link.connecting
+                                  ? null
+                                  : () => link.connect(
+                                      accessCode.text,
+                                      host: host.text.trim().isEmpty
+                                          ? defaultHost
+                                          : host.text.trim(),
+                                    ),
+                              icon: const Icon(Icons.wifi),
+                              label: const Text('Verbinden'),
+                            ),
+                            const SizedBox(height: 12),
                             if (link.connecting)
                               const LinearProgressIndicator(),
                             const SizedBox(height: 20),
                             const Text(
-                              'Bluetooth steuert das Fahrzeug. Das WLAN „MotorPi“ ist zusätzlich für den lokalen Zugang verfügbar.',
+                              'Die Steuerung läuft über das WLAN „MotorPi“. Fragt Android, ob die Verbindung ohne Internet bleiben soll: Ja.',
                             ),
                           ],
                         ],
@@ -293,10 +292,12 @@ class _ControlScreenState extends State<ControlScreen>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (status?.error != 0)
-                    const Text(
-                      'Steuerung gestoppt. Pi und Verbindung prüfen.',
-                      style: TextStyle(color: Colors.orange),
+                  if (status?.problem != null)
+                    Text(
+                      status!.problem!,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.orange),
                     ),
                   Row(
                     children: [
@@ -347,7 +348,7 @@ class _ControlScreenState extends State<ControlScreen>
                             await stop();
                             await link.disconnect();
                           },
-                          icon: const Icon(Icons.bluetooth_disabled),
+                          icon: const Icon(Icons.link_off),
                         ),
                       ],
                     )

@@ -357,8 +357,19 @@ class Watchdog:
         if not instances:
             logger.warning(f"{reason} — no known motor instances to stop yet")
             return
+        # One lock hold for every stop write (2026-10-14): releasing it per
+        # motor let the monitor thread slip a ~2s timed-out read of an
+        # unresponsive motor in between, so the second motor's stop went
+        # out 2s late while it was still driving. Writes get no slave
+        # reply, so this hold stays a few ms even with a dead motor.
         for instance in instances:
-            self._stop_motor(instance, reason)
+            logger.warning(f"{reason} — stopping motor {instance}")
+        with self.lock:
+            for instance in instances:
+                linbus.set_speed(self.lin, instance, 0)
+        for instance in instances:
+            self.last_commanded_speed[instance] = 0
+            self.speed_became_nonzero_at[instance] = None
 
     def on_connect(self):
         self.last_command_time = time.monotonic()
@@ -803,9 +814,18 @@ def serve(address=SOCKET_ADDRESS, live=False, debug=False):
                     while True:
                         try:
                             command = conn.recv()
-                        except EOFError:
+                        except (EOFError, OSError):
                             break
-                        conn.send(wd.execute(command))
+                        reply = wd.execute(command)
+                        try:
+                            conn.send(reply)
+                        except OSError:
+                            # Client gave up while a slow (timed-out) LIN
+                            # read was in flight (2026-10-14): a closed
+                            # pipe is a disconnect, never a reason to let
+                            # the safety barrier itself crash and leave
+                            # the motors without a LIN master.
+                            break
                 finally:
                     wd.on_disconnect()
                     logger.info("client disconnected")

@@ -31,6 +31,15 @@ void main() {
       List.generate(16, (i) => i),
     );
   });
+  test('hardware problems explain themselves and recovery', () {
+    VehicleStatus status(int flags, int error) =>
+        VehicleStatus([1, 0, flags, error, ...List.filled(16, 0)]);
+    expect(status(5, 0).problem, isNull);
+    expect(status(1, 4).problem, contains('Motorsicherung'));
+    expect(status(5, 4).problem, contains('Start drücken'));
+    expect(status(5, 5).problem, contains('Sicherung prüfen'));
+    expect(status(1, 3).problem, contains('neu starten'));
+  });
   test('malformed status cannot arm the UI', () {
     expect(() => VehicleStatus([1, 1]), throwsFormatException);
     expect(() => VehicleStatus(List.filled(20, 2)), throwsFormatException);

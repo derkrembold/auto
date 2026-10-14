@@ -11,6 +11,7 @@ const int LIN_CHK_ERR = -5;
 const int LIN_TIM_ERR = -6;
 const int LIN_GEN_ERR = -7;
 const int LIN_RCV_ERR = -8;
+const int LIN_COMM_LOST_ERR = -9;  // no LIN header for LIN_COMM_TIMEOUT_MS while driving
 
 const int STALL_TIM_ERR = -65;
 
