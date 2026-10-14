@@ -72,3 +72,11 @@ lightsensor/*.hex
 # backed up locally from the Pi's /home/pi/IFM/, not added to the repo
 # yet - revisit once IFM integration actually starts.
 IFM/
+
+# Local mobile build tools, generated packages, and private deployment configuration
+.tools/
+dist/
+raspi/mobile/config.json
+raspi/mobile/*.log
+raspi/mobile/access.txt
+mobile_app/android/build/

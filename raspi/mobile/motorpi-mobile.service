@@ -1,0 +1,21 @@
+[Unit]
+Description=MotorPi Bluetooth mobile control (simulation by default)
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/auto/mobile
+ExecStart=/usr/bin/python3 /home/pi/auto/mobile/ble_server.py --config /etc/motorpi-mobile/config.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=5
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/tmp
+
+[Install]
+WantedBy=multi-user.target

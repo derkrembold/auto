@@ -1,0 +1,14 @@
+{
+  "key_hex": "GENERATE_A_RANDOM_32_HEX_CHARACTER_ACCESS_CODE",
+  "live": false,
+  "left": 0,
+  "right": 1,
+  "left_dir": "unknown",
+  "right_dir": "unknown",
+  "mapping_verified": false,
+  "max_rpm": 1200,
+  "deadzone_rpm": 500,
+  "heartbeat_s": 0.6,
+  "ramp_s": 1.0,
+  "socket_path": "/tmp/motorwatchdog.sock"
+}
