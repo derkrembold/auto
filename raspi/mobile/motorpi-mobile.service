@@ -1,13 +1,12 @@
 [Unit]
-Description=MotorPi Bluetooth mobile control (simulation by default)
-After=bluetooth.service
-Requires=bluetooth.service
+Description=MotorPi WLAN mobile control (simulation by default)
+After=network.target
 
 [Service]
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/auto/mobile
-ExecStart=/usr/bin/python3 /home/pi/auto/mobile/ble_server.py --config /etc/motorpi-mobile/config.json
+ExecStart=/usr/bin/python3 /home/pi/auto/mobile/wifi_server.py --config /etc/motorpi-mobile/config.json
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=5

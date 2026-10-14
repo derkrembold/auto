@@ -11,6 +11,8 @@ COMMAND_UUID = "bc790003-6a35-4c63-9419-00d9e185a101"
 STATUS_UUID = "bc790004-6a35-4c63-9419-00d9e185a101"
 AUTH, ARM, DRIVE, STOP = 0, 1, 2, 3
 DISARMED, ARMED, STOPPING, FAULT = 0, 1, 2, 3
+# Status error codes. 1 and 3 as before; 4/5 clear themselves once the hardware answers.
+ERR_INPUT_LOST, ERR_HARDWARE, ERR_UNREACHABLE, ERR_MOTOR_STALLED = 1, 3, 4, 5
 
 
 @dataclass
@@ -113,6 +115,8 @@ class Control:
             if forward or steer or flags or self.state == STOPPING or self.output != (0, 0):
                 raise ValueError("Release all controls before Start")
             if not self.ready:
+                if self.error in (ERR_UNREACHABLE, ERR_MOTOR_STALLED):
+                    raise ValueError("Motors not reachable or not turning; check the motor fuse")
                 raise ValueError("Watchdog not ready; check local service")
             if self.state == FAULT:
                 raise ValueError("Fault is latched; local operator must inspect/restart service")
@@ -144,7 +148,7 @@ class Control:
         if self.state == FAULT:
             return
         self.target = (0, 0)
-        if error:
+        if error and self.ready:  # keep a pending hardware reason visible
             self.error = error
         if self.state == STOPPING:
             return  # repeated Stop/heartbeat loss must not extend the ramp
@@ -155,6 +159,20 @@ class Control:
         # A hardware fault must not be followed by nonzero ramp commands re-arming a stalled motor.
         self.state, self.error = FAULT, error
         self.output = self.target = (0, 0)
+
+    def unavailable(self, error):
+        # Hardware not answering or not turning: zero at once (no ramp on a lost motor),
+        # block Start until the bridge sees every device answer cleanly again.
+        if self.state == FAULT:
+            return
+        self.ready = False
+        self.state, self.error = DISARMED, error
+        self.output = self.target = (0, 0)
+
+    def available(self):
+        # The error stays visible until the next Start, which clears it.
+        if self.state != FAULT:
+            self.ready = True
 
     def disconnect(self, peer):
         self.sessions.pop(peer, None)

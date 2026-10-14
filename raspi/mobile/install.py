@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the BLE simulator and optional dedicated offline AP. Does not start motors."""
+"""Install the WLAN control simulator and optional dedicated offline AP. Does not start motors."""
 import argparse
 import json
 import os
@@ -20,10 +20,13 @@ def main():
     parser.add_argument("--access-point", action="store_true")
     parser.add_argument("--app-download", action="store_true")
     parser.add_argument("--rotate-access-code", action="store_true",
-                        help="Generate a new eight-character Bluetooth code")
+                        help="Generate a new eight-character app access code")
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error("Run with sudo")
+    # Restarting the simulator next to a consented live session would run two control servers.
+    if subprocess.run(["systemctl", "is-active", "--quiet", "motorpi-driving-session"]).returncode == 0:
+        parser.error("A live driving session is running; stop it before installing")
     source = Path(__file__).resolve().parent
     config_dir = Path("/etc/motorpi-mobile")
     config_dir.mkdir(mode=0o750, exist_ok=True)
@@ -40,7 +43,7 @@ def main():
     access_code = config["key_hex"]
     if access.exists():
         for line in access.read_text().splitlines():
-            if line.startswith("MotorPi Bluetooth access code: "):
+            if line.startswith(("MotorPi access code: ", "MotorPi Bluetooth access code: ")):
                 candidate = line.split(": ", 1)[1]
                 if len(candidate) == 8 and derive_key(candidate).hex() == config["key_hex"]:
                     access_code = candidate
@@ -50,9 +53,12 @@ def main():
         config_file.write_text(json.dumps(config, indent=2) + "\n")
     os.chmod(str(config_file), 0o640); os.chown(str(config_file), 0, pi.pw_gid)
     shutil.copyfile(str(source / "motorpi-mobile.service"), "/etc/systemd/system/motorpi-mobile.service")
-    shutil.copyfile(str(source / "dbus-motorpi.conf"), "/etc/dbus-1/system.d/motorpi-mobile.conf")
-    run("systemctl", "reload", "dbus")
-    credentials = "MotorPi Bluetooth access code: " + access_code + "\nMode: SIMULATION\n"
+    # The earlier BLE transport needed a D-Bus policy for BlueZ; WLAN control does not.
+    old_dbus = Path("/etc/dbus-1/system.d/motorpi-mobile.conf")
+    if old_dbus.exists():
+        old_dbus.unlink()
+        run("systemctl", "reload", "dbus")
+    credentials = "MotorPi access code: " + access_code + "\nMode: SIMULATION\n"
     if args.access_point:
         # Ethernet is the maintenance connection. Never replace a Wi-Fi uplink silently.
         routes = subprocess.check_output(["ip", "route", "show", "default"], universal_newlines=True)
@@ -92,17 +98,20 @@ def main():
         # These were freshly installed for this feature; dedicated units keep their scope on wlan0.
         run("systemctl", "disable", "--now", "dnsmasq.service")
         run("systemctl", "stop", "wpa_supplicant@wlan0.service")
-    # Keep already provisioned WLAN credentials when updating just the BLE code.
+    # Keep already provisioned WLAN credentials when updating just the access code.
     hostapd = config_dir / "hostapd.conf"
     if hostapd.exists():
         password = next(line.split("=", 1)[1] for line in hostapd.read_text().splitlines()
                         if line.startswith("wpa_passphrase="))
         credentials += "Wi-Fi SSID: MotorPi\nWi-Fi password: " + password + "\nPi access-point IP: 10.42.0.1\n"
+        credentials += "App control: TCP 10.42.0.1:" + str(config.get("listen_port", 8765)) + "\n"
     if args.app_download:
         download = source / "download"
         if not (download / "motorpi.apk").is_file():
             raise RuntimeError("Copy the APK to mobile/download/motorpi.apk first")
-        shutil.copyfile(str(source / "download.html"), str(download / "index.html"))
+        page = (source / "download.html").read_text(encoding="utf-8")
+        version = (download / "version.txt").read_text().strip() if (download / "version.txt").exists() else "unbekannt"
+        (download / "index.html").write_text(page.replace("{{VERSION}}", version), encoding="utf-8")
         shutil.copyfile(str(source / "motorpi-download.service"), "/etc/systemd/system/motorpi-download.service")
         credentials += "App download via WLAN: http://10.42.0.1:8080/\n"
     access.write_text(credentials); os.chmod(str(access), 0o600); os.chown(str(access), pi.pw_uid, pi.pw_gid)

@@ -1,10 +1,9 @@
 package de.motorpi.motorpi_control
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.hardware.input.InputManager
-import android.os.Build
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -16,7 +15,6 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
     private var sink: EventChannel.EventSink? = null
-    private var pending: MethodChannel.Result? = null
     private var forward = 0.0
     private var steer = 0.0
     private var held = false
@@ -32,20 +30,17 @@ class MainActivity : FlutterActivity(), InputManager.InputDeviceListener {
             override fun onCancel(arguments: Any?) { sink = null }
         })
         MethodChannel(engine.dartExecutor.binaryMessenger, "motorpi/platform").setMethodCallHandler { call, result ->
-            if (call.method != "bluetoothPermissions") { result.notImplemented() }
-            else if (pending != null) { result.error("busy", "Permission request pending", null) }
+            if (call.method != "bindWifi") { result.notImplemented() }
             else {
-                val permissions = if (Build.VERSION.SDK_INT >= 31) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-                    else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-                val missing = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
-                if (missing.isEmpty()) result.success(true)
-                else { pending = result; requestPermissions(missing.toTypedArray(), 401) }
+                // Without internet Android would route via mobile data; pin sockets to the WLAN.
+                val connectivity = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                @Suppress("DEPRECATION")
+                val wifi = connectivity.allNetworks.firstOrNull {
+                    connectivity.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+                }
+                result.success(wifi != null && connectivity.bindProcessToNetwork(wifi))
             }
         }
-    }
-    override fun onRequestPermissionsResult(code: Int, permissions: Array<out String>, results: IntArray) {
-        super.onRequestPermissionsResult(code, permissions, results)
-        if (code == 401) { pending?.success(results.isNotEmpty() && results.all { it == PackageManager.PERMISSION_GRANTED }); pending = null }
     }
     private fun emit(start: Boolean = false, stop: Boolean = false, connected: Boolean = true) {
         sink?.success(mapOf("forward" to forward, "steer" to steer, "held" to held,

@@ -24,14 +24,17 @@ def main():
         return
     if args.consent != 'STARTFAHRT':
         parser.error('Immediate human consent is required for this driving session')
-    config = Config(**json.loads(Path(args.config).read_text()))
+    data = json.loads(Path(args.config).read_text())
+    for key in ('listen_host', 'listen_port'):
+        data.pop(key, None)
+    config = Config(**data)
     if not config.live:
         parser.error('Verified live configuration required')
     socket_path = Path(config.socket_path)
     if socket_path.exists():
         parser.error('Existing watchdog session; refusing to take over')
     directory = Path(__file__).resolve().parent
-    watchdog = ble = None
+    watchdog = server = None
     owned_socket = None
     def interrupted(signum, frame):
         raise KeyboardInterrupt()
@@ -46,15 +49,15 @@ def main():
                 raise RuntimeError('Live watchdog did not start')
             time.sleep(.1)
         owned_socket = socket_path.stat().st_ino
-        ble = subprocess.Popen([sys.executable, str(directory / 'ble_server.py'),
-                                '--config', args.config, '--live'], cwd=str(directory))
+        server = subprocess.Popen([sys.executable, str(directory / 'wifi_server.py'),
+                                   '--config', args.config, '--live'], cwd=str(directory))
         print('Live session running: authenticate in the app, then press START.', flush=True)
-        while watchdog.poll() is None and ble.poll() is None:
+        while watchdog.poll() is None and server.poll() is None:
             time.sleep(.2)
         raise RuntimeError('Live process exited; ending the driving session')
     finally:
-        # BLE SIGTERM performs the existing proportional ramp before closing IPC.
-        for process, wait_s in ((ble, 5), (watchdog, 3)):
+        # Server SIGTERM performs the existing proportional ramp before closing IPC.
+        for process, wait_s in ((server, 5), (watchdog, 3)):
             if process is not None and process.poll() is None:
                 process.terminate()
                 try:
