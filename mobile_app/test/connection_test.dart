@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:motorpi_control/protocol.dart';
-import 'package:motorpi_control/vehicle_link.dart';
+import 'package:motorpi_control/models/protocol.dart';
+import 'package:motorpi_control/services/transport.dart';
+import 'package:motorpi_control/services/vehicle_link.dart';
 
 class FakeTransport implements Transport {
   final incoming = StreamController<List<int>>();

@@ -21,9 +21,20 @@ def main():
     parser.add_argument("--app-download", action="store_true")
     parser.add_argument("--rotate-access-code", action="store_true",
                         help="Generate a new eight-character app access code")
+    parser.add_argument("--logs-only", action="store_true",
+                        help="Install/restart only the read-only log service; allowed during a live session")
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error("Run with sudo")
+    if args.logs_only:
+        # Separate read-only process; touches neither the control server nor a live session.
+        unit = Path(__file__).resolve().parent / "motorpi-logs.service"
+        shutil.copyfile(str(unit), "/etc/systemd/system/motorpi-logs.service")
+        run("systemctl", "daemon-reload")
+        run("systemctl", "enable", "--now", "motorpi-logs.service")
+        run("systemctl", "restart", "motorpi-logs.service")
+        print("Installed the log service only (port 8081).")
+        return
     # Restarting the simulator next to a consented live session would run two control servers.
     if subprocess.run(["systemctl", "is-active", "--quiet", "motorpi-driving-session"]).returncode == 0:
         parser.error("A live driving session is running; stop it before installing")
@@ -53,6 +64,7 @@ def main():
         config_file.write_text(json.dumps(config, indent=2) + "\n")
     os.chmod(str(config_file), 0o640); os.chown(str(config_file), 0, pi.pw_gid)
     shutil.copyfile(str(source / "motorpi-mobile.service"), "/etc/systemd/system/motorpi-mobile.service")
+    shutil.copyfile(str(source / "motorpi-logs.service"), "/etc/systemd/system/motorpi-logs.service")
     # The earlier BLE transport needed a D-Bus policy for BlueZ; WLAN control does not.
     old_dbus = Path("/etc/dbus-1/system.d/motorpi-mobile.conf")
     if old_dbus.exists():
@@ -105,6 +117,7 @@ def main():
                         if line.startswith("wpa_passphrase="))
         credentials += "Wi-Fi SSID: MotorPi\nWi-Fi password: " + password + "\nPi access-point IP: 10.42.0.1\n"
         credentials += "App control: TCP 10.42.0.1:" + str(config.get("listen_port", 8765)) + "\n"
+        credentials += "App logs (read-only, same access code): HTTP 10.42.0.1:8081\n"
     if args.app_download:
         download = source / "download"
         if not (download / "motorpi.apk").is_file():
@@ -118,6 +131,9 @@ def main():
     run("systemctl", "daemon-reload")
     run("systemctl", "enable", "--now", "motorpi-mobile.service")
     run("systemctl", "restart", "motorpi-mobile.service")
+    # Read-only and a separate process: safe next to a live driving session too.
+    run("systemctl", "enable", "--now", "motorpi-logs.service")
+    run("systemctl", "restart", "motorpi-logs.service")
     if args.access_point:
         run("systemctl", "enable", "--now", "motorpi-ap.service", "motorpi-dhcp.service")
     if args.app_download:

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:motorpi_control/main.dart';
-import 'package:motorpi_control/protocol.dart';
-import 'package:motorpi_control/vehicle_link.dart';
+import 'package:motorpi_control/controllers/drive_controller.dart';
+import 'package:motorpi_control/models/protocol.dart';
+import 'package:motorpi_control/services/vehicle_link.dart';
+import 'package:motorpi_control/views/control/control_view.dart';
+import 'package:motorpi_control/views/control/joystick.dart';
+import 'package:provider/provider.dart';
 
 class FakeLink extends VehicleLink {
   FakeLink() {
@@ -55,6 +58,17 @@ class FakeLink extends VehicleLink {
   }
 }
 
+Widget controlScreen(VehicleLink link) =>
+    ChangeNotifierProvider<VehicleLink>.value(
+      value: link,
+      child: MaterialApp(
+        home: ChangeNotifierProvider(
+          create: (_) => DriveController(link: link),
+          child: const ControlView(),
+        ),
+      ),
+    );
+
 void main() {
   for (final size in [const Size(360, 640), const Size(640, 360)]) {
     testWidgets('fixed joystick retains drive and never scrolls at $size', (
@@ -76,7 +90,7 @@ void main() {
         ),
       );
       final link = FakeLink();
-      await tester.pumpWidget(MaterialApp(home: ControlScreen(link: link)));
+      await tester.pumpWidget(controlScreen(link));
       expect(find.byType(SingleChildScrollView), findsNothing);
       expect(tester.getRect(find.text('STOPP')).bottom, lessThan(size.height));
       await tester.tap(find.text('START'));
@@ -123,7 +137,7 @@ void main() {
         ),
       );
       final link = FakeLink();
-      await tester.pumpWidget(MaterialApp(home: ControlScreen(link: link)));
+      await tester.pumpWidget(controlScreen(link));
       expect(tester.getRect(find.text('STOPP')).bottom, lessThan(640));
       await tester.tap(find.text('START'));
       await tester.pump();

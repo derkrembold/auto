@@ -1,43 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'protocol.dart';
-
-/// A byte stream to the Pi. Production uses TCP over the MotorPi WLAN.
-abstract class Transport {
-  Stream<List<int>> get input;
-  void add(List<int> bytes);
-  Future<void> close();
-}
-
-class SocketTransport implements Transport {
-  SocketTransport(this._socket) {
-    _socket.setOption(SocketOption.tcpNoDelay, true);
-  }
-  final Socket _socket;
-  static Future<Transport> connect(String host, int port) async =>
-      SocketTransport(
-        await Socket.connect(host, port, timeout: const Duration(seconds: 5)),
-      );
-  @override
-  Stream<List<int>> get input => _socket;
-  @override
-  void add(List<int> bytes) => _socket.add(bytes);
-  @override
-  Future<void> close() async => _socket.destroy();
-}
-
-typedef Connector = Future<Transport> Function(String host, int port);
+import '../models/protocol.dart';
+import 'platform_network.dart';
+import 'transport.dart';
 
 class VehicleLink extends ChangeNotifier {
   VehicleLink({Connector? connector, Future<void> Function()? prepareNetwork})
     : _connector = connector ?? SocketTransport.connect,
-      _prepareNetwork = prepareNetwork ?? _bindWifi;
+      _prepareNetwork = prepareNetwork ?? bindWifi;
   final Connector _connector;
   final Future<void> Function() _prepareNetwork;
-  static const platform = MethodChannel('motorpi/platform');
   Transport? _transport;
   StreamSubscription<List<int>>? _input;
   SessionProtocol? _protocol;
@@ -46,21 +19,17 @@ class VehicleLink extends ChangeNotifier {
       'Mit dem WLAN „MotorPi“ verbinden, dann Zugangscode eingeben.';
   VehicleStatus? status;
   DateTime? lastStatus;
+
+  /// Last successfully authenticated Pi and key; kept in memory only, so the
+  /// log viewer works after a drive session ends.
+  String? host;
+  List<int>? key;
   int _generation = 0;
   bool _disposed = false;
   Completer<void>? _acknowledgement;
   int? _awaitedSequence;
   void _notify() {
     if (!_disposed) notifyListeners();
-  }
-
-  /// Android routes sockets via mobile data when the WLAN has no internet;
-  /// binding the process to the WLAN keeps 10.42.0.1 reachable.
-  static Future<void> _bindWifi() async {
-    final bound = await platform.invokeMethod<bool>('bindWifi') ?? false;
-    if (!bound) {
-      throw StateError('Kein WLAN verbunden. Mit „MotorPi“ verbinden.');
-    }
   }
 
   Future<void> connect(
@@ -184,6 +153,8 @@ class VehicleLink extends ChangeNotifier {
       ensureCurrent();
       connected = true;
       connecting = false;
+      this.host = host;
+      this.key = key;
       message = 'Verbunden · Start gibt die Steuerung frei.';
       _notify();
     } catch (error) {
@@ -247,6 +218,7 @@ class VehicleLink extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    if (connected) message = 'Verbindung getrennt.';
     connected = false;
     connecting = false;
     ++_generation;

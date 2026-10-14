@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:motorpi_control/protocol.dart';
+import 'package:motorpi_control/models/protocol.dart';
 
 void main() {
   test(
