@@ -32,6 +32,34 @@ allein wegen unveränderter Eingabe oder normalem Touch-Loslassen.
 App-Wechsel, abgebrochene Touch-Geste, Controllertrennung und WLAN-Ausfall
 beenden die Fahrt. Ein Wechsel Touch/Controller stoppt zuerst.
 
+## App 0.4.0: new screen flow, logs and shell (14.10.2026)
+
+The app now starts with a launcher, finds the Pi on its own (short probe
+connections to the last host, `10.42.0.1` and `motorpi.local`), then asks
+for the access code, then shows the drive screen. Driving behaviour,
+protocol and limits are unchanged. Details and the code structure:
+`mobile_app/README.md`.
+
+**Log service `log_server.py` (`motorpi-logs.service`, port 8081)** — a
+separate, read-only process, so file reads and `journalctl` never touch
+the control loop. Serves only a fixed list: `watchdog`, `joystick`,
+`motorcontrol`, `validate_speed`, `capture_step_response`,
+`validate_lin_stress` (`/home/pi/auto/*.log`) and the journals of
+`motorpi-mobile`, `motorpi-driving-session`, `motorpi-ap`, `motorpi-dhcp`,
+`motorpi-download`, `motorpi-logs`. Protected by the same access code:
+`GET /challenge` returns a single-use nonce (30 s); every other request sends
+`X-MotorPi-Auth: <nonce>:<HMAC-SHA256(key, "logs" || nonce || path)[:16]>`,
+`path` including the query string. Five wrong codes block for the rest of the
+30 s window. Plain HTTP (WPA2 encrypts the WLAN); the logs are readable by
+anyone who has the code. Runs as `pi` with `SupplementaryGroups=systemd-journal`.
+`install.py` installs and (re)starts it; it is safe next to a live session.
+
+**Shell:** the app has a full SSH terminal (any user, password or pasted
+key). Unrestricted on purpose during testing — it bypasses the app's safety
+logic and the Motor Execution Consent rule in `raspi/CLAUDE.md` is up to the
+person holding the phone. Nothing on the Pi changes for it; it uses the
+existing SSH server.
+
 ## Umstellung auf WLAN, App 0.3.0 (14.10.2026)
 
 Steuerung über TCP im WLAN statt BLE. Gleiche Anmeldung, gleiche signierte
@@ -157,7 +185,8 @@ nichts steuern.
 
 Getestete Umgebung: Flutter 3.47.6 / Dart 3.13.5, JDK 17 (Temurin), Android
 compile SDK 36. Flutter liegt ignoriert in `.tools/flutter` (offizielles Archiv,
-SHA-256 gegen `releases_windows.json` prüfen). Außer `crypto` keine Pakete.
+SHA-256 gegen `releases_windows.json` prüfen). Packages since 0.4.0: `crypto`,
+`provider`, `dartssh2`, `xterm` (see `mobile_app/README.md`).
 
 Downloadseite aktuell halten: App bauen, testen und mit Version veröffentlichen
 in einem Schritt:
@@ -174,6 +203,13 @@ Bekannter Windows-Stolperstein: Scheitert der Gradle-Daemon mit „Unable to
 establish loopback connection“ (JDK-Unix-Socket unter 8.3-Kurzpfad im TEMP),
 setzt `deploy.ps1` `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=C:\Temp`.
 
+On Linux/macOS use `raspi/mobile/deploy.sh` (same steps and file list:
+`--install`, `--build-apk`, `--apk <path>`, `--access-point`,
+`--rotate-access-code`, `--host user@ip`). `--logs-only` installs/restarts
+just the read-only log service and, unlike a full install, is allowed while
+a live driving session runs. If `motorpi.local` does not resolve, use the IP
+(`--host pi@192.168.0.104` on the home LAN, or `MOTORPI_HOST`).
+
 Bei der ersten WLAN-Einrichtung zusätzlich `-AccessPoint` angeben. Sie verlangt
 den bestehenden Ethernet-Uplink. Voraussetzungen: `hostapd`, `dnsmasq`. Auf dem vorhandenen Raspbian Buster wurden die
 fehlenden WLAN-Pakete über eine temporäre Quellenliste der offiziellen
@@ -186,7 +222,7 @@ Konfiguration: `/etc/motorpi-mobile/config.json`. Zugangsdaten:
 oder in den Downloadordner kopieren. Die App hält den Code nur im Speicher.
 
 ```sh
-systemctl status motorpi-mobile motorpi-ap motorpi-dhcp motorpi-download
+systemctl status motorpi-mobile motorpi-logs motorpi-ap motorpi-dhcp motorpi-download
 journalctl -u motorpi-mobile -n 40 --no-pager
 ```
 

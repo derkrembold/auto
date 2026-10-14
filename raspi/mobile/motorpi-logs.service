@@ -1,0 +1,20 @@
+[Unit]
+Description=MotorPi read-only log service for the app
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+# Reading other units' journals needs this group; the log files are pi's own.
+SupplementaryGroups=systemd-journal
+WorkingDirectory=/home/pi/auto/mobile
+ExecStart=/usr/bin/python3 /home/pi/auto/mobile/log_server.py --config /etc/motorpi-mobile/config.json
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

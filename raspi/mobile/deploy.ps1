@@ -27,7 +27,7 @@ if ($BuildApk) {
 }
 & ssh -o BatchMode=yes $PiHost 'mkdir -p /home/pi/auto/mobile'
 if ($LASTEXITCODE -ne 0) { throw 'SSH preparation failed' }
-$files = @('control_core.py', 'bridge.py', 'wifi_server.py', 'config.example.json', 'motorpi-mobile.service', 'motorpi-download.service', 'download.html', 'install.py', 'access_code.py', 'commission.py', 'live_session.py')
+$files = @('control_core.py', 'bridge.py', 'wifi_server.py', 'log_server.py', 'motorpi-logs.service', 'config.example.json', 'motorpi-mobile.service', 'motorpi-download.service', 'download.html', 'install.py', 'access_code.py', 'commission.py', 'live_session.py')
 $paths = $files | ForEach-Object { Join-Path $source $_ }
 & scp @paths "${PiHost}:/home/pi/auto/mobile/"
 if ($LASTEXITCODE -ne 0) { throw 'Copy failed' }
