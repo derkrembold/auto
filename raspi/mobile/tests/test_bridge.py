@@ -1,6 +1,4 @@
 """Bridge recovery logic against a scripted fake watchdog client (no sockets, no motors)."""
-import hashlib
-import hmac
 import logging
 import struct
 import sys
@@ -11,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import bridge
 from bridge import Unreachable, MotorFault, WatchdogClient, worker
-from control_core import (Config, Control, AUTH, ARM, ARMED, DISARMED, FAULT,
+from control_core import (Config, Control, CLAIM, ARM, ARMED, DISARMED, FAULT,
                           ERR_UNREACHABLE, ERR_MOTOR_STALLED)
 
 bridge.PROBE_INTERVAL_S = 0.05
@@ -59,7 +57,7 @@ class FakeWatchdog:
 
 
 def start(fake):
-    config = Config("00" * 16, live=True, mapping_verified=True, left_dir="cw", right_dir="ccw")
+    config = Config(live=True, mapping_verified=True, left_dir="cw", right_dir="ccw")
     control = Control(config, time.monotonic)
     lock, shutdown = threading.Lock(), threading.Event()
     thread = threading.Thread(target=worker, args=(control, lock, shutdown, logging.getLogger("t"), fake),
@@ -145,7 +143,7 @@ def test_late_reply_forces_reconnect():
             return False
         def close(self):
             pass
-    client = WatchdogClient(Config("00" * 16))
+    client = WatchdogClient(Config())
     client.connection = Late()
     try:
         client.check_status(0, timeout=0.01)
@@ -156,7 +154,7 @@ def test_late_reply_forces_reconnect():
 
 
 def test_status_reply_parsing():
-    client = WatchdogClient(Config("00" * 16))
+    client = WatchdogClient(Config())
     replies = iter(["OK ret=-5 timeout=None checksum=None kickstart=None sys_error=None",
                     "OK ret=0 timeout=0 checksum=0 kickstart=3 sys_error=-65",
                     "OK ret=0 timeout=0 checksum=0 kickstart=0 sys_error=0"])
@@ -172,14 +170,12 @@ def test_status_reply_parsing():
 
 
 def test_arm_explains_missing_motors():
-    key = bytes(16)
-    control = Control(Config(key.hex()), time.monotonic)
-    nonce = control.challenge("p")
-    control.receive("p", bytes([AUTH]) + hmac.new(key, b"auth" + nonce, hashlib.sha256).digest()[:16])
+    control = Control(Config(), time.monotonic)
+    control.connect("p")
+    control.receive("p", bytes([CLAIM]))
     control.unavailable(ERR_UNREACHABLE)
-    body = struct.pack("<BIhhB", ARM, 1, 0, 0, 0)
     try:
-        control.receive("p", body + hmac.new(key, nonce + body, hashlib.sha256).digest()[:10])
+        control.receive("p", struct.pack("<BIhhB", ARM, 1, 0, 0, 0))
     except ValueError as exc:
         assert "motor fuse" in str(exc)
     else:

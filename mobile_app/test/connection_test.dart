@@ -8,7 +8,7 @@ import 'package:motorpi_control/services/vehicle_link.dart';
 class FakeTransport implements Transport {
   final incoming = StreamController<List<int>>();
   final sent = <List<int>>[];
-  bool acceptAuthentication = true, acknowledge = true, closed = false;
+  bool acceptClaim = true, acknowledge = true, closed = false;
   int lastSequence = 0;
 
   @override
@@ -18,13 +18,13 @@ class FakeTransport implements Transport {
   void add(List<int> bytes) {
     final packet = bytes.sublist(1);
     sent.add(packet);
-    if (packet.length == 17 && acceptAuthentication) {
-      emitStatus(authenticated: true);
+    if (packet.length == 1 && acceptClaim) {
+      emitStatus(claimed: true);
     }
-    if (packet.length == 20 && acknowledge) {
+    if (packet.length == 10 && acknowledge) {
       lastSequence =
           packet[1] | packet[2] << 8 | packet[3] << 16 | packet[4] << 24;
-      emitStatus(authenticated: true);
+      emitStatus(claimed: true);
     }
   }
 
@@ -32,12 +32,13 @@ class FakeTransport implements Transport {
     () => incoming.add(encodeFrame([kind.codeUnitAt(0), ...payload])),
   );
 
-  void challenge() => frame('C', List.generate(16, (i) => i));
+  /// What the Pi sends right after the connection is accepted.
+  void greet() => emitStatus(claimed: false);
 
-  void emitStatus({required bool authenticated}) => frame('S', [
-    1,
+  void emitStatus({required bool claimed}) => frame('S', [
+    2,
     0,
-    authenticated ? 6 : 4,
+    claimed ? 6 : 4,
     0,
     0,
     0,
@@ -63,8 +64,6 @@ class FakeTransport implements Transport {
   }
 }
 
-const key = '000102030405060708090a0b0c0d0e0f';
-
 Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 30));
 
 VehicleLink linkFor(FakeTransport transport, {Completer<void>? network}) =>
@@ -87,42 +86,44 @@ void main() {
     ]);
   });
 
-  test('authenticates after the challenge and acknowledges commands', () async {
-    final transport = FakeTransport();
-    final link = linkFor(transport);
-    final connecting = link.connect(key);
-    await settle();
-    expect(transport.sent, isEmpty);
-    transport.challenge();
-    transport.emitStatus(authenticated: false);
-    await connecting.timeout(const Duration(seconds: 2));
-    expect(link.connected, isTrue, reason: link.message);
-    expect(transport.sent.single.length, 17);
-    expect(await link.send(1), isTrue);
-    expect(transport.sent.last.length, 20);
-    await link.disconnect();
-    expect(transport.closed, isTrue);
-    link.dispose();
-  });
+  test(
+    'claims control after the first status and acknowledges commands',
+    () async {
+      final transport = FakeTransport();
+      final link = linkFor(transport);
+      final connecting = link.connect();
+      await settle();
+      expect(transport.sent, isEmpty);
+      transport.greet();
+      await connecting.timeout(const Duration(seconds: 2));
+      expect(link.connected, isTrue, reason: link.message);
+      expect(transport.sent.single, [0]);
+      expect(await link.send(1), isTrue);
+      expect(transport.sent.last.length, 10);
+      await link.disconnect();
+      expect(transport.closed, isTrue);
+      link.dispose();
+    },
+  );
 
-  test('Pi rejection of the access code is shown, not a timeout', () async {
-    final transport = FakeTransport()..acceptAuthentication = false;
+  test('Pi rejection of the claim is shown, not a timeout', () async {
+    final transport = FakeTransport()..acceptClaim = false;
     final link = linkFor(transport);
-    final connecting = link.connect(key);
-    transport.challenge();
+    final connecting = link.connect();
+    transport.greet();
     await settle();
-    transport.frame('E', utf8.encode('Invalid access code'));
+    transport.frame('E', utf8.encode('Another phone owns the control session'));
     await connecting.timeout(const Duration(seconds: 2));
     expect(link.connected, isFalse);
-    expect(link.message, contains('Invalid access code'));
+    expect(link.message, contains('Another phone'));
     link.dispose();
   });
 
   test('missing acknowledgement stops control within 500 ms', () async {
     final transport = FakeTransport();
     final link = linkFor(transport);
-    final connecting = link.connect(key);
-    transport.challenge();
+    final connecting = link.connect();
+    transport.greet();
     await connecting.timeout(const Duration(seconds: 2));
     transport.acknowledge = false;
     final started = DateTime.now();
@@ -136,8 +137,8 @@ void main() {
   test('closed socket during a drive is a safety loss', () async {
     final transport = FakeTransport();
     final link = linkFor(transport);
-    final connecting = link.connect(key);
-    transport.challenge();
+    final connecting = link.connect();
+    transport.greet();
     await connecting.timeout(const Duration(seconds: 2));
     await transport.incoming.close();
     await settle();
@@ -146,15 +147,15 @@ void main() {
     link.dispose();
   });
 
-  test('canceled attempt cannot send authentication afterwards', () async {
+  test('canceled attempt cannot claim control afterwards', () async {
     final transport = FakeTransport();
     final network = Completer<void>();
     final link = linkFor(transport, network: network);
-    final connecting = link.connect(key);
+    final connecting = link.connect();
     await settle();
     await link.disconnect();
     network.complete();
-    transport.challenge();
+    transport.greet();
     await connecting.timeout(const Duration(seconds: 2));
     expect(link.connected, isFalse);
     expect(transport.sent, isEmpty);
@@ -166,7 +167,7 @@ void main() {
       connector: (host, port) async => FakeTransport(),
       prepareNetwork: () async => throw StateError('Kein WLAN verbunden.'),
     );
-    await link.connect(key);
+    await link.connect();
     expect(link.connected, isFalse);
     expect(link.message, contains('Kein WLAN'));
     link.dispose();

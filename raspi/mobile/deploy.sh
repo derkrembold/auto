@@ -14,7 +14,7 @@
 set -euo pipefail
 
 HOST="${MOTORPI_HOST:-pi@motorpi.local}"
-INSTALL=0 LOGS_ONLY=0 ACCESS_POINT=0 BUILD_APK=0 ROTATE=0 APK_PATH=""
+INSTALL=0 LOGS_ONLY=0 ACCESS_POINT=0 BUILD_APK=0 APK_PATH=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --host) HOST="$2"; shift 2 ;;
@@ -23,7 +23,6 @@ while [[ $# -gt 0 ]]; do
         --access-point) ACCESS_POINT=1; shift ;;
         --build-apk) BUILD_APK=1; shift ;;
         --apk) APK_PATH="$2"; shift 2 ;;
-        --rotate-access-code) ROTATE=1; shift ;;
         -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 2 ;;
     esac
@@ -55,7 +54,7 @@ fi
 
 FILES=(control_core.py bridge.py wifi_server.py log_server.py motorpi-logs.service
        config.example.json motorpi-mobile.service motorpi-download.service download.html
-       install.py access_code.py commission.py live_session.py)
+       install.py network_policy.py commission.py live_session.py)
 
 echo "Deploying to $HOST:$TARGET (copy only unless --install/--logs-only)"
 retry ssh "${SSH_OPTS[@]}" "$HOST" "mkdir -p $TARGET"
@@ -75,7 +74,6 @@ if [[ $LOGS_ONLY -eq 1 ]]; then
 elif [[ $INSTALL -eq 1 ]]; then
     COMMAND="sudo -n python3 $TARGET/install.py"
     [[ $ACCESS_POINT -eq 1 ]] && COMMAND+=" --access-point"
-    [[ $ROTATE -eq 1 ]] && COMMAND+=" --rotate-access-code"
     [[ -n "$APK_PATH" ]] && COMMAND+=" --app-download"
     # No retry: a failed install should be inspected, not repeated blindly.
     ssh "${SSH_OPTS[@]}" "$HOST" "$COMMAND" || { echo "Installation failed; inspect Pi output" >&2; exit 1; }

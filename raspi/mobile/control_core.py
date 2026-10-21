@@ -1,7 +1,7 @@
-"""Hardware-independent, authenticated mobile control. Python 3.7 compatible."""
-import hashlib
-import hmac
-import secrets
+"""Hardware-independent mobile control. Python 3.7 compatible.
+
+No access code: being on the MotorPi WLAN is the admission (see network_policy.py).
+"""
 import struct
 from dataclasses import dataclass
 
@@ -9,7 +9,8 @@ SERVICE_UUID = "bc790001-6a35-4c63-9419-00d9e185a101"
 CHALLENGE_UUID = "bc790002-6a35-4c63-9419-00d9e185a101"
 COMMAND_UUID = "bc790003-6a35-4c63-9419-00d9e185a101"
 STATUS_UUID = "bc790004-6a35-4c63-9419-00d9e185a101"
-AUTH, ARM, DRIVE, STOP = 0, 1, 2, 3
+CLAIM, ARM, DRIVE, STOP = 0, 1, 2, 3
+PROTOCOL_VERSION = 2
 DISARMED, ARMED, STOPPING, FAULT = 0, 1, 2, 3
 # Status error codes. 1 and 3 as before; 4/5 clear themselves once the hardware answers.
 ERR_INPUT_LOST, ERR_HARDWARE, ERR_UNREACHABLE, ERR_MOTOR_STALLED = 1, 3, 4, 5
@@ -17,7 +18,6 @@ ERR_INPUT_LOST, ERR_HARDWARE, ERR_UNREACHABLE, ERR_MOTOR_STALLED = 1, 3, 4, 5
 
 @dataclass
 class Config:
-    key_hex: str
     live: bool = False
     left: int = 0
     right: int = 1
@@ -31,8 +31,6 @@ class Config:
     socket_path: str = "/tmp/motorwatchdog.sock"
 
     def __post_init__(self):
-        if len(bytes.fromhex(self.key_hex)) != 16:
-            raise ValueError("key_hex must contain 16 random bytes")
         if self.left == self.right or self.left not in range(4) or self.right not in range(4):
             raise ValueError("Two distinct motor instances 0..3 are required")
         if not 0 < self.max_rpm <= 1200 or not 0 <= self.deadzone_rpm < self.max_rpm:
@@ -49,8 +47,7 @@ class Control:
     """Called under the server's lock; tick() has no I/O and never blocks."""
     def __init__(self, config, clock):
         self.config, self.clock = config, clock
-        self.key = bytes.fromhex(config.key_hex)
-        self.sessions = {}
+        self.sessions = set()
         self.owner = None
         self.state = DISARMED
         self.error = 0
@@ -61,51 +58,31 @@ class Control:
         self.stop_started = None
         self.stop_origin = (0, 0)
         self.ready = not config.live
-        self.auth_failures = 0
-        self.auth_window = self.clock()
 
-    def challenge(self, peer):
+    def connect(self, peer):
+        """A connection only observes status until it claims control."""
         if not peer:
-            raise ValueError("Missing Bluetooth device identity")
+            raise ValueError("Missing peer identity")
         if self.owner is not None and self.owner != peer:
             raise ValueError("Another phone owns the control session")
         if self.owner == peer:
             self.stop()
             self.owner = None
-        # Bound memory even if many unauthenticated devices ask for a challenge.
-        if len(self.sessions) >= 8 and peer not in self.sessions:
-            self.sessions.clear()
-        nonce = secrets.token_bytes(16)
-        self.sessions[peer] = (nonce, self.clock())
-        return nonce
+        self.sessions.add(peer)
 
     def receive(self, peer, packet):
         if peer not in self.sessions:
-            raise ValueError("Read challenge first")
-        nonce, issued = self.sessions[peer]
-        if len(packet) == 17 and packet[0] == AUTH:
-            now = self.clock()
-            if now - self.auth_window >= 30:
-                self.auth_failures, self.auth_window = 0, now
-            if self.auth_failures >= 5:
-                raise ValueError("Too many access-code attempts; wait 30 seconds")
-            if self.clock() - issued > 30 or self.owner not in (None, peer):
-                raise ValueError("Challenge expired or control occupied")
-            expected = hmac.new(self.key, b"auth" + nonce, hashlib.sha256).digest()[:16]
-            if not hmac.compare_digest(expected, packet[1:]):
-                self.auth_failures += 1
-                raise ValueError("Invalid access code")
+            raise ValueError("Not connected")
+        if len(packet) == 1 and packet[0] == CLAIM:
+            if self.owner not in (None, peer):
+                raise ValueError("Another phone owns the control session")
             if self.owner == peer:
-                raise ValueError("Already authenticated; read a fresh challenge")
+                raise ValueError("Control already claimed; reconnect to start over")
             self.owner, self.seq = peer, 0
             return
-        if len(packet) != 20 or self.owner != peer:
-            raise ValueError("Not authenticated or invalid packet size")
-        body, tag = packet[:10], packet[10:]
-        expected = hmac.new(self.key, nonce + body, hashlib.sha256).digest()[:10]
-        if not hmac.compare_digest(expected, tag):
-            raise ValueError("Invalid command signature")
-        op, seq, forward, steer, flags = struct.unpack("<BIhhB", body)
+        if len(packet) != 10 or self.owner != peer:
+            raise ValueError("Claim control first or invalid packet size")
+        op, seq, forward, steer, flags = struct.unpack("<BIhhB", packet)
         held, limit = bool(flags & 128), flags & 127
         if seq <= self.seq or abs(forward) > 1000 or abs(steer) > 1000 or limit > 100:
             raise ValueError("Stale sequence or invalid control values")
@@ -175,7 +152,7 @@ class Control:
             self.ready = True
 
     def disconnect(self, peer):
-        self.sessions.pop(peer, None)
+        self.sessions.discard(peer)
         if self.owner == peer:
             self.stop(error=1)
             self.owner = None
@@ -198,6 +175,6 @@ class Control:
     def status(self):
         # 20 bytes, fits the default BLE ATT payload without MTU negotiation.
         flags = int(self.config.live) | (int(self.owner is not None) << 1) | (int(self.ready) << 2)
-        return struct.pack("<BBBBhhIHH4x", 1, self.state, flags, self.error,
+        return struct.pack("<BBBBhhIHH4x", PROTOCOL_VERSION, self.state, flags, self.error,
                            *self.output, self.seq, self.config.max_rpm,
                            round(self.config.heartbeat_s * 1000))

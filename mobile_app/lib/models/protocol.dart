@@ -1,12 +1,13 @@
-import 'dart:convert';
 import 'dart:typed_data';
-import 'package:crypto/crypto.dart';
 
 const defaultHost = '10.42.0.1';
 const defaultPort = 8765;
 
+/// Protocol version 2: no access code, being on the MotorPi WLAN is enough.
+const protocolVersion = 2;
+
 /// One length byte, then the payload. Pi frames start with a kind byte:
-/// `C` challenge, `S` status, `E` UTF-8 rejection reason.
+/// `S` status, `E` UTF-8 rejection reason.
 List<int> encodeFrame(List<int> payload) {
   if (payload.length > 255) throw RangeError('Frame zu lang');
   return [payload.length, ...payload];
@@ -31,41 +32,13 @@ class FrameDecoder {
   }
 }
 
-List<int> parseKey(String text) {
-  final cleaned = text.trim().replaceAll(RegExp(r'[\s-]'), '');
-  if (RegExp(r'^[A-HJ-NP-Z2-9]{8}$').hasMatch(cleaned.toUpperCase())) {
-    return sha256
-        .convert(utf8.encode('MotorPi access code v1:${cleaned.toUpperCase()}'))
-        .bytes
-        .sublist(0, 16);
-  }
-  if (!RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(cleaned)) {
-    throw const FormatException(
-      'Der Zugangscode muss 8 Zeichen enthalten (ohne I, O, 0 und 1).',
-    );
-  }
-  return [
-    for (var i = 0; i < 32; i += 2)
-      int.parse(cleaned.substring(i, i + 2), radix: 16),
-  ];
-}
-
+/// Per connection: claims control once, then numbers every command.
 class SessionProtocol {
-  SessionProtocol(this.key, this.nonce) {
-    if (key.length != 16 || nonce.length != 16) {
-      throw const FormatException('Ungültige Sitzung');
-    }
-  }
-  final List<int> key;
-  final List<int> nonce;
   int sequence = 0;
-  List<int> authentication() => [
-    0,
-    ...Hmac(
-      sha256,
-      key,
-    ).convert([...utf8.encode('auth'), ...nonce]).bytes.take(16),
-  ];
+
+  /// Takes control; the Pi admits only one phone at a time.
+  List<int> claim() => const [0];
+
   List<int> command(
     int operation, {
     int forward = 0,
@@ -86,23 +59,21 @@ class SessionProtocol {
         9,
         operation == 2 ? ((held ? 128 : 0) | speedLimit.clamp(0, 100)) : 0,
       );
-    final bytes = body.buffer.asUint8List();
-    return [
-      ...bytes,
-      ...Hmac(sha256, key).convert([...nonce, ...bytes]).bytes.take(10),
-    ];
+    return body.buffer.asUint8List();
   }
 }
 
 class VehicleStatus {
   VehicleStatus(List<int> bytes) {
-    if (bytes.length != 20 || bytes[0] != 1) {
-      throw const FormatException('Unbekanntes Pi-Protokoll');
+    if (bytes.length != 20 || bytes[0] != protocolVersion) {
+      throw const FormatException(
+        'Unbekanntes Pi-Protokoll – App und Pi-Dienst auf den gleichen Stand bringen.',
+      );
     }
     final data = ByteData.sublistView(Uint8List.fromList(bytes));
     state = data.getUint8(1);
     live = data.getUint8(2) & 1 != 0;
-    authenticated = data.getUint8(2) & 2 != 0;
+    claimed = data.getUint8(2) & 2 != 0;
     ready = data.getUint8(2) & 4 != 0;
     error = data.getUint8(3);
     left = data.getInt16(4, Endian.little);
@@ -111,7 +82,7 @@ class VehicleStatus {
     maxRpm = data.getUint16(12, Endian.little);
   }
   late final int state, error, left, right, ack, maxRpm;
-  late final bool live, authenticated, ready;
+  late final bool live, claimed, ready;
   bool get armed => state == 1;
   String get label => switch (state) {
     1 => 'FAHRBEREIT',

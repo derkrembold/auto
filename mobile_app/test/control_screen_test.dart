@@ -12,7 +12,7 @@ class FakeLink extends VehicleLink {
   FakeLink() {
     connected = true;
     status = VehicleStatus([
-      1,
+      2,
       0,
       6,
       0,
@@ -48,7 +48,7 @@ class FakeLink extends VehicleLink {
     commands.add(operation);
     if (operation == 2) driveValues.add((forward, held));
     final bytes = List<int>.filled(20, 0);
-    bytes[0] = 1;
+    bytes[0] = 2;
     bytes[1] = operation == 3 ? 0 : 1;
     bytes[2] = 6;
     status = VehicleStatus(bytes);

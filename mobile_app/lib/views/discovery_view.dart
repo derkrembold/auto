@@ -29,14 +29,11 @@ class _DiscoveryViewState extends State<DiscoveryView> {
   }
 
   Future<void> _select(DiscoveredPi pi) async {
-    final route = await context.read<DiscoveryController>().select(pi);
-    if (!mounted) return;
-    final navigator = Navigator.of(context);
-    if (route == Routes.control) {
-      await navigator.pushNamedAndRemoveUntil(route, (_) => false);
-    } else {
-      await navigator.pushNamed(route, arguments: pi.host);
-    }
+    final connected = await context.read<DiscoveryController>().select(pi);
+    if (!mounted || !connected) return;
+    await Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(Routes.control, (_) => false);
   }
 
   void _addHost() {

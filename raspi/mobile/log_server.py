@@ -4,25 +4,18 @@
 A separate process from wifi_server.py on purpose: reading files and running
 journalctl must never delay the control loop.
 
-  GET /challenge          -> {"nonce": "<32 hex>"}  (single use, valid 30 s)
   GET /logs               -> [{"name", "label", "available"}, ...]
   GET /logs/<name>?lines=N -> last N lines as UTF-8 text (1..2000, default 200)
 
-Every request except /challenge carries
-  X-MotorPi-Auth: <nonce hex>:<HMAC-SHA256(key, b"logs" || nonce || path)[:16] hex>
-where path is the request path including the query string, and key is the
-16-byte key derived from the app access code (config key_hex).
-Only the fixed sources below can be read. Connections are capped (MAX_CLIENTS) and
-time-limited before authentication even starts, so unauthenticated clients cannot
-exhaust the Pi. Python 3.7 compatible, standard library only.
+No access code: only clients on the MotorPi WLAN are served (network_policy.py),
+others are closed without a response. Only the fixed sources below can be read.
+Connections are capped (MAX_CLIENTS) and time-limited, so clients cannot exhaust
+the Pi. Python 3.7 compatible, standard library only.
 """
 import argparse
-import hashlib
-import hmac
 import json
 import logging
 import os
-import secrets
 import socket
 import subprocess
 import threading
@@ -31,11 +24,10 @@ from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from network_policy import allowed, parse_networks
+
 LOG = logging.getLogger("motorpi.logs")
 DEFAULT_PORT = 8081
-NONCE_TTL_S = 30
-MAX_NONCES = 64
-MAX_FAILURES = 5
 MAX_LINES = 2000
 MAX_TAIL_BYTES = 4 * 1024 * 1024
 # Unauthenticated clients must not be able to pile up threads/sockets on the Pi.
@@ -88,57 +80,20 @@ def tail_journal(unit, lines):
     return text
 
 
-class Auth:
-    """Single-use challenges; five failures block everyone until the 30 s window ends."""
-
-    def __init__(self, key, clock=time.monotonic):
-        self.key, self.clock = key, clock
-        self.lock = threading.Lock()
-        self.nonces = OrderedDict()
-        self.failures, self.window = 0, clock()
-
-    def challenge(self):
-        nonce = secrets.token_bytes(16)
-        with self.lock:
-            now = self.clock()
-            for old in [n for n, issued in self.nonces.items() if now - issued > NONCE_TTL_S]:
-                del self.nonces[old]
-            while len(self.nonces) >= MAX_NONCES:
-                self.nonces.popitem(last=False)
-            self.nonces[nonce] = now
-        return nonce.hex()
-
-    def verify(self, header, path):
-        """Returns None when accepted, else the rejection reason."""
-        with self.lock:
-            now = self.clock()
-            if now - self.window >= NONCE_TTL_S:
-                self.failures, self.window = 0, now
-            if self.failures >= MAX_FAILURES:
-                return "Too many access-code attempts; wait 30 seconds"
-            try:
-                nonce_hex, mac_hex = (header or "").split(":", 1)
-                nonce, mac = bytes.fromhex(nonce_hex), bytes.fromhex(mac_hex)
-            except ValueError:
-                return "Missing or malformed X-MotorPi-Auth"
-            issued = self.nonces.pop(nonce, None)
-            if issued is None or now - issued > NONCE_TTL_S:
-                return "Challenge unknown, used or expired"
-            expected = hmac.new(self.key, b"logs" + nonce + path.encode("utf-8"),
-                                hashlib.sha256).digest()[:16]
-            if not hmac.compare_digest(expected, mac):
-                self.failures += 1
-                return "Invalid access code"
-            return None
-
-
 class BoundedServer(ThreadingHTTPServer):
     """At most max_clients connections at once; further ones are closed immediately."""
     daemon_threads = True
 
-    def __init__(self, address, handler, max_clients=MAX_CLIENTS):
+    def __init__(self, address, handler, max_clients=MAX_CLIENTS, networks=None):
         super().__init__(address, handler)
         self.slots = threading.BoundedSemaphore(max_clients)
+        self.networks = parse_networks(networks)
+
+    def verify_request(self, request, client_address):
+        if allowed(client_address[0], self.networks):
+            return True
+        LOG.warning("Log client %s rejected: not on the MotorPi WLAN", client_address[0])
+        return False
 
     def process_request(self, request, client_address):
         if not self.slots.acquire(blocking=False):
@@ -158,7 +113,7 @@ class BoundedServer(ThreadingHTTPServer):
             self.slots.release()
 
 
-def make_handler(auth, sources, journal=tail_journal,
+def make_handler(sources, journal=tail_journal,
                  timeout=SOCKET_TIMEOUT_S, deadline=CONNECTION_DEADLINE_S):
     class Handler(BaseHTTPRequestHandler):
         server_version = "MotorPiLogs/1"
@@ -194,14 +149,8 @@ def make_handler(auth, sources, journal=tail_journal,
 
         def do_GET(self):
             url = urlsplit(self.path)
-            if url.path == "/challenge":
-                return self._send(200, json.dumps({"nonce": auth.challenge()}), "application/json")
             if url.path != "/logs" and not url.path.startswith("/logs/"):
                 return self._send(404, "Not found")
-            reason = auth.verify(self.headers.get("X-MotorPi-Auth"), self.path)
-            if reason is not None:
-                LOG.warning("Log request rejected: %s", reason)
-                return self._send(429 if reason.startswith("Too many") else 403, reason)
             if url.path == "/logs":
                 listing = [{"name": name, "label": label,
                             "available": kind == "journal" or os.path.isfile(target)}
@@ -236,11 +185,9 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     with open(args.config) as source:
-        key = bytes.fromhex(json.load(source)["key_hex"])
-    if len(key) != 16:
-        raise SystemExit("key_hex must contain 16 bytes")
-    server = BoundedServer((args.host, args.port),
-                           make_handler(Auth(key), default_sources(args.log_dir)))
+        networks = json.load(source).get("allowed_networks")
+    server = BoundedServer((args.host, args.port), make_handler(default_sources(args.log_dir)),
+                           networks=networks)
     LOG.info("Serving logs from %s and the journal on %s:%d", args.log_dir, args.host, args.port)
     try:
         server.serve_forever()

@@ -15,7 +15,7 @@ class ReadyLink extends VehicleLink {
   final commands = <int>[];
   static VehicleStatus _status(int state) => VehicleStatus(
     List<int>.filled(20, 0)
-      ..[0] = 1
+      ..[0] = 2
       ..[1] = state
       ..[2] = 6,
   );

@@ -15,15 +15,13 @@ class VehicleLink extends ChangeNotifier {
   StreamSubscription<List<int>>? _input;
   SessionProtocol? _protocol;
   bool connected = false, connecting = false, busy = false;
-  String message =
-      'Mit dem WLAN „MotorPi“ verbinden, dann Zugangscode eingeben.';
+  String message = 'Mit dem WLAN „MotorPi“ verbinden.';
   VehicleStatus? status;
   DateTime? lastStatus;
 
-  /// Last successfully authenticated Pi and key; kept in memory only, so the
-  /// log viewer works after a drive session ends.
+  /// Last Pi this app controlled; probed first by discovery and used by the
+  /// log viewer and shell after a drive session ends.
   String? host;
-  List<int>? key;
   int _generation = 0;
   bool _disposed = false;
   Completer<void>? _acknowledgement;
@@ -32,16 +30,14 @@ class VehicleLink extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> connect(
-    String keyText, {
+  Future<void> connect({
     String host = defaultHost,
     int port = defaultPort,
   }) async {
     if (connecting || connected) return;
-    var stage = 'Zugangscode prüfen';
+    var stage = 'Verbinden';
     int? attempt;
     try {
-      final key = parseKey(keyText);
       await disconnect();
       final generation = ++_generation;
       attempt = generation;
@@ -71,15 +67,15 @@ class VehicleLink extends ChangeNotifier {
         ensureCurrent();
       }
       _transport = transport;
-      final challenge = Completer<List<int>>();
-      final authenticated = Completer<void>();
+      final greeted = Completer<void>();
+      final claimed = Completer<void>();
       // A rejection may fail a waiter that is not awaited yet; keep it handled.
-      challenge.future.ignore();
-      authenticated.future.ignore();
+      greeted.future.ignore();
+      claimed.future.ignore();
       final decoder = FrameDecoder();
       void fail(Object error) {
-        if (!challenge.isCompleted) challenge.completeError(error);
-        if (!authenticated.isCompleted) authenticated.completeError(error);
+        if (!greeted.isCompleted) greeted.completeError(error);
+        if (!claimed.isCompleted) claimed.completeError(error);
       }
 
       _input = transport.input.listen(
@@ -90,15 +86,14 @@ class VehicleLink extends ChangeNotifier {
               if (frame.isEmpty) throw const FormatException('Leerer Frame');
               final payload = frame.sublist(1);
               switch (frame[0]) {
-                case 0x43: // C
-                  if (!challenge.isCompleted) challenge.complete(payload);
                 case 0x53: // S
                   status = VehicleStatus(payload);
                   lastStatus = DateTime.now();
-                  if (status!.authenticated &&
+                  if (!greeted.isCompleted) greeted.complete();
+                  if (status!.claimed &&
                       _protocol != null &&
-                      !authenticated.isCompleted) {
-                    authenticated.complete();
+                      !claimed.isCompleted) {
+                    claimed.complete();
                   }
                   if (status!.ack == _awaitedSequence &&
                       !(_acknowledgement?.isCompleted ?? true)) {
@@ -142,19 +137,17 @@ class VehicleLink extends ChangeNotifier {
           }
         },
       );
-      progress('Sitzung vom Pi lesen');
-      final nonce = await challenge.future.timeout(const Duration(seconds: 5));
+      progress('Status vom Pi lesen');
+      await greeted.future.timeout(const Duration(seconds: 5));
       ensureCurrent();
-      _protocol = SessionProtocol(key, nonce);
-      progress('Anmeldung senden');
-      transport.add(encodeFrame(_protocol!.authentication()));
-      progress('Anmeldung bestätigen');
-      await authenticated.future.timeout(const Duration(seconds: 5));
+      _protocol = SessionProtocol();
+      progress('Steuerung übernehmen');
+      transport.add(encodeFrame(_protocol!.claim()));
+      await claimed.future.timeout(const Duration(seconds: 5));
       ensureCurrent();
       connected = true;
       connecting = false;
       this.host = host;
-      this.key = key;
       message = 'Verbunden · Start gibt die Steuerung frei.';
       _notify();
     } catch (error) {

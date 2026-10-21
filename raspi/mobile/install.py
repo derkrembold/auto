@@ -8,7 +8,6 @@ import pwd
 import secrets
 import shutil
 import subprocess
-from access_code import derive_key, generate_code
 
 
 def run(*args):
@@ -19,8 +18,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--access-point", action="store_true")
     parser.add_argument("--app-download", action="store_true")
-    parser.add_argument("--rotate-access-code", action="store_true",
-                        help="Generate a new eight-character app access code")
     parser.add_argument("--logs-only", action="store_true",
                         help="Install/restart only the read-only log service; allowed during a live session")
     args = parser.parse_args()
@@ -45,22 +42,11 @@ def main():
     os.chown(str(config_dir), 0, pi.pw_gid)
     config_file = config_dir / "config.json"
     access = source / "access.txt"
-    new_config = not config_file.exists()
-    if new_config:
-        config = json.loads((source / "config.example.json").read_text())
-        config["key_hex"] = secrets.token_hex(16)
-        config_file.write_text(json.dumps(config, indent=2) + "\n")
+    if not config_file.exists():
+        shutil.copyfile(str(source / "config.example.json"), str(config_file))
     config = json.loads(config_file.read_text())
-    access_code = config["key_hex"]
-    if access.exists():
-        for line in access.read_text().splitlines():
-            if line.startswith(("MotorPi access code: ", "MotorPi Bluetooth access code: ")):
-                candidate = line.split(": ", 1)[1]
-                if len(candidate) == 8 and derive_key(candidate).hex() == config["key_hex"]:
-                    access_code = candidate
-    if new_config or args.rotate_access_code:
-        access_code = generate_code()
-        config["key_hex"] = derive_key(access_code).hex()
+    # No access code since protocol version 2: the MotorPi WLAN is the admission.
+    if config.pop("key_hex", None) is not None:
         config_file.write_text(json.dumps(config, indent=2) + "\n")
     os.chmod(str(config_file), 0o640); os.chown(str(config_file), 0, pi.pw_gid)
     shutil.copyfile(str(source / "motorpi-mobile.service"), "/etc/systemd/system/motorpi-mobile.service")
@@ -70,7 +56,7 @@ def main():
     if old_dbus.exists():
         old_dbus.unlink()
         run("systemctl", "reload", "dbus")
-    credentials = "MotorPi access code: " + access_code + "\nMode: SIMULATION\n"
+    credentials = "Mode: SIMULATION\nApp control and logs: only from the MotorPi WLAN, no access code\n"
     if args.access_point:
         # Ethernet is the maintenance connection. Never replace a Wi-Fi uplink silently.
         routes = subprocess.check_output(["ip", "route", "show", "default"], universal_newlines=True)
@@ -110,14 +96,14 @@ def main():
         # These were freshly installed for this feature; dedicated units keep their scope on wlan0.
         run("systemctl", "disable", "--now", "dnsmasq.service")
         run("systemctl", "stop", "wpa_supplicant@wlan0.service")
-    # Keep already provisioned WLAN credentials when updating just the access code.
+    # Keep already provisioned WLAN credentials on a plain update.
     hostapd = config_dir / "hostapd.conf"
     if hostapd.exists():
         password = next(line.split("=", 1)[1] for line in hostapd.read_text().splitlines()
                         if line.startswith("wpa_passphrase="))
         credentials += "Wi-Fi SSID: MotorPi\nWi-Fi password: " + password + "\nPi access-point IP: 10.42.0.1\n"
         credentials += "App control: TCP 10.42.0.1:" + str(config.get("listen_port", 8765)) + "\n"
-        credentials += "App logs (read-only, same access code): HTTP 10.42.0.1:8081\n"
+        credentials += "App logs (read-only): HTTP 10.42.0.1:8081\n"
     if args.app_download:
         download = source / "download"
         if not (download / "motorpi.apk").is_file():

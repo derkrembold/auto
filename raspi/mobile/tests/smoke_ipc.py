@@ -38,7 +38,7 @@ def main():
                     commands.append("DISCONNECTED")
 
         fake = threading.Thread(target=fake_watchdog, daemon=True); fake.start()
-        config = Config("00" * 16, live=True, mapping_verified=True,
+        config = Config(live=True, mapping_verified=True,
                         left_dir="cw", right_dir="ccw", socket_path=address)
         control = Control(config, time.monotonic)
         lock, shutdown = threading.Lock(), threading.Event()

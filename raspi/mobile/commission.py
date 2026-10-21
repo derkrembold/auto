@@ -56,7 +56,7 @@ def main():
     def interrupted(signum, frame):
         raise KeyboardInterrupt()
     signal.signal(signal.SIGTERM, interrupted)
-    client = WatchdogClient(Config('00' * 16))
+    client = WatchdogClient(Config())
     watchdog = subprocess.Popen([sys.executable, str(directory / 'watchdog.py'), '--live'],
                                 cwd=str(directory))
     owned_socket = None

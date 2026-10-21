@@ -13,35 +13,34 @@ methods; all drive-safety logic lives in `DriveController`, not in widgets.
 
 ```
 lib/
-  main.dart          MultiProvider (VehicleLink, PiDiscovery, ShellCredentials) + MaterialApp
+  main.dart          MultiProvider (VehicleLink, PiDiscovery, ShellCredentials, KnownHosts) + MaterialApp
   theme.dart         ThemeData and AppColors; no colour literals elsewhere
   routes.dart        Named routes; each route creates and owns its controller
-  app_config.dart    Debug access code, ports, fallback hosts
-  models/            protocol.dart (wire format, unchanged), discovered_pi, gamepad_event
+  app_config.dart    Ports, fallback hosts
+  models/            protocol.dart (wire format, version 2), discovered_pi, gamepad_event
   services/          transport, vehicle_link (session), pi_discovery, log_client,
-                     platform_network (bindWifi), gamepad_service
-  controllers/       launcher, discovery, access_code, drive, logs, shell
+                     platform_network (bindWifi), gamepad_service, known_hosts
+  controllers/       launcher, discovery, drive, logs, shell
   views/             one file per screen; control/ holds the drive screen, joystick, buttons
 ```
 
 Flow: **Launcher** (binds the process to the WLAN) → **Discovery** (probes
 the last host, `10.42.0.1` and `motorpi.local`; a probe is a short control
-connection that reads the Pi's greeting without logging in, so it shows
-simulation/live and whether another phone holds control) → **Access code** →
-**Control**. Right after launch, a single free Pi is selected automatically.
+connection that reads the Pi's greeting without claiming control, so it
+shows simulation/live and whether another phone holds control) → **Control**.
+There is no access code since 0.5.0: being on the MotorPi WLAN is the
+admission, and the Pi refuses peers from elsewhere (see the Pi README's
+"App 0.5.0" section). Selecting a Pi claims control right away; a refusal
+keeps the user on Discovery with the reason. Right after launch, a single
+free Pi is selected automatically.
 A lost connection returns to Discovery with the reason. `VehicleLink` is
 app-wide; `DriveController` exists only while the drive screen does, and
 sends a stop if that screen goes away while armed.
 
-**Debug shortcut:** `flutter run --dart-define=MOTORPI_CODE=ABCD2345` skips
-the code screen in debug builds (`kDebugMode` only — release builds ignore
-it). The Pi still checks the code. Never commit it.
-
-**Tools menu (wrench icon)** on discovery, code and drive screens:
+**Tools menu (wrench icon)** on discovery and drive screens:
 
 - **Logs** — read-only, from `raspi/mobile/log_server.py` (port 8081),
-  authenticated with the same access code (kept in memory after a
-  successful connect; asked for otherwise).
+  no access code; only served on the MotorPi WLAN.
 - **Shell** — full interactive SSH (`dartssh2` + `xterm`) as any user
   with password or pasted private key. Deliberately unrestricted for the
   testing phase: it can do everything that user can, including starting
@@ -57,5 +56,5 @@ Opening a tool from the drive screen stops first and blocks Start (touch
 and gamepad) until the tool is closed.
 
 Tests: `flutter test` (protocol, connection, drive screen, `DriveController`,
-discovery, log-client HMAC golden vector shared with the Python tests, SSH
-host key pinning, full launch-to-drive flow).
+discovery, log client, drive-packet golden vector shared with the Python
+tests, SSH host key pinning, full launch-to-drive flow).

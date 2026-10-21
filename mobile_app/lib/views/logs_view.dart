@@ -11,24 +11,10 @@ class LogsView extends StatefulWidget {
 }
 
 class _LogsViewState extends State<LogsView> {
-  final _code = TextEditingController();
-
   @override
   void initState() {
     super.initState();
-    final controller = context.read<LogsController>();
-    if (!controller.locked) controller.loadSources();
-  }
-
-  void _unlock() {
-    final controller = context.read<LogsController>()..unlock(_code.text);
-    if (!controller.locked) controller.loadSources();
-  }
-
-  @override
-  void dispose() {
-    _code.dispose();
-    super.dispose();
+    context.read<LogsController>().loadSources();
   }
 
   @override
@@ -38,42 +24,16 @@ class _LogsViewState extends State<LogsView> {
       appBar: AppBar(
         title: Text('Logs · ${controller.host}'),
         actions: [
-          if (!controller.locked)
-            IconButton(
-              tooltip: 'Aktualisieren',
-              onPressed: controller.loading ? null : controller.refresh,
-              icon: const Icon(Icons.refresh),
-            ),
+          IconButton(
+            tooltip: 'Aktualisieren',
+            onPressed: controller.loading ? null : controller.refresh,
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
-      body: SafeArea(
-        child: controller.locked
-            ? _unlockForm(controller)
-            : _logBody(controller),
-      ),
+      body: SafeArea(child: _logBody(controller)),
     );
   }
-
-  Widget _unlockForm(LogsController controller) => ListView(
-    padding: const EdgeInsets.all(20),
-    children: [
-      const Text('Die Logs sind mit dem Zugangscode des Pi geschützt.'),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _code,
-        autocorrect: false,
-        enableSuggestions: false,
-        textCapitalization: TextCapitalization.characters,
-        decoration: InputDecoration(
-          labelText: 'Zugangscode',
-          errorText: controller.error,
-        ),
-        onSubmitted: (_) => _unlock(),
-      ),
-      const SizedBox(height: 12),
-      FilledButton.tonal(onPressed: _unlock, child: const Text('Logs öffnen')),
-    ],
-  );
 
   Widget _logBody(LogsController controller) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,

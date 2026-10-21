@@ -1,5 +1,4 @@
 {
-  "key_hex": "GENERATE_A_RANDOM_32_HEX_CHARACTER_ACCESS_CODE",
   "live": false,
   "left": 0,
   "right": 1,
@@ -10,5 +9,6 @@
   "deadzone_rpm": 500,
   "heartbeat_s": 0.6,
   "ramp_s": 1.0,
-  "socket_path": "/tmp/motorwatchdog.sock"
+  "socket_path": "/tmp/motorwatchdog.sock",
+  "allowed_networks": ["10.42.0.0/24", "127.0.0.0/8"]
 }

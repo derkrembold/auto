@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../app_config.dart';
 import '../models/discovered_pi.dart';
-import '../routes.dart';
 import '../services/pi_discovery.dart';
 import '../services/platform_network.dart' as network;
 import '../services/vehicle_link.dart';
@@ -11,7 +10,6 @@ class DiscoveryController extends ChangeNotifier {
     required this.discovery,
     required this.link,
     this.autoSelect = false,
-    this.accessCode,
     Future<void> Function()? prepareNetwork,
   }) : _prepareNetwork = prepareNetwork ?? network.bindWifi;
   final Future<void> Function() _prepareNetwork;
@@ -22,8 +20,6 @@ class DiscoveryController extends ChangeNotifier {
   /// connection loss the user decides, so a rejecting Pi cannot cause a loop.
   bool autoSelect;
 
-  /// Defaults to [debugAccessCode]; injectable for tests.
-  final String? accessCode;
   final _manualHosts = <String>[];
   List<DiscoveredPi> results = [];
   bool scanning = false, selecting = false;
@@ -72,16 +68,14 @@ class DiscoveryController extends ChangeNotifier {
     return free.length == 1 ? free.single : null;
   }
 
-  /// Returns the next route: straight to the drive screen when a debug code
-  /// is configured and accepted, else the access-code screen.
-  Future<String> select(DiscoveredPi pi) async {
-    final code = accessCode ?? debugAccessCode;
-    if (code == null) return Routes.accessCode;
+  /// No access code: being on the MotorPi WLAN is enough. True once this
+  /// phone controls the Pi; otherwise [VehicleLink.message] says why not.
+  Future<bool> select(DiscoveredPi pi) async {
     selecting = true;
     notifyListeners();
-    await link.connect(code, host: pi.host, port: pi.port);
+    await link.connect(host: pi.host, port: pi.port);
     selecting = false;
     notifyListeners();
-    return link.connected ? Routes.control : Routes.accessCode;
+    return link.connected;
   }
 }

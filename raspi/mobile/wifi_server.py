@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""MotorPi WLAN control server: the signed control protocol over plain TCP.
+"""MotorPi WLAN control server: the control protocol (version 2) over plain TCP.
 
 Frames in both directions: one length byte, then the payload.
-  Pi -> app:  b"C" + 16-byte challenge (once per connection, immediately)
-              b"S" + 20-byte status (after every accepted packet, and every 200 ms)
+  Pi -> app:  b"S" + 20-byte status (immediately, after every accepted packet,
+              and every 200 ms)
               b"E" + UTF-8 reason (rejected packet; the connection stays open)
-  App -> Pi:  17-byte authentication or 20-byte command, unchanged from control_core.
-One TCP connection is one peer identity; closing it stops like a radio loss.
-Python 3.7 compatible, standard library only.
+  App -> Pi:  1-byte claim (0x00) or 10-byte command, see control_core.
+Only peers from the MotorPi WLAN are accepted (network_policy.py); others get
+an E frame and are closed. One TCP connection is one peer identity; closing it
+stops like a radio loss. Python 3.7 compatible, standard library only.
 """
 import argparse
 import json
@@ -20,6 +21,7 @@ import time
 
 from bridge import worker
 from control_core import Config, Control
+from network_policy import REJECTION, allowed, parse_networks
 
 LOG = logging.getLogger("motorpi.mobile")
 DEFAULT_PORT = 8765
@@ -46,8 +48,9 @@ class Peer:
 class Server:
     """Single-threaded selector loop; Control is shared with the bridge worker under lock."""
 
-    def __init__(self, control, lock, host, port, clock=time.monotonic):
+    def __init__(self, control, lock, host, port, clock=time.monotonic, networks=None):
         self.control, self.lock, self.clock = control, lock, clock
+        self.networks = parse_networks(networks)
         self.selector = selectors.DefaultSelector()
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -70,15 +73,20 @@ class Server:
         self.peers[sock] = peer
         self.selector.register(sock, selectors.EVENT_READ)
         LOG.info("WLAN peer %s connected", peer.name)
+        if not allowed(address[0], self.networks):
+            LOG.warning("Peer %s rejected: not on the MotorPi WLAN", peer.name)
+            peer.closed = True  # close once the reason has been flushed
+            self._queue(peer, frame(b"E", REJECTION.encode("utf-8")))
+            return
         try:
             with self.lock:
-                nonce = self.control.challenge(peer.name)
+                self.control.connect(peer.name)
                 status = self.control.status()
-            self._queue(peer, frame(b"C", nonce) + frame(b"S", status))
+            self._queue(peer, frame(b"S", status))
         except ValueError as exc:
             LOG.warning("WLAN session rejected: %s", exc)
-            self._queue(peer, frame(b"E", str(exc).encode("utf-8")))
             peer.closed = True  # close once the reason has been flushed
+            self._queue(peer, frame(b"E", str(exc).encode("utf-8")))
 
     def _queue(self, peer, data):
         peer.outbox += data
@@ -142,8 +150,8 @@ class Server:
             with self.lock:
                 self.control.receive(peer.name, packet)
                 status = self.control.status()
-            if len(packet) == 17 and packet[0] == 0:
-                LOG.info("WLAN authentication accepted for %s", peer.name)
+            if packet == b"\x00":
+                LOG.info("WLAN control claimed by %s", peer.name)
             self._queue(peer, frame(b"S", status))
         except ValueError as exc:
             LOG.warning("WLAN command rejected: %s", exc)
@@ -181,11 +189,13 @@ def load_config(path, live):
         data = json.load(source)
     host = data.pop("listen_host", "0.0.0.0")
     port = int(data.pop("listen_port", DEFAULT_PORT))
+    networks = data.pop("allowed_networks", None)
+    data.pop("key_hex", None)  # access code of protocol version 1, no longer used
     configured_live = data.get("live", False)
     if live and not configured_live:
         raise SystemExit("The local configuration has not been commissioned for live control")
     data["live"] = bool(live and configured_live)
-    return Config(**data), host, port
+    return Config(**data), host, port, networks
 
 
 def main():
@@ -195,10 +205,10 @@ def main():
                         help="Explicit per-start hardware consent; config must also authorize live mode")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    config, host, port = load_config(args.config, args.live)
+    config, host, port, networks = load_config(args.config, args.live)
     control = Control(config, time.monotonic)
     lock, shutdown = threading.Lock(), threading.Event()
-    server = Server(control, lock, host, port)
+    server = Server(control, lock, host, port, networks=networks)
     thread = threading.Thread(target=worker, args=(control, lock, shutdown, LOG), daemon=True)
     thread.start()
     stop_at = []

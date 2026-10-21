@@ -13,28 +13,25 @@ import 'package:motorpi_control/services/vehicle_link.dart';
 import 'package:provider/provider.dart';
 import 'memory_known_hosts.dart';
 
-/// A Pi that greets like wifi_server.py and accepts any login.
+/// A Pi that greets like wifi_server.py and hands control to the first claim.
 class PiTransport implements Transport {
   PiTransport() {
-    scheduleMicrotask(() {
-      incoming.add(encodeFrame([0x43, ...List.filled(16, 7)]));
-      _status(authenticated: false);
-    });
+    scheduleMicrotask(() => _status(claimed: false));
   }
   final incoming = StreamController<List<int>>();
-  void _status({required bool authenticated}) => incoming.add(
+  void _status({required bool claimed}) => incoming.add(
     encodeFrame([
       0x53,
       ...List<int>.filled(20, 0)
-        ..[0] = 1
-        ..[2] = authenticated ? 6 : 4,
+        ..[0] = 2
+        ..[2] = claimed ? 6 : 4,
     ]),
   );
   @override
   Stream<List<int>> get input => incoming.stream;
   @override
   void add(List<int> bytes) {
-    if (bytes.length == 18) _status(authenticated: true);
+    if (bytes.length == 2 && bytes[1] == 0) _status(claimed: true);
   }
 
   @override
@@ -42,8 +39,8 @@ class PiTransport implements Transport {
 }
 
 void main() {
-  testWidgets('launch finds the Pi, asks for the code, drives, and returns '
-      'to discovery when the connection drops', (tester) async {
+  testWidgets('launch finds the Pi, drives without an access code, and '
+      'returns to discovery when the connection drops', (tester) async {
     final messenger = tester.binding.defaultBinaryMessenger;
     for (final name in ['motorpi/platform', 'motorpi/gamepad']) {
       messenger.setMockMethodCallHandler(
@@ -82,11 +79,7 @@ void main() {
     }
 
     await settle();
-    // Exactly one free Pi: discovery continues to the code on its own.
-    expect(find.text('Pi unter $defaultHost'), findsOneWidget);
-    await tester.enterText(find.byType(EditableText), 'ABCD2345');
-    await tester.tap(find.text('Verbinden'));
-    await settle();
+    // Exactly one free Pi: discovery takes control and drives on its own.
     expect(find.text('START'), findsOneWidget);
     expect(link.host, defaultHost);
     await transports.last.incoming.close();

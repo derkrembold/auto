@@ -8,8 +8,9 @@ import 'transport.dart';
 typedef Lookup = Future<List<InternetAddress>> Function(String host);
 
 /// Finds the Pi by opening a short control connection: the server answers
-/// immediately with a challenge plus status, or with a rejection when another
-/// phone owns the session. An unauthenticated connection has no side effects.
+/// immediately with its status, or with a rejection (another phone owns the
+/// session, or this phone is not on the MotorPi WLAN). A connection that does
+/// not claim control has no side effects.
 class PiDiscovery {
   PiDiscovery({Connector? connector, Lookup? lookup})
     : _connector = connector ?? SocketTransport.connect,
@@ -45,12 +46,20 @@ class PiDiscovery {
       if (status == null && rejection == null) {
         throw StateError('Keine Antwort vom Pi');
       }
+      final occupied = rejection?.contains('Another phone') ?? false;
+      if (rejection != null && !occupied) {
+        throw StateError(
+          rejection.contains('MotorPi WLAN')
+              ? 'Nur aus dem WLAN „MotorPi“ erreichbar'
+              : rejection,
+        );
+      }
       return DiscoveredPi(
         host: host,
         port: port,
         address: address,
         live: status?.live ?? false,
-        occupied: rejection != null,
+        occupied: occupied,
         latency: watch.elapsed,
       );
     } catch (error) {

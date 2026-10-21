@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'controllers/access_code_controller.dart';
 import 'controllers/discovery_controller.dart';
 import 'controllers/drive_controller.dart';
 import 'controllers/launcher_controller.dart';
@@ -10,15 +9,14 @@ import 'models/protocol.dart';
 import 'services/known_hosts.dart';
 import 'services/pi_discovery.dart';
 import 'services/vehicle_link.dart';
-import 'views/access_code_view.dart';
 import 'views/control/control_view.dart';
 import 'views/discovery_view.dart';
 import 'views/launcher_view.dart';
 import 'views/logs_view.dart';
 import 'views/shell_view.dart';
 
-/// Launcher -> discovery -> access code (skipped in debug with MOTORPI_CODE)
-/// -> control. Logs and shell are reachable from discovery and control.
+/// Launcher -> discovery -> control; no access code, the MotorPi WLAN is the
+/// admission. Logs and shell are reachable from discovery and control.
 /// Each route owns its controller, so leaving a screen disposes its timers.
 abstract final class Routes {
   static const launcher = '/';
@@ -27,8 +25,6 @@ abstract final class Routes {
   /// exactly one free Pi is found.
   static const discovery = '/discovery';
 
-  /// Argument: the selected host.
-  static const accessCode = '/access-code';
   static const control = '/control';
 
   /// Argument for logs and shell: the host (defaults to the connected Pi).
@@ -50,26 +46,17 @@ abstract final class Routes {
         ),
         child: const DiscoveryView(),
       ),
-      accessCode => ChangeNotifierProvider(
-        create: (context) => AccessCodeController(
-          link: context.read<VehicleLink>(),
-          host: argument as String? ?? defaultHost,
-        ),
-        child: const AccessCodeView(),
-      ),
       control => ChangeNotifierProvider(
         create: (context) => DriveController(link: context.read<VehicleLink>()),
         child: const ControlView(),
       ),
       logs => ChangeNotifierProvider(
-        create: (context) {
-          final link = context.read<VehicleLink>();
-          // One Pi, one code: reuse the key even if it is reached by another name.
-          return LogsController(
-            host: argument as String? ?? link.host ?? defaultHost,
-            key: link.key,
-          );
-        },
+        create: (context) => LogsController(
+          host:
+              argument as String? ??
+              context.read<VehicleLink>().host ??
+              defaultHost,
+        ),
         child: const LogsView(),
       ),
       shell => ChangeNotifierProvider(

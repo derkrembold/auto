@@ -11,10 +11,10 @@ Steuerung über BLE).
    Das WLAN-Passwort steht in den privat bereitgestellten Zugangsdaten.
 2. `http://10.42.0.1:8080/` öffnen, APK herunterladen und installieren.
    Im bisherigen LAN geht auch `http://motorpi.local:8080/`.
-3. Im WLAN **MotorPi** bleiben. In der App den separaten achtstelligen
-   Zugangscode eingeben und **Verbinden** antippen. Die Adresse ist mit
-   `10.42.0.1` vorbelegt. Die App bindet sich selbst an das WLAN, damit
-   Android die Verbindung nicht über mobile Daten leitet.
+3. Stay on the **MotorPi** WLAN and open the app. It finds the Pi on its own
+   and goes straight to the drive screen — no access code (since 0.5.0, see
+   below). The app binds itself to the WLAN so Android does not route the
+   connection over mobile data.
 4. Bei neutralen Eingaben **Start** drücken. Den festen Joystick bewegen.
    Seine Stellung bleibt beim Loslassen erhalten. **Stopp** hält beide Motoren an.
    Danach erneut starten. Der Fahrbildschirm scrollt nicht, auch im Querformat.
@@ -32,6 +32,35 @@ allein wegen unveränderter Eingabe oder normalem Touch-Loslassen.
 App-Wechsel, abgebrochene Touch-Geste, Controllertrennung und WLAN-Ausfall
 beenden die Fahrt. Ein Wechsel Touch/Controller stoppt zuerst.
 
+## App 0.5.0 / protocol version 2: no access code (21.10.2026)
+
+The access code is gone from the app, the Pi services and `install.py`:
+**being on the WPA2-protected MotorPi WLAN is the admission.** The WLAN
+password is now the only credential, so treat it like the old code.
+
+- **Network check instead of a code.** The control server (8765) and the log
+  service (8081) listen on every interface, including Ethernet/the home LAN,
+  so both accept only peers from `allowed_networks` (config, default
+  `10.42.0.0/24` and loopback; `network_policy.py`). Anyone else gets
+  `E` "Only reachable from the MotorPi WLAN" (control) or no response (logs).
+  Discovery over the home LAN (`motorpi.local`) therefore shows the Pi as
+  unreachable on purpose; widen `allowed_networks` for LAN development.
+- **Protocol version 2** (status byte 0 = 2): no challenge, no HMAC. The Pi
+  greets with a status, the app claims control with one byte, commands are
+  the bare 10-byte body. One phone at a time, sequence acknowledgement,
+  heartbeat, limits and the state machine are unchanged. Apps up to 0.4.0
+  and a v1 Pi refuse each other with "Unbekanntes Pi-Protokoll" — update
+  both together (`deploy.ps1 -Install -BuildApk`).
+- **Removed:** `access_code.py`, `--rotate-access-code`, the code screen,
+  the `MOTORPI_CODE` debug shortcut, `key_hex` (install drops it from an
+  existing config; the servers ignore it if still present) and the code line
+  in `access.txt`.
+
+What the WLAN-only model gives up, stated plainly: commands are no longer
+authenticated per message — integrity and confidentiality now rest entirely
+on WPA2, and any device on the MotorPi WLAN can take control while no other
+phone holds it. The SSH shell is unaffected (own credentials, pinned host key).
+
 ## App 0.4.0: new screen flow, logs and shell (14.10.2026)
 
 The app now starts with a launcher, finds the Pi on its own (short probe
@@ -46,12 +75,9 @@ the control loop. Serves only a fixed list: `watchdog`, `joystick`,
 `motorcontrol`, `validate_speed`, `capture_step_response`,
 `validate_lin_stress` (`/home/pi/auto/*.log`) and the journals of
 `motorpi-mobile`, `motorpi-driving-session`, `motorpi-ap`, `motorpi-dhcp`,
-`motorpi-download`, `motorpi-logs`. Protected by the same access code:
-`GET /challenge` returns a single-use nonce (30 s); every other request sends
-`X-MotorPi-Auth: <nonce>:<HMAC-SHA256(key, "logs" || nonce || path)[:16]>`,
-`path` including the query string. Five wrong codes block for the rest of the
-30 s window. Plain HTTP (WPA2 encrypts the WLAN); the logs are readable by
-anyone who has the code. Runs as `pi` with `SupplementaryGroups=systemd-journal`.
+`motorpi-download`, `motorpi-logs`. Since 0.5.0 no access code: only clients
+on the MotorPi WLAN are served (see above). Plain HTTP (WPA2 encrypts the
+WLAN); the logs are readable by anyone on the MotorPi WLAN. Runs as `pi` with `SupplementaryGroups=systemd-journal`.
 `install.py` installs and (re)starts it; it is safe next to a live session.
 
 **Shell:** the app has a full SSH terminal (any user, password or pasted
@@ -101,13 +127,16 @@ der persönliche Zugangscode bleibt gleich.
 
 ```text
 Touch / Android-Gamecontroller -> Flutter + Android-Eingabeadapter
-  -> WLAN/TCP 10.42.0.1:8765 (signierte Befehle, bestätigte Sequenznummern)
+  -> WLAN/TCP 10.42.0.1:8765 (WLAN-only admission, acknowledged sequence numbers)
   -> wifi_server.py -> control_core.py
   -> bridge.py (nur bei --live) -> vorhandener Watchdog -> LIN -> STM32
 ```
 
-- `control_core.py`: Hardware-unabhängige Zustandsmaschine, HMAC-Anmeldung,
-  Wiedergabeschutz, Mischung, Limits, Heartbeat, gemeinsame Stopprampe.
+- `control_core.py`: hardware-independent state machine, control claim (one
+  phone at a time), replay protection via sequence numbers, mixing, limits,
+  heartbeat, shared stop ramp.
+- `network_policy.py`: which peer addresses may use the control and log
+  services (`allowed_networks`, default MotorPi WLAN + loopback).
 - `bridge.py`: ein persistenter IPC-Client des vorhandenen Watchdogs, kein
   eigener LIN-Master. Prüft vor jeder Geschwindigkeitsrunde beide Motorstatus
   und `current 0`; nicht endliche Ströme oder mehr als 15 A sperren die Fahrt,
@@ -132,38 +161,32 @@ Der Watchdog bestimmt dann den tatsächlichen Hardware-Stopp. Die App ersetzt
 keinen physischen Not-Aus; Reaktionszeiten unter realer Last sind noch nicht
 am Fahrzeug vermessen.
 
-## WLAN-Protokoll (Transport für Protokoll Version 1)
+## WLAN protocol (version 2)
 
-TCP auf Port 8765 (`listen_host`/`listen_port` optional in der Pi-Konfiguration,
-Standard `0.0.0.0:8765`). In beide Richtungen: ein Längenbyte, dann die Nutzdaten.
+TCP on port 8765 (`listen_host`/`listen_port` optional in the Pi config,
+default `0.0.0.0:8765`; peers outside `allowed_networks` are rejected). Both
+directions: one length byte, then the payload.
 
-| Richtung | Nutzdaten |
+| Direction | Payload |
 |---|---|
-| Pi → App | `C` + 16 Byte Challenge, sofort nach Verbindungsaufbau |
-| Pi → App | `S` + 20 Byte Status, nach jedem angenommenen Paket und alle 200 ms |
-| Pi → App | `E` + UTF-8-Begründung bei abgelehntem Paket (Verbindung bleibt) |
-| App → Pi | 17 Byte Anmeldung oder 20 Byte Befehl, unverändert |
+| Pi → app | `S` + 20-byte status, right after the connection is accepted, after every accepted packet, and every 200 ms |
+| Pi → app | `E` + UTF-8 reason for a rejected packet (connection stays open) or connection (then closed) |
+| App → Pi | 1-byte claim `0x00`, or 10-byte command |
 
-Anmeldung innerhalb 30 s: `0x00 || HMAC-SHA256(key, "auth" || nonce)[:16]`.
-Pro Verbindung eigene Challenge, genau ein Besitzer der Steuerung; ein zweites
-Handy erhält `E` und wird getrennt. Schlüssel: 16 Bytes. Zugangscodes bestehen
-aus acht zufälligen Zeichen des Alphabets `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`
-(40 Bit Entropie). Groß-/Kleinschreibung, Leerzeichen und Bindestriche sind
-unerheblich. Ableitung: `SHA256("MotorPi access code v1:" + normalisierter_code)[:16]`.
-Die App akzeptiert außerdem alte 32-stellige Hex-Codes für nicht umgestellte Pis.
-Nach fünf falschen Anmeldungen sind weitere Versuche bis zum Ende des laufenden
-30-Sekunden-Fensters blockiert, auch über neue Verbindungen hinweg.
+A connection only observes until it claims control; exactly one owner at a
+time. While another phone owns control, a new connection gets `E` and is
+closed (discovery shows "Belegt"). Claiming twice on one connection is
+refused; reconnect to start over.
 
-Befehl: Body `<BIhhB` (little endian) plus
-`HMAC-SHA256(key, nonce || body)[:10]`, insgesamt 20 Bytes. Body: Opcode,
-steigende uint32-Sequenz, Vorwärts/Lenkung jeweils -1000..1000, Flags.
-Opcodes 1 Start, 2 Fahren, 3 Stopp. Bei Fahren: Bit 7 aktive Fahrfreigabe,
-Bits 0..6 Limit 0..100 %. Start verlangt neutrale Werte und Flags.
+Command: `<BIhhB` (little endian), 10 bytes: opcode, increasing uint32
+sequence, forward/steer each -1000..1000, flags. Opcodes 1 Start, 2 Drive,
+3 Stop. For Drive: bit 7 active dead-man, bits 0..6 limit 0..100 %. Start
+requires neutral values and flags.
 
 Status `<BBBBhhIHH4x`: Version, Zustand, Flags, Fehler, links/rechts Sollwert,
 letzte akzeptierte Sequenz, Maximal-RPM, Heartbeat-ms, vier reservierte Bytes.
 Zustände 0 gestoppt, 1 freigegeben, 2 Rampe, 3 Störung. Flags: Bit 0 live,
-Bit 1 angemeldet, Bit 2 bereit. Fehler 1 Verbindung/Eingabe ausgeblieben,
+Bit 1 Steuerung übernommen (claimed), Bit 2 bereit. Fehler 1 Verbindung/Eingabe ausgeblieben,
 3 Hardware/IPC/Überstrom, 4 Motoren/Stromsensor nicht erreichbar, 5 Motor
 drehte nicht (Firmware-Stall `sys_error=-65`).
 
@@ -175,18 +198,18 @@ Sobald alles sauber antwortet, ist „bereit“ wieder gesetzt; weitergefahren w
 nur nach erneutem **Start** in der App. Ein Watchdog-Timeout (verspätete
 Antwort) öffnet die IPC-Verbindung neu, damit keine alte Antwort als neue gilt.
 
-Ein Fahrbefehl gilt erst als bestätigt, wenn ein Status mit seiner Sequenz
-zurückkommt (maximal 500 ms). HMAC authentifiziert die Befehle; verschlüsselt
-wird durch WPA2 des MotorPi-WLANs. Status ist für jeden WLAN-Teilnehmer lesbar.
-Der Port ist auch über Ethernet erreichbar; ohne Zugangscode lässt sich dort
-nichts steuern.
+A drive command counts as acknowledged only once a status with its sequence
+comes back (at most 500 ms). Commands are not signed: WPA2 of the MotorPi WLAN
+provides encryption and integrity, and the peer-address check keeps Ethernet/
+the home LAN out. Status is readable by every WLAN client.
 
 ## Build und Deployment
 
 Getestete Umgebung: Flutter 3.47.6 / Dart 3.13.5, JDK 17 (Temurin), Android
 compile SDK 36. Flutter liegt ignoriert in `.tools/flutter` (offizielles Archiv,
-SHA-256 gegen `releases_windows.json` prüfen). Packages since 0.4.0: `crypto`,
-`provider`, `dartssh2`, `xterm` (see `mobile_app/README.md`).
+SHA-256 gegen `releases_windows.json` prüfen). Packages: `provider`,
+`dartssh2`, `xterm`, `shared_preferences` (`crypto` dropped in 0.5.0; see
+`mobile_app/README.md`).
 
 Downloadseite aktuell halten: App bauen, testen und mit Version veröffentlichen
 in einem Schritt:
@@ -205,7 +228,7 @@ setzt `deploy.ps1` `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=C:\Temp`.
 
 On Linux/macOS use `raspi/mobile/deploy.sh` (same steps and file list:
 `--install`, `--build-apk`, `--apk <path>`, `--access-point`,
-`--rotate-access-code`, `--host user@ip`). `--logs-only` installs/restarts
+`--host user@ip`). `--logs-only` installs/restarts
 just the read-only log service and, unlike a full install, is allowed while
 a live driving session runs. If `motorpi.local` does not resolve, use the IP
 (`--host pi@192.168.0.104` on the home LAN, or `MOTORPI_HOST`).
@@ -217,9 +240,9 @@ Raspberry-Pi-Archive installiert; keine dauerhafte APT-Quellenänderung und kein
 OS-Upgrade. Python 3.7.3 des Pi wird weiterverwendet.
 
 Deployment: `/home/pi/auto/mobile/`, getrennt von bisherigen Watchdogdateien.
-Konfiguration: `/etc/motorpi-mobile/config.json`. Zugangsdaten:
-`/home/pi/auto/mobile/access.txt` (0600). Passwörter/Schlüssel niemals ins Repo
-oder in den Downloadordner kopieren. Die App hält den Code nur im Speicher.
+Configuration: `/etc/motorpi-mobile/config.json`. Credentials (WLAN password):
+`/home/pi/auto/mobile/access.txt` (0600). Never copy passwords/keys into the
+repo or the download folder.
 
 ```sh
 systemctl status motorpi-mobile motorpi-logs motorpi-ap motorpi-dhcp motorpi-download

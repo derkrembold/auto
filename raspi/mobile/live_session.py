@@ -25,7 +25,7 @@ def main():
     if args.consent != 'STARTFAHRT':
         parser.error('Immediate human consent is required for this driving session')
     data = json.loads(Path(args.config).read_text())
-    for key in ('listen_host', 'listen_port'):
+    for key in ('listen_host', 'listen_port', 'allowed_networks', 'key_hex'):
         data.pop(key, None)
     config = Config(**data)
     if not config.live:
@@ -51,7 +51,7 @@ def main():
         owned_socket = socket_path.stat().st_ino
         server = subprocess.Popen([sys.executable, str(directory / 'wifi_server.py'),
                                    '--config', args.config, '--live'], cwd=str(directory))
-        print('Live session running: authenticate in the app, then press START.', flush=True)
+        print('Live session running: connect in the app, then press START.', flush=True)
         while watchdog.poll() is None and server.poll() is None:
             time.sleep(.2)
         raise RuntimeError('Live process exited; ending the driving session')
