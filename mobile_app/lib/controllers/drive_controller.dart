@@ -114,7 +114,15 @@ class DriveController extends ChangeNotifier with WidgetsBindingObserver {
     forward = steer = 0;
     stopping = true;
     _notify();
-    // Do not queue drive packets behind a stalled radio. Stop follows at most one in-flight write.
+    await _sendStop();
+    stopping = false;
+    _notify();
+  }
+
+  /// Do not queue drive packets behind a stalled radio. Stop follows at most
+  /// one in-flight write; if it cannot be delivered, closing the socket makes
+  /// the Pi stop instead.
+  Future<void> _sendStop() async {
     final deadline = DateTime.now().add(const Duration(milliseconds: 550));
     while (link.busy && DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -122,8 +130,6 @@ class DriveController extends ChangeNotifier with WidgetsBindingObserver {
     if (link.connected && (link.busy || !await link.send(3))) {
       await link.disconnect();
     }
-    stopping = false;
-    _notify();
   }
 
   /// Stops and blocks starting while another screen (logs, shell) covers the
@@ -170,8 +176,9 @@ class DriveController extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_gamepad.cancel());
     link.removeListener(_onLink);
-    // The link outlives this screen; never leave the Pi armed behind it.
-    if (armed && link.connected) unawaited(link.send(3));
+    // The link outlives this screen; never leave the Pi armed behind it, even
+    // when a drive packet is still in flight.
+    if (armed && link.connected) unawaited(_sendStop());
     super.dispose();
   }
 }

@@ -7,6 +7,7 @@ import 'controllers/launcher_controller.dart';
 import 'controllers/logs_controller.dart';
 import 'controllers/shell_controller.dart';
 import 'models/protocol.dart';
+import 'services/known_hosts.dart';
 import 'services/pi_discovery.dart';
 import 'services/vehicle_link.dart';
 import 'views/access_code_view.dart';
@@ -78,6 +79,7 @@ abstract final class Routes {
               context.read<VehicleLink>().host ??
               defaultHost,
           credentials: context.read<ShellCredentials>(),
+          knownHosts: context.read<KnownHosts>(),
         ),
         child: const ShellView(),
       ),

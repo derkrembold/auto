@@ -35,6 +35,34 @@ class ReadyLink extends VehicleLink {
   }
 }
 
+/// Like [ReadyLink], but DRIVE packets stay in flight (busy) until released.
+class SlowDriveLink extends ReadyLink {
+  Completer<void>? inFlight;
+  bool disconnected = false;
+  @override
+  Future<bool> send(
+    int operation, {
+    int forward = 0,
+    int steer = 0,
+    bool held = false,
+    int speedLimit = 100,
+  }) async {
+    if (busy) return false;
+    if (operation != 2) return super.send(operation);
+    busy = true;
+    final pending = inFlight = Completer<void>();
+    await pending.future;
+    busy = false;
+    return super.send(operation);
+  }
+
+  @override
+  Future<void> disconnect() async {
+    disconnected = true;
+    connected = false;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -72,6 +100,33 @@ void main() {
     drive.dispose();
     await pumpEventQueue();
     expect(link.commands, [1, 3]);
+    link.dispose();
+  });
+
+  test('leaving with a drive packet in flight stops after it', () async {
+    final link = SlowDriveLink();
+    final drive = DriveController(link: link, gamepad: const Stream.empty());
+    await drive.start();
+    unawaited(link.send(2));
+    expect(link.busy, isTrue);
+    drive.dispose();
+    await pumpEventQueue();
+    link.inFlight!.complete();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(link.commands, [1, 2, 3]);
+    expect(link.disconnected, isFalse);
+    link.dispose();
+  });
+
+  test('leaving with a stalled drive packet closes the link', () async {
+    final link = SlowDriveLink();
+    final drive = DriveController(link: link, gamepad: const Stream.empty());
+    await drive.start();
+    unawaited(link.send(2));
+    drive.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    expect(link.commands, [1]);
+    expect(link.disconnected, isTrue);
     link.dispose();
   });
 

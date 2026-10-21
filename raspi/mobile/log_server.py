@@ -12,7 +12,9 @@ Every request except /challenge carries
   X-MotorPi-Auth: <nonce hex>:<HMAC-SHA256(key, b"logs" || nonce || path)[:16] hex>
 where path is the request path including the query string, and key is the
 16-byte key derived from the app access code (config key_hex).
-Only the fixed sources below can be read. Python 3.7 compatible, standard library only.
+Only the fixed sources below can be read. Connections are capped (MAX_CLIENTS) and
+time-limited before authentication even starts, so unauthenticated clients cannot
+exhaust the Pi. Python 3.7 compatible, standard library only.
 """
 import argparse
 import hashlib
@@ -21,6 +23,7 @@ import json
 import logging
 import os
 import secrets
+import socket
 import subprocess
 import threading
 import time
@@ -35,6 +38,10 @@ MAX_NONCES = 64
 MAX_FAILURES = 5
 MAX_LINES = 2000
 MAX_TAIL_BYTES = 4 * 1024 * 1024
+# Unauthenticated clients must not be able to pile up threads/sockets on the Pi.
+MAX_CLIENTS = 8
+SOCKET_TIMEOUT_S = 10    # per read/write, covers request line and headers
+CONNECTION_DEADLINE_S = 30  # whole connection, so trickling bytes cannot hold a slot
 
 
 def default_sources(log_dir):
@@ -125,9 +132,53 @@ class Auth:
             return None
 
 
-def make_handler(auth, sources, journal=tail_journal):
+class BoundedServer(ThreadingHTTPServer):
+    """At most max_clients connections at once; further ones are closed immediately."""
+    daemon_threads = True
+
+    def __init__(self, address, handler, max_clients=MAX_CLIENTS):
+        super().__init__(address, handler)
+        self.slots = threading.BoundedSemaphore(max_clients)
+
+    def process_request(self, request, client_address):
+        if not self.slots.acquire(blocking=False):
+            LOG.warning("Too many log clients; dropping %s", client_address[0])
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
+
+
+def make_handler(auth, sources, journal=tail_journal,
+                 timeout=SOCKET_TIMEOUT_S, deadline=CONNECTION_DEADLINE_S):
     class Handler(BaseHTTPRequestHandler):
         server_version = "MotorPiLogs/1"
+
+        def setup(self):
+            self.timeout = timeout
+            super().setup()
+            self._deadline = threading.Timer(deadline, self._abort)
+            self._deadline.daemon = True
+            self._deadline.start()
+
+        def _abort(self):
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+        def finish(self):
+            self._deadline.cancel()
+            super().finish()
 
         def log_message(self, format_, *args):
             LOG.info("%s %s", self.address_string(), format_ % args)
@@ -188,9 +239,8 @@ def main():
         key = bytes.fromhex(json.load(source)["key_hex"])
     if len(key) != 16:
         raise SystemExit("key_hex must contain 16 bytes")
-    server = ThreadingHTTPServer((args.host, args.port),
-                                 make_handler(Auth(key), default_sources(args.log_dir)))
-    server.daemon_threads = True
+    server = BoundedServer((args.host, args.port),
+                           make_handler(Auth(key), default_sources(args.log_dir)))
     LOG.info("Serving logs from %s and the journal on %s:%d", args.log_dir, args.host, args.port)
     try:
         server.serve_forever()

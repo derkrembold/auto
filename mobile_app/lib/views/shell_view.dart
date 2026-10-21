@@ -68,9 +68,53 @@ class _ShellViewState extends State<ShellView> {
     );
   }
 
+  Widget _hostKeyPrompt(ShellController controller) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Erste Verbindung zu ${controller.host}',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Fingerabdruck nur bestätigen, wenn er mit dem auf dem Pi übereinstimmt '
+            '(ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub). Er wird gespeichert; '
+            'ein anderer Schlüssel wird künftig abgelehnt.',
+          ),
+          const SizedBox(height: 8),
+          SelectableText(
+            controller.pendingFingerprint!,
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            children: [
+              FilledButton(
+                onPressed: () => controller.confirmHostKey(true),
+                child: const Text('Stimmt überein'),
+              ),
+              OutlinedButton(
+                onPressed: () => controller.confirmHostKey(false),
+                child: const Text('Abbrechen'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+
   Widget _loginForm(ShellController controller) => ListView(
     padding: const EdgeInsets.all(20),
     children: [
+      if (controller.state == ShellState.confirmHostKey) ...[
+        _hostKeyPrompt(controller),
+        const SizedBox(height: 16),
+      ],
       const Text(
         'Volle SSH-Shell auf dem Pi – ohne Einschränkungen, auch für Motorbefehle.',
         style: TextStyle(color: AppColors.warning),
@@ -108,9 +152,18 @@ class _ShellViewState extends State<ShellView> {
             style: const TextStyle(color: AppColors.warning),
           ),
         ),
+      if (controller.hostKeyChanged)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: controller.forgetHostKey,
+            icon: const Icon(Icons.key_off),
+            label: const Text('Pi wurde neu aufgesetzt – Schlüssel vergessen'),
+          ),
+        ),
       const SizedBox(height: 16),
       FilledButton.tonalIcon(
-        onPressed: controller.state == ShellState.connecting ? null : _connect,
+        onPressed: controller.state == ShellState.idle ? _connect : null,
         icon: const Icon(Icons.terminal),
         label: const Text('Verbinden'),
       ),

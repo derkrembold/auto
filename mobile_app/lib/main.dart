@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'controllers/shell_controller.dart';
 import 'routes.dart';
+import 'services/known_hosts.dart';
 import 'services/pi_discovery.dart';
 import 'services/vehicle_link.dart';
 import 'theme.dart';
@@ -15,6 +16,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => VehicleLink()),
         Provider(create: (_) => PiDiscovery()),
         Provider(create: (_) => ShellCredentials()),
+        Provider<KnownHosts>(create: (_) => StoredKnownHosts()),
       ],
       child: const MotorPiApp(),
     ),

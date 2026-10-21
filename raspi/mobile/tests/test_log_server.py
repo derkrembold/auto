@@ -2,8 +2,10 @@
 import hashlib
 import hmac
 import json
+import socket
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -12,8 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from access_code import derive_key
-from log_server import Auth, default_sources, make_handler, tail_file
-from http.server import ThreadingHTTPServer
+from log_server import Auth, BoundedServer, default_sources, make_handler, tail_file
 
 KEY = bytes(range(16))
 
@@ -29,8 +30,8 @@ def server(tmp_path):
 
     clock = [0.0]
     auth = Auth(KEY, clock=lambda: clock[0])
-    instance = ThreadingHTTPServer(("127.0.0.1", 0),
-                                   make_handler(auth, default_sources(str(tmp_path)), journal))
+    instance = BoundedServer(("127.0.0.1", 0),
+                             make_handler(auth, default_sources(str(tmp_path)), journal))
     thread = threading.Thread(target=instance.serve_forever, daemon=True)
     thread.start()
     yield "http://127.0.0.1:%d" % instance.server_address[1], journal_calls, clock
@@ -115,3 +116,62 @@ def test_app_golden_vector():
 
 
 GOLDEN = "ed7e8826e793b78dc19da8b3586f91de"
+
+
+@pytest.fixture
+def limited(tmp_path):
+    """Two client slots, short timeouts."""
+    instance = BoundedServer(("127.0.0.1", 0),
+                             make_handler(Auth(KEY), default_sources(str(tmp_path)),
+                                          timeout=0.3, deadline=1.0),
+                             max_clients=2)
+    thread = threading.Thread(target=instance.serve_forever, daemon=True)
+    thread.start()
+    yield instance.server_address
+    instance.shutdown()
+    instance.server_close()
+
+
+def closed_within(sock, seconds):
+    """True when the server closes the connection before `seconds` pass."""
+    sock.settimeout(seconds)
+    try:
+        while sock.recv(4096):
+            pass
+        return True
+    except socket.timeout:
+        return False
+    except ConnectionResetError:
+        return True
+
+
+def test_silent_client_is_dropped_after_socket_timeout(limited):
+    with socket.create_connection(limited) as sock:
+        sock.sendall(b"GET /logs HTTP/1.0\r\n")  # headers never finish
+        assert closed_within(sock, 2)
+
+
+def test_trickling_client_is_cut_by_connection_deadline(limited):
+    with socket.create_connection(limited) as sock:
+        sock.sendall(b"GET /logs HTTP/1.0\r\n")
+        start = time.monotonic()
+        with pytest.raises(OSError):
+            for _ in range(50):  # one header byte every 0.1 s keeps the socket timeout happy
+                sock.sendall(b"X")
+                time.sleep(0.1)
+        assert time.monotonic() - start < 2
+
+
+def test_connections_beyond_the_cap_are_closed_at_once(limited):
+    held = [socket.create_connection(limited) for _ in range(2)]
+    try:
+        time.sleep(0.05)
+        with socket.create_connection(limited) as extra:
+            assert closed_within(extra, 0.2)
+    finally:
+        for sock in held:
+            sock.close()
+    time.sleep(0.1)
+    base = "http://%s:%d" % limited
+    with urllib.request.urlopen(base + "/challenge") as response:
+        assert response.status == 200

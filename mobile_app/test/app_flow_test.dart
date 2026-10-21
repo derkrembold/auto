@@ -6,10 +6,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:motorpi_control/controllers/shell_controller.dart';
 import 'package:motorpi_control/main.dart';
 import 'package:motorpi_control/models/protocol.dart';
+import 'package:motorpi_control/services/known_hosts.dart';
 import 'package:motorpi_control/services/pi_discovery.dart';
 import 'package:motorpi_control/services/transport.dart';
 import 'package:motorpi_control/services/vehicle_link.dart';
 import 'package:provider/provider.dart';
+import 'memory_known_hosts.dart';
 
 /// A Pi that greets like wifi_server.py and accepts any login.
 class PiTransport implements Transport {
@@ -67,6 +69,7 @@ void main() {
           ChangeNotifierProvider.value(value: link),
           Provider.value(value: discovery),
           Provider(create: (_) => ShellCredentials()),
+          Provider<KnownHosts>(create: (_) => MemoryKnownHosts()),
         ],
         child: const MotorPiApp(),
       ),

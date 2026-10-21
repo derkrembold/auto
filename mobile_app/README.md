@@ -46,11 +46,16 @@ it). The Pi still checks the code. Never commit it.
   with password or pasted private key. Deliberately unrestricted for the
   testing phase: it can do everything that user can, including starting
   motors outside the app's safety logic. Credentials live in memory only.
-  Host keys are not verified.
+  The Pi's host key is pinned on first use: the first connect shows its
+  SHA-256 fingerprint to compare with `ssh-keygen -lf
+  /etc/ssh/ssh_host_ed25519_key.pub` on the Pi, and the confirmed key is
+  stored per host name (`shared_preferences`). A different key is refused
+  before any password or private key is used; after re-imaging a Pi, use
+  "Schlüssel vergessen" to confirm the new one.
 
 Opening a tool from the drive screen stops first and blocks Start (touch
 and gamepad) until the tool is closed.
 
 Tests: `flutter test` (protocol, connection, drive screen, `DriveController`,
-discovery, log-client HMAC golden vector shared with the Python tests, full
-launch-to-drive flow).
+discovery, log-client HMAC golden vector shared with the Python tests, SSH
+host key pinning, full launch-to-drive flow).
